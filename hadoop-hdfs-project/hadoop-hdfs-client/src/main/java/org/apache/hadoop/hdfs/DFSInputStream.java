@@ -679,7 +679,7 @@ public class DFSInputStream extends FSInputStream
       InetSocketAddress targetAddr = retval.addr;
       StorageType storageType = retval.storageType;
       // Latest block if refreshed by chooseDatanode()
-      targetBlock = retval.block;
+      // targetBlock = retval.block;
 
       try {
         blockReader = getBlockReader(targetBlock, offsetIntoBlock,
@@ -861,7 +861,7 @@ public class DFSInputStream extends FSInputStream
     }
   }
 
-  protected synchronized int readWithStrategy(ReaderStrategy strategy)
+  protected synchronized int  readWithStrategy(ReaderStrategy strategy)
       throws IOException {
     dfsClient.checkOpen();
     if (closed.get()) {
@@ -1146,7 +1146,7 @@ public class DFSInputStream extends FSInputStream
     while (true) {
       DNAddrPair addressPair = chooseDataNode(block, null);
       // Latest block, if refreshed internally
-      block = addressPair.block;
+      // block = addressPair.block;
       try {
         actualGetFromOneDataNode(addressPair, start, end, buf,
             corruptedBlocks);
