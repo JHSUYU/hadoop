@@ -148,6 +148,8 @@ class BlockReceiver implements Closeable {
   private final AtomicLong lastSentTime = new AtomicLong(0L);
   private long maxSendIdleTime;
 
+  private static boolean triggerAgain = false;
+
   BlockReceiver(final ExtendedBlock block, final StorageType storageType,
       final DataInputStream in,
       final String inAddr, final String myAddr,
@@ -1476,10 +1478,17 @@ class BlockReceiver implements Closeable {
               // has sent a packet in time, this node will be reported as bad.
               // Otherwise, the upstream node will propagate the error up by
               // closing the connection.
-              LOG.warn("The downstream error might be due to congestion in " +
-                  "upstream including this node. Propagating the error: ",
-                  ioe);
-              throw ioe;
+//              LOG.warn("The downstream error might be due to congestion in " +
+//                  "upstream including this node. Propagating the error: ",
+//                  ioe);
+//              throw ioe;
+              mirrorError = true;
+              LOG.info(myString, ioe);
+              if(triggerAgain){
+                System.out.println("[Failure Recovery] Triggering again");
+              }
+              triggerAgain = true;
+
             } else {
               // continue to run even if can not read from mirror
               // notify client of the error
