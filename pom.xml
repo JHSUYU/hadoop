@@ -680,6 +680,7 @@ xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/x
                 <!-- include ONLY dependencies I control -->
                 <dependencySourceInclude>org.apache.hadoop:hadoop-annotations</dependencySourceInclude>
               </dependencySourceIncludes>
+              <javadocExecutable>${java.home}/bin/javadoc</javadocExecutable>
 
             </configuration>
             <reports>
