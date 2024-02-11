@@ -701,8 +701,10 @@ class DataStreamer extends Daemon {
     System.arraycopy(this.shadowNodes, 0, this.nodes, 0, this.shadowNodes.length);
     this.storageTypes = new StorageType[this.shadowStorageTypes.length];
     System.arraycopy(this.shadowStorageTypes, 0, this.storageTypes, 0, this.shadowStorageTypes.length);
-    Configuration.triggerAgain = true;
-    LOG.debug("After shadowErrorHandler, the nodes are: {}", Arrays.toString(this.nodes));
+    this.storageIDs = new String[this.shadowStorageIDs.length];
+    System.arraycopy(this.shadowStorageIDs, 0, this.storageIDs, 0, this.shadowStorageIDs.length);
+    Configuration.triggerAgain = false;
+    LOG.info("After shadowErrorHandler, the nodes are: {}", Arrays.toString(this.nodes));
   }
 
   /*
@@ -722,7 +724,13 @@ class DataStreamer extends Daemon {
       try {
         // process datanode IO errors if any
         LOG.debug("Before shadowErrorHandler, the nodes are: {}", Arrays.toString(this.nodes));
-        boolean doSleep = shadowProcessDatanodeOrExternalError();
+        boolean doSleep = false;
+        if (!checker()) {
+          doSleep = shadowProcessDatanodeOrExternalError();
+        }else {
+          revert2Original();
+          LOG.info("[Failure Recovery] checker Trigger Again");
+        }
         //boolean doSleep = processDatanodeOrExternalError();
 
         synchronized (dataQueue) {
@@ -1391,9 +1399,6 @@ class DataStreamer extends Daemon {
    * @return true if it should sleep for a while after returning.
    */
   private boolean shadowProcessDatanodeOrExternalError() throws IOException {
-    if(checker()){
-      LOG.debug("[Failure Recovery] checker Trigger Again");
-    }
 
     if (!errorState.hasDatanodeError() && !shouldHandleExternalError()) {
       return false;
