@@ -1196,6 +1196,7 @@ class DataStreamer extends Daemon {
           // processes response status from datanodes.
           ArrayList<DatanodeInfo> congestedNodesFromAck = new ArrayList<>();
           ArrayList<DatanodeInfo> slownodesFromAck = new ArrayList<>();
+          System.out.println("[Failure Recovery] The length of ack is "+ack.getNumOfReplies());
           for (int i = ack.getNumOfReplies()-1; i >=0  && dfsClient.clientRunning; i--) {
             final Status reply = PipelineAck.getStatusFromHeader(ack
                 .getHeaderFlag(i));
