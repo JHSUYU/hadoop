@@ -1647,6 +1647,7 @@ class DataStreamer extends Daemon {
       accessToken = lb.getBlockToken();
 
       // set up the pipeline again with the remaining nodes
+      System.out.println("[Failure Recovery]: after update the nodes length is"+nodes.length);
       success = createBlockOutputStream(nodes, storageTypes, storageIDs, newGS,
           isRecovery);
 
