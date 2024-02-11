@@ -45,6 +45,7 @@ import java.util.concurrent.atomic.AtomicReference;
 
 import org.apache.hadoop.classification.VisibleForTesting;
 import org.apache.hadoop.classification.InterfaceAudience;
+import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.StorageType;
 import org.apache.hadoop.hdfs.client.HdfsClientConfigKeys;
 import org.apache.hadoop.hdfs.client.HdfsClientConfigKeys.BlockWrite;
@@ -479,8 +480,11 @@ class DataStreamer extends Daemon {
   private ResponseProcessor response = null;
   private final Object nodesLock = new Object();
   private volatile DatanodeInfo[] nodes = null; // list of targets for current block
+  private volatile DatanodeInfo[] shadowNodes = null;
   private volatile StorageType[] storageTypes = null;
+  private volatile StorageType[] shadowStorageTypes = null;
   private volatile String[] storageIDs = null;
+  private volatile String[] shadowStorageIDs = null;
   private final ErrorState errorState;
 
   private volatile BlockConstructionStage stage;  // block construction stage
@@ -490,6 +494,7 @@ class DataStreamer extends Daemon {
 
   /** Nodes have been used in the pipeline before and have failed. */
   private final List<DatanodeInfo> failed = new ArrayList<>();
+  private final List<DatanodeInfo> shadowFailed = new ArrayList<>();
   /** Restarting Nodes */
   private List<DatanodeInfo> restartingNodes = new ArrayList<>();
   /** The times have retried to recover pipeline, for the same packet. */
@@ -687,6 +692,19 @@ class DataStreamer extends Daemon {
     return streamerClosed || errorState.hasError() || !dfsClient.clientRunning;
   }
 
+  public boolean checker(){ return Configuration.triggerAgain;}
+
+  public void revert2Original(){
+    this.failed.clear();
+    this.failed.addAll(this.shadowFailed);
+    this.nodes = new DatanodeInfo[this.shadowNodes.length];
+    System.arraycopy(this.shadowNodes, 0, this.nodes, 0, this.shadowNodes.length);
+    this.storageTypes = new StorageType[this.shadowStorageTypes.length];
+    System.arraycopy(this.shadowStorageTypes, 0, this.storageTypes, 0, this.shadowStorageTypes.length);
+    Configuration.triggerAgain = true;
+    LOG.debug("After shadowErrorHandler, the nodes are: {}", Arrays.toString(this.nodes));
+  }
+
   /*
    * streamer thread is the only thread that opens streams to datanode,
    * and closes them. Any error recovery is also done by this thread.
@@ -702,8 +720,13 @@ class DataStreamer extends Daemon {
 
       DFSPacket one;
       try {
+        if(checker()){
+          revert2Original();
+        }
         // process datanode IO errors if any
-        boolean doSleep = processDatanodeOrExternalError();
+        LOG.debug("Before shadowErrorHandler, the nodes are: {}", Arrays.toString(this.nodes));
+        boolean doSleep = shadowProcessDatanodeOrExternalError();
+        //boolean doSleep = processDatanodeOrExternalError();
 
         synchronized (dataQueue) {
           // wait for a packet to be sent.
@@ -1370,6 +1393,83 @@ class DataStreamer extends Daemon {
    *
    * @return true if it should sleep for a while after returning.
    */
+  private boolean shadowProcessDatanodeOrExternalError() throws IOException {
+    if (!errorState.hasDatanodeError() && !shouldHandleExternalError()) {
+      return false;
+    }
+    LOG.debug("start process datanode/external error, {}", this);
+    if (response != null) {
+      LOG.info("Error Recovery for " + block +
+              " waiting for responder to exit. ");
+      return true;
+    }
+    closeStream();
+
+    // move packets from ack queue to front of the data queue
+    synchronized (dataQueue) {
+      dataQueue.addAll(0, ackQueue);
+      ackQueue.clear();
+      packetSendTime.clear();
+    }
+
+    // If we had to recover the pipeline more than the value
+    // defined by maxPipelineRecoveryRetries in a row for the
+    // same packet, this client likely has corrupt data or corrupting
+    // during transmission.
+    if (!errorState.isRestartingNode() && ++pipelineRecoveryCount >
+            maxPipelineRecoveryRetries) {
+      LOG.warn("Error recovering pipeline for writing " +
+              block + ". Already retried " + maxPipelineRecoveryRetries
+              + " times for the same packet.");
+      lastException.set(new IOException("Failing write. Tried pipeline " +
+              "recovery " + maxPipelineRecoveryRetries
+              + " times without success."));
+      streamerClosed = true;
+      return false;
+    }
+
+    shadowSetupPipelineForAppendOrRecovery();
+
+    if (!streamerClosed && dfsClient.clientRunning) {
+      if (stage == BlockConstructionStage.PIPELINE_CLOSE) {
+
+        // If we had an error while closing the pipeline, we go through a fast-path
+        // where the BlockReceiver does not run. Instead, the DataNode just finalizes
+        // the block immediately during the 'connect ack' process. So, we want to pull
+        // the end-of-block packet from the dataQueue, since we don't actually have
+        // a true pipeline to send it over.
+        //
+        // We also need to set lastAckedSeqno to the end-of-block Packet's seqno, so that
+        // a client waiting on close() will be aware that the flush finished.
+        synchronized (dataQueue) {
+          DFSPacket endOfBlockPacket = dataQueue.remove();  // remove the end of block packet
+          // Close any trace span associated with this Packet
+          Span span = endOfBlockPacket.getSpan();
+          if (span != null) {
+            span.finish();
+            endOfBlockPacket.setSpan(null);
+          }
+          assert endOfBlockPacket.isLastPacketInBlock();
+          assert lastAckedSeqno == endOfBlockPacket.getSeqno() - 1;
+          lastAckedSeqno = endOfBlockPacket.getSeqno();
+          pipelineRecoveryCount = 0;
+          dataQueue.notifyAll();
+        }
+        endBlock();
+      } else {
+        initDataStreaming();
+      }
+    }
+
+    return false;
+  }
+
+  /**
+   * If this stream has encountered any errors, shutdown threads
+   * and mark the stream as closed.
+   *
+   * @return true if it should sleep for a while after returning.
+   */
   private boolean processDatanodeOrExternalError() throws IOException {
     if (!errorState.hasDatanodeError() && !shouldHandleExternalError()) {
       return false;
@@ -1609,6 +1709,27 @@ class DataStreamer extends Daemon {
    * This happens when a file is appended or data streaming fails
    * It keeps on trying until a pipeline is setup
    */
+  private void shadowSetupPipelineForAppendOrRecovery() throws IOException {
+    // Check number of datanodes. Note that if there is no healthy datanode,
+    // this must be internal error because we mark external error in striped
+    // outputstream only when all the streamers are in the DATA_STREAMING stage
+    if (nodes == null || nodes.length == 0) {
+      String msg = "Could not get block locations. " + "Source file \""
+              + src + "\" - Aborting..." + this;
+      LOG.warn(msg);
+      lastException.set(new IOException(msg));
+      streamerClosed = true;
+      return;
+    }
+    shadowSetupPipelineInternal(nodes, storageTypes, storageIDs);
+  }
+
+  /**
+   * Open a DataStreamer to a DataNode pipeline so that
+   * it can be written to.
+   * This happens when a file is appended or data streaming fails
+   * It keeps on trying until a pipeline is setup
+   */
   private void setupPipelineForAppendOrRecovery() throws IOException {
     // Check number of datanodes. Note that if there is no healthy datanode,
     // this must be internal error because we mark external error in striped
@@ -1622,6 +1743,43 @@ class DataStreamer extends Daemon {
       return;
     }
     setupPipelineInternal(nodes, storageTypes, storageIDs);
+  }
+
+  protected void shadowSetupPipelineInternal(DatanodeInfo[] datanodes,
+                                       StorageType[] nodeStorageTypes, String[] nodeStorageIDs)
+          throws IOException {
+    boolean success = false;
+    long newGS = 0L;
+    while (!success && !streamerClosed && dfsClient.clientRunning) {
+      if (!handleRestartingDatanode()) {
+        return;
+      }
+
+      final boolean isRecovery = errorState.hasInternalError();
+      if (!shadowHandleBadDatanode()) {
+        return;
+      }
+
+      handleDatanodeReplacement();
+
+      // get a new generation stamp and an access token
+      final LocatedBlock lb = updateBlockForPipeline();
+      newGS = lb.getBlock().getGenerationStamp();
+      accessToken = lb.getBlockToken();
+
+      // set up the pipeline again with the remaining nodes
+      LOG.debug("[Failure Recovery]: after update the nodes length is"+nodes.length);
+      success = createBlockOutputStream(nodes, storageTypes, storageIDs, newGS,
+              isRecovery);
+
+      failPacket4Testing();
+
+      errorState.checkRestartingNodeDeadline(nodes);
+    } // while
+
+    if (success) {
+      updatePipeline(newGS);
+    }
   }
 
   protected void setupPipelineInternal(DatanodeInfo[] datanodes,
@@ -1689,6 +1847,56 @@ class DataStreamer extends Daemon {
         streamerClosed = true;
         return false;
       }
+    }
+    return true;
+  }
+
+  /**
+   * Remove bad node from list of nodes if badNodeIndex was set.
+   * @return true if it should continue.
+   */
+  boolean shadowHandleBadDatanode() {
+    final int badNodeIndex = errorState.getBadNodeIndex();
+    if (badNodeIndex >= 0) {
+      if (nodes.length <= 1) {
+        lastException.set(new IOException("All datanodes "
+                + Arrays.toString(nodes) + " are bad. Aborting..."));
+        streamerClosed = true;
+        return false;
+      }
+
+      String reason = "bad.";
+      if (errorState.getRestartingNodeIndex() == badNodeIndex) {
+        reason = "restarting.";
+        restartingNodes.add(nodes[badNodeIndex]);
+      }
+      LOG.warn("Error Recovery for " + block + " in pipeline "
+              + Arrays.toString(nodes) + ": datanode " + badNodeIndex
+              + "("+ nodes[badNodeIndex] + ") is " + reason);
+
+      this.shadowFailed.clear();
+      this.shadowFailed.addAll(failed);
+      this.shadowNodes = new DatanodeInfo[nodes.length];
+      System.arraycopy(this.nodes, 0, this.shadowNodes, 0, this.nodes.length);
+      this.shadowStorageIDs = new String[storageIDs.length];
+      System.arraycopy(this.storageIDs, 0, this.shadowStorageIDs, 0, this.storageIDs.length);
+      this.shadowStorageTypes = storageTypes;
+      System.arraycopy(this.storageTypes, 0, this.shadowStorageTypes, 0, this.storageTypes.length);
+
+      DatanodeInfo[] newnodes = new DatanodeInfo[nodes.length-1];
+      arraycopy(nodes, newnodes, badNodeIndex);
+
+      final StorageType[] newStorageTypes = new StorageType[newnodes.length];
+      arraycopy(storageTypes, newStorageTypes, badNodeIndex);
+
+      final String[] newStorageIDs = new String[newnodes.length];
+      arraycopy(storageIDs, newStorageIDs, badNodeIndex);
+
+
+      setPipeline(newnodes, newStorageTypes, newStorageIDs);
+
+      errorState.adjustState4RestartingNode();
+      lastException.clear();
     }
     return true;
   }

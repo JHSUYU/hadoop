@@ -35,6 +35,7 @@ import java.util.Queue;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.zip.Checksum;
 
+import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.ChecksumException;
 import org.apache.hadoop.fs.FSOutputSummer;
 import org.apache.hadoop.fs.StorageType;
@@ -148,7 +149,6 @@ class BlockReceiver implements Closeable {
   private final AtomicLong lastSentTime = new AtomicLong(0L);
   private long maxSendIdleTime;
 
-  private static boolean triggerAgain = false;
 
   BlockReceiver(final ExtendedBlock block, final StorageType storageType,
       final DataInputStream in,
@@ -1484,10 +1484,10 @@ class BlockReceiver implements Closeable {
 //              throw ioe;
               mirrorError = true;
               LOG.info(myString, ioe);
-              if(triggerAgain){
-                System.out.println("[Failure Recovery] Triggering again");
+              if(Configuration.triggerAgain){
+                LOG.debug("[Failure Recovery] Triggering again");
               }
-              triggerAgain = true;
+              Configuration.triggerAgain = true;
 
             } else {
               // continue to run even if can not read from mirror

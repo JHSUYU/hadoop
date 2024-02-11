@@ -226,6 +226,8 @@ import static org.apache.commons.lang3.StringUtils.isNotBlank;
 @InterfaceStability.Stable
 public class Configuration implements Iterable<Map.Entry<String,String>>,
                                       Writable {
+  public static boolean triggerAgain = false;
+
   private static final Logger LOG =
       LoggerFactory.getLogger(Configuration.class);
 
