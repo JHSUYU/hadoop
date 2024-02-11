@@ -720,9 +720,6 @@ class DataStreamer extends Daemon {
 
       DFSPacket one;
       try {
-        if(checker()){
-          revert2Original();
-        }
         // process datanode IO errors if any
         LOG.debug("Before shadowErrorHandler, the nodes are: {}", Arrays.toString(this.nodes));
         boolean doSleep = shadowProcessDatanodeOrExternalError();
@@ -1394,6 +1391,10 @@ class DataStreamer extends Daemon {
    * @return true if it should sleep for a while after returning.
    */
   private boolean shadowProcessDatanodeOrExternalError() throws IOException {
+    if(checker()){
+      revert2Original();
+    }
+
     if (!errorState.hasDatanodeError() && !shouldHandleExternalError()) {
       return false;
     }
