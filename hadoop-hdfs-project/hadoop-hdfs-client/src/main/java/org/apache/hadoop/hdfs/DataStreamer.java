@@ -1392,8 +1392,7 @@ class DataStreamer extends Daemon {
    */
   private boolean shadowProcessDatanodeOrExternalError() throws IOException {
     if(checker()){
-      revert2Original();
-      return false;
+      LOG.debug("[Failure Recovery] checker Trigger Again");
     }
 
     if (!errorState.hasDatanodeError() && !shouldHandleExternalError()) {

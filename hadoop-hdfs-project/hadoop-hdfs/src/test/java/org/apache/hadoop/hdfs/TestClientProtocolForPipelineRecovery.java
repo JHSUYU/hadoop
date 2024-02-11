@@ -287,7 +287,8 @@ public class TestClientProtocolForPipelineRecovery {
       out.write(0x32);
       out.hflush();
 
-
+      // Cause the second datanode to timeout on reading packet
+      Thread.sleep(3500);
       out.write(0x33);
       out.hflush();
 
