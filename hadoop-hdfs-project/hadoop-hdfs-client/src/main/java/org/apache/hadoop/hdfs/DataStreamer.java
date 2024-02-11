@@ -1393,6 +1393,7 @@ class DataStreamer extends Daemon {
   private boolean shadowProcessDatanodeOrExternalError() throws IOException {
     if(checker()){
       revert2Original();
+      return false;
     }
 
     if (!errorState.hasDatanodeError() && !shouldHandleExternalError()) {
