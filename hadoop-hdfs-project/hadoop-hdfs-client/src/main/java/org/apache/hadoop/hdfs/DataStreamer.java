@@ -521,8 +521,11 @@ class DataStreamer extends Daemon {
   private volatile boolean appendChunk = false;
   // both dataQueue and ackQueue are protected by dataQueue lock
   protected final LinkedList<DFSPacket> dataQueue = new LinkedList<>();
+  protected LinkedList<DFSPacket> shadowDataQueue = new LinkedList<>();
   private final Map<Long, Long> packetSendTime = new HashMap<>();
+  protected Map<Long, Long> shadowPacketSendTime = new HashMap<>();
   private final LinkedList<DFSPacket> ackQueue = new LinkedList<>();
+  protected LinkedList<DFSPacket> shadowAckQueue = new LinkedList<>();
   private final AtomicReference<CachingStrategy> cachingStrategy;
   private final ByteArrayManager byteArrayManager;
   //persist blocks on namenode
@@ -703,6 +706,12 @@ class DataStreamer extends Daemon {
     System.arraycopy(this.shadowStorageTypes, 0, this.storageTypes, 0, this.shadowStorageTypes.length);
     this.storageIDs = new String[this.shadowStorageIDs.length];
     System.arraycopy(this.shadowStorageIDs, 0, this.storageIDs, 0, this.shadowStorageIDs.length);
+    this.dataQueue.clear();
+    this.dataQueue.addAll(this.shadowDataQueue);
+    this.ackQueue.clear();
+    this.ackQueue.addAll(this.shadowAckQueue);
+    this.packetSendTime.clear();
+    this.packetSendTime.putAll(this.shadowPacketSendTime);
     Configuration.triggerAgain = false;
     LOG.info("After shadowErrorHandler, the nodes are: {}", Arrays.toString(this.nodes));
   }
@@ -1413,6 +1422,13 @@ class DataStreamer extends Daemon {
 
     // move packets from ack queue to front of the data queue
     synchronized (dataQueue) {
+      this.shadowAckQueue.clear();
+      this.shadowDataQueue.clear();
+      this.shadowPacketSendTime.clear();
+      this.shadowDataQueue.addAll(0, dataQueue);
+      this.shadowAckQueue.addAll(0, ackQueue);
+      this.shadowPacketSendTime.putAll(packetSendTime);
+
       dataQueue.addAll(0, ackQueue);
       ackQueue.clear();
       packetSendTime.clear();
