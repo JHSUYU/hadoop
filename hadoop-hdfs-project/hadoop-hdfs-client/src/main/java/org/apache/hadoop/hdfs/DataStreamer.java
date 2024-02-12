@@ -494,6 +494,7 @@ class DataStreamer extends Daemon {
 
   /** Nodes have been used in the pipeline before and have failed. */
   private final List<DatanodeInfo> failed = new ArrayList<>();
+  private HashSet<DatanodeInfo> erroredNodes = new HashSet<>();
   private final List<DatanodeInfo> shadowFailed = new ArrayList<>();
   /** Restarting Nodes */
   private List<DatanodeInfo> restartingNodes = new ArrayList<>();
@@ -733,6 +734,8 @@ class DataStreamer extends Daemon {
       try {
         // process datanode IO errors if any
         LOG.info("Before shadowErrorHandler, the nodes are: {}", Arrays.toString(this.nodes));
+        DatanodeInfo[] originalNodes = new DatanodeInfo[this.nodes.length];
+        System.arraycopy(this.nodes, 0, originalNodes, 0, this.nodes.length);
         boolean doSleep = false;
 //        if (!checker()) {
 //          doSleep = shadowProcessDatanodeOrExternalError();
@@ -742,7 +745,9 @@ class DataStreamer extends Daemon {
 //          //processDatanodeOrExternalError();
 //        }
         doSleep = processDatanodeOrExternalError();
-        LOG.info("After shadowErrorHandler, the nodes are: {}", Arrays.toString(this.nodes));
+        DatanodeInfo[] newNodes = new DatanodeInfo[this.nodes.length];
+        System.arraycopy(this.nodes, 0, newNodes, 0, this.nodes.length);
+        assert Arrays.equals(originalNodes, newNodes);
 
         synchronized (dataQueue) {
           // wait for a packet to be sent.
@@ -1958,6 +1963,8 @@ class DataStreamer extends Daemon {
           + Arrays.toString(nodes) + ": datanode " + badNodeIndex
           + "("+ nodes[badNodeIndex] + ") is " + reason);
       failed.add(nodes[badNodeIndex]);
+      assert ! erroredNodes.contains(nodes[badNodeIndex]);
+      erroredNodes.add(nodes[badNodeIndex]);
 
       DatanodeInfo[] newnodes = new DatanodeInfo[nodes.length-1];
       arraycopy(nodes, newnodes, badNodeIndex);

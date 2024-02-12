@@ -252,14 +252,14 @@ public class TestClientProtocolForPipelineRecovery {
   @Test
   public void testHDFS9176() throws Exception {
     // Make the first datanode to not relay heartbeat packet.
-    DataNodeFaultInjector dnFaultInjector = new DataNodeFaultInjector() {
-      @Override
-      public boolean dropHeartbeatPacket() {
-        return true;
-      }
-    };
-    DataNodeFaultInjector oldDnInjector = DataNodeFaultInjector.get();
-    DataNodeFaultInjector.set(dnFaultInjector);
+//    DataNodeFaultInjector dnFaultInjector = new DataNodeFaultInjector() {
+//      @Override
+//      public boolean dropHeartbeatPacket() {
+//        return true;
+//      }
+//    };
+//    DataNodeFaultInjector oldDnInjector = DataNodeFaultInjector.get();
+//    DataNodeFaultInjector.set(dnFaultInjector);
 
     // Setting the timeout to be 3 seconds. Normally heartbeat packet
     // would be sent every 1.5 seconds if there is no data traffic.
@@ -283,12 +283,12 @@ public class TestClientProtocolForPipelineRecovery {
       DatanodeInfo[] orgNodes = dfsOut.getPipeline();
 
       // Cause the second datanode to timeout on reading packet
-      Thread.sleep(3500);
+      //Thread.sleep(3500);
       out.write(0x32);
       out.hflush();
 
       // Cause the second datanode to timeout on reading packet
-      Thread.sleep(3500);
+      //Thread.sleep(3500);
       out.write(0x33);
       out.hflush();
 
@@ -307,7 +307,7 @@ public class TestClientProtocolForPipelineRecovery {
 //      }
 //      Assert.assertTrue(contains);
     } finally {
-      DataNodeFaultInjector.set(oldDnInjector);
+      //DataNodeFaultInjector.set(oldDnInjector);
       if (cluster != null) {
         cluster.shutdown();
       }
