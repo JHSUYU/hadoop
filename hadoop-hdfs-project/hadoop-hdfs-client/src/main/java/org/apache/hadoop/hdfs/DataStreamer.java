@@ -732,12 +732,13 @@ class DataStreamer extends Daemon {
       DFSPacket one;
       try {
         // process datanode IO errors if any
-        LOG.debug("Before shadowErrorHandler, the nodes are: {}", Arrays.toString(this.nodes));
+        LOG.info("Before shadowErrorHandler, the nodes are: {}", Arrays.toString(this.nodes));
         boolean doSleep = false;
         if (!checker()) {
           doSleep = shadowProcessDatanodeOrExternalError();
         }else {
           revert2Original();
+          initDataStreaming();
           LOG.info("[Failure Recovery] checker Trigger Again");
         }
         //boolean doSleep = processDatanodeOrExternalError();
