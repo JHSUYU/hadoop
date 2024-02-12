@@ -546,6 +546,7 @@ class DataStreamer extends Daemon {
   protected final LoadingCache<DatanodeInfo, DatanodeInfo> excludedNodes;
   private final String[] favoredNodes;
   private final EnumSet<AddBlockFlag> addBlockFlags;
+  public boolean isCopy = false;
 
   private DataStreamer(HdfsFileStatus stat, ExtendedBlock block,
                        DFSClient dfsClient, String src,
@@ -712,8 +713,6 @@ class DataStreamer extends Daemon {
     this.ackQueue.addAll(this.shadowAckQueue);
     this.packetSendTime.clear();
     this.packetSendTime.putAll(this.shadowPacketSendTime);
-    //initDataStreaming();
-    Configuration.triggerAgain = false;
     LOG.info("After shadowErrorHandler, the nodes are: {}", Arrays.toString(this.nodes));
   }
 
@@ -735,14 +734,15 @@ class DataStreamer extends Daemon {
         // process datanode IO errors if any
         LOG.info("Before shadowErrorHandler, the nodes are: {}", Arrays.toString(this.nodes));
         boolean doSleep = false;
-        if (!checker()) {
-          doSleep = shadowProcessDatanodeOrExternalError();
-          LOG.info("[Failure Recovery] checker Trigger Again");
-        }else{
-          revert2Original();
-          //processDatanodeOrExternalError();
-        }
-        //boolean doSleep = processDatanodeOrExternalError();
+//        if (!checker()) {
+//          doSleep = shadowProcessDatanodeOrExternalError();
+//          LOG.info("[Failure Recovery] checker Trigger Again");
+//        }else{
+//          revert2Original();
+//          //processDatanodeOrExternalError();
+//        }
+        doSleep = processDatanodeOrExternalError();
+        LOG.info("After shadowErrorHandler, the nodes are: {}", Arrays.toString(this.nodes));
 
         synchronized (dataQueue) {
           // wait for a packet to be sent.
@@ -1403,6 +1403,19 @@ class DataStreamer extends Daemon {
     return errorState.hasExternalError() && blockStream != null;
   }
 
+  private void shadowCopy(){
+    if (isCopy){
+      return;
+    }
+    this.shadowAckQueue.clear();
+    this.shadowDataQueue.clear();
+    this.shadowPacketSendTime.clear();
+    this.shadowDataQueue.addAll(0, dataQueue);
+    this.shadowAckQueue.addAll(0, ackQueue);
+    this.shadowPacketSendTime.putAll(packetSendTime);
+    isCopy = true;
+  }
+
   /**
    * If this stream has encountered any errors, shutdown threads
    * and mark the stream as closed.
@@ -1410,12 +1423,8 @@ class DataStreamer extends Daemon {
    * @return true if it should sleep for a while after returning.
    */
   private boolean shadowProcessDatanodeOrExternalError() throws IOException {
-    this.shadowAckQueue.clear();
-    this.shadowDataQueue.clear();
-    this.shadowPacketSendTime.clear();
-    this.shadowDataQueue.addAll(0, dataQueue);
-    this.shadowAckQueue.addAll(0, ackQueue);
-    this.shadowPacketSendTime.putAll(packetSendTime);
+
+
 
 
     if (!errorState.hasDatanodeError() && !shouldHandleExternalError()) {
