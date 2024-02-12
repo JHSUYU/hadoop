@@ -712,7 +712,7 @@ class DataStreamer extends Daemon {
     this.ackQueue.addAll(this.shadowAckQueue);
     this.packetSendTime.clear();
     this.packetSendTime.putAll(this.shadowPacketSendTime);
-    initDataStreaming();
+    //initDataStreaming();
     Configuration.triggerAgain = false;
     LOG.info("After shadowErrorHandler, the nodes are: {}", Arrays.toString(this.nodes));
   }
@@ -739,8 +739,8 @@ class DataStreamer extends Daemon {
           doSleep = shadowProcessDatanodeOrExternalError();
           LOG.info("[Failure Recovery] checker Trigger Again");
         }else{
-          //revert2Original();
-          processDatanodeOrExternalError();
+          revert2Original();
+          //processDatanodeOrExternalError();
         }
         //boolean doSleep = processDatanodeOrExternalError();
 
@@ -1410,6 +1410,13 @@ class DataStreamer extends Daemon {
    * @return true if it should sleep for a while after returning.
    */
   private boolean shadowProcessDatanodeOrExternalError() throws IOException {
+    this.shadowAckQueue.clear();
+    this.shadowDataQueue.clear();
+    this.shadowPacketSendTime.clear();
+    this.shadowDataQueue.addAll(0, dataQueue);
+    this.shadowAckQueue.addAll(0, ackQueue);
+    this.shadowPacketSendTime.putAll(packetSendTime);
+
 
     if (!errorState.hasDatanodeError() && !shouldHandleExternalError()) {
       return false;
@@ -1424,12 +1431,6 @@ class DataStreamer extends Daemon {
 
     // move packets from ack queue to front of the data queue
     synchronized (dataQueue) {
-      this.shadowAckQueue.clear();
-      this.shadowDataQueue.clear();
-      this.shadowPacketSendTime.clear();
-      this.shadowDataQueue.addAll(0, dataQueue);
-      this.shadowAckQueue.addAll(0, ackQueue);
-      this.shadowPacketSendTime.putAll(packetSendTime);
 
       dataQueue.addAll(0, ackQueue);
       ackQueue.clear();
