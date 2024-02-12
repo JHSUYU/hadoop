@@ -739,7 +739,7 @@ class DataStreamer extends Daemon {
           doSleep = shadowProcessDatanodeOrExternalError();
           LOG.info("[Failure Recovery] checker Trigger Again");
         }else{
-          revert2Original();
+          //revert2Original();
           processDatanodeOrExternalError();
         }
         //boolean doSleep = processDatanodeOrExternalError();
