@@ -734,8 +734,8 @@ class DataStreamer extends Daemon {
       try {
         // process datanode IO errors if any
         LOG.info("Before shadowErrorHandler, the nodes are: {}", Arrays.toString(this.nodes));
-//        DatanodeInfo[] originalNodes = new DatanodeInfo[this.nodes.length];
-//        System.arraycopy(this.nodes, 0, originalNodes, 0, this.nodes.length);
+        DatanodeInfo[] originalNodes = new DatanodeInfo[this.nodes.length];
+        System.arraycopy(this.nodes, 0, originalNodes, 0, this.nodes.length);
         boolean doSleep = false;
 //        if (!checker()) {
 //          doSleep = shadowProcessDatanodeOrExternalError();
