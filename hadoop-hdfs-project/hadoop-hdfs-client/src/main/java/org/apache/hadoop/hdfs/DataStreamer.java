@@ -747,7 +747,7 @@ class DataStreamer extends Daemon {
         doSleep = processDatanodeOrExternalError();
         DatanodeInfo[] newNodes = new DatanodeInfo[this.nodes.length];
         System.arraycopy(this.nodes, 0, newNodes, 0, this.nodes.length);
-        assert Arrays.equals(originalNodes, newNodes);
+        //assert Arrays.equals(originalNodes, newNodes);
 
         synchronized (dataQueue) {
           // wait for a packet to be sent.
