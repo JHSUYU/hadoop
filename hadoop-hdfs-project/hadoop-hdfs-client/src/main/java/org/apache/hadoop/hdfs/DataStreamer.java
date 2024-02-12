@@ -712,6 +712,7 @@ class DataStreamer extends Daemon {
     this.ackQueue.addAll(this.shadowAckQueue);
     this.packetSendTime.clear();
     this.packetSendTime.putAll(this.shadowPacketSendTime);
+    initDataStreaming();
     Configuration.triggerAgain = false;
     LOG.info("After shadowErrorHandler, the nodes are: {}", Arrays.toString(this.nodes));
   }
@@ -736,10 +737,9 @@ class DataStreamer extends Daemon {
         boolean doSleep = false;
         if (!checker()) {
           doSleep = shadowProcessDatanodeOrExternalError();
-        }else {
-          revert2Original();
-          initDataStreaming();
           LOG.info("[Failure Recovery] checker Trigger Again");
+        }else{
+          revert2Original();
         }
         //boolean doSleep = processDatanodeOrExternalError();
 
