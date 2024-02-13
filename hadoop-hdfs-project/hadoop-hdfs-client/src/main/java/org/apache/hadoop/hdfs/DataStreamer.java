@@ -1951,6 +1951,8 @@ class DataStreamer extends Daemon {
   boolean handleBadDatanode() {
     final int badNodeIndex = errorState.getBadNodeIndex();
     if (badNodeIndex >= 0) {
+      Configuration.process_count++;
+      assert Configuration.process_count == Configuration.error_count;
       if (nodes.length <= 1) {
         lastException.set(new IOException("All datanodes "
             + Arrays.toString(nodes) + " are bad. Aborting..."));
@@ -1967,8 +1969,8 @@ class DataStreamer extends Daemon {
           + Arrays.toString(nodes) + ": datanode " + badNodeIndex
           + "("+ nodes[badNodeIndex] + ") is " + reason);
       failed.add(nodes[badNodeIndex]);
-//      assert ! erroredNodes.contains(nodes[badNodeIndex]);
-//      erroredNodes.add(nodes[badNodeIndex]);
+      assert ! erroredNodes.contains(nodes[badNodeIndex]);
+      erroredNodes.add(nodes[badNodeIndex]);
 
       DatanodeInfo[] newnodes = new DatanodeInfo[nodes.length-1];
       arraycopy(nodes, newnodes, badNodeIndex);
