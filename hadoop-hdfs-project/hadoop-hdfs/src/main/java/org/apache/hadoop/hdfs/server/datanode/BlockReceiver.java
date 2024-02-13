@@ -1485,10 +1485,10 @@ class BlockReceiver implements Closeable {
               throw ioe;
 //              mirrorError = true;
 //              LOG.info(myString, ioe);
-              if(Configuration.triggerAgain){
-                LOG.debug("[Failure Recovery] Triggering again");
-              }
-              Configuration.triggerAgain = true;
+//              if(Configuration.triggerAgain){
+//                LOG.debug("[Failure Recovery] Triggering again");
+//              }
+//              Configuration.triggerAgain = true;
 
             } else {
               Configuration.error_count++;
