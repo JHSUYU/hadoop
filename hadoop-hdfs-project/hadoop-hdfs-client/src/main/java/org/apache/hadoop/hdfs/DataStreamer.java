@@ -548,7 +548,6 @@ class DataStreamer extends Daemon {
   private final String[] favoredNodes;
   private final EnumSet<AddBlockFlag> addBlockFlags;
   public boolean isCopy = false;
-  DatanodeInfo[] originalNodes = new DatanodeInfo[this.nodes.length];
 
   private DataStreamer(HdfsFileStatus stat, ExtendedBlock block,
                        DFSClient dfsClient, String src,
@@ -735,10 +734,8 @@ class DataStreamer extends Daemon {
       try {
         // process datanode IO errors if any
         LOG.info("Before shadowErrorHandler, the nodes are: {}", Arrays.toString(this.nodes));
-
-//        for(int i=0;i<this.nodes.length; i++){
-//          originalNodes[i] = null;
-//        }
+        List<DatanodeInfo> originalNodes = new ArrayList<DatanodeInfo>();
+        originalNodes.addAll(Arrays.asList(this.nodes));
         boolean doSleep = false;
 //        if (!checker()) {
 //          doSleep = shadowProcessDatanodeOrExternalError();
