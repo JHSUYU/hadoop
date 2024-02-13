@@ -30,15 +30,7 @@ import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.Socket;
 import java.nio.channels.ClosedChannelException;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.HashMap;
-import java.util.EnumSet;
-import java.util.HashSet;
-import java.util.LinkedList;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
@@ -742,11 +734,9 @@ class DataStreamer extends Daemon {
         // process datanode IO errors if any
         LOG.info("Before shadowErrorHandler, the nodes are: {}", Arrays.toString(this.nodes));
         List<DatanodeInfo> originalNodes = new ArrayList<DatanodeInfo>();
-
         for(int i=0;i<getNodesLength();i++){
-          LOG.info("testing");
+          originalNodes.add(this.nodes[i]);
         }
-//        originalNodes.addAll(Arrays.asList(this.nodes));
         boolean doSleep = false;
 //        if (!checker()) {
 //          doSleep = shadowProcessDatanodeOrExternalError();
@@ -756,9 +746,12 @@ class DataStreamer extends Daemon {
 //          //processDatanodeOrExternalError();
 //        }
         doSleep = processDatanodeOrExternalError();
-//        DatanodeInfo[] newNodes = new DatanodeInfo[this.nodes.length];
-//        System.arraycopy(this.nodes, 0, newNodes, 0, this.nodes.length);
-        //assert Arrays.equals(originalNodes, newNodes);
+        List<DatanodeInfo> newNodes = new ArrayList<DatanodeInfo>();
+        for(int i=0;i<getNodesLength();i++){
+          newNodes.add(this.nodes[i]);
+        }
+
+        assert originalNodes.equals(newNodes);
 
         synchronized (dataQueue) {
           // wait for a packet to be sent.
