@@ -717,6 +717,13 @@ class DataStreamer extends Daemon {
     LOG.info("After shadowErrorHandler, the nodes are: {}", Arrays.toString(this.nodes));
   }
 
+  public int getNodesLength(){
+    if (this.nodes == null){
+      return 0;
+    }
+    return this.nodes.length;
+  }
+
   /*
    * streamer thread is the only thread that opens streams to datanode,
    * and closes them. Any error recovery is also done by this thread.
@@ -735,7 +742,8 @@ class DataStreamer extends Daemon {
         // process datanode IO errors if any
         LOG.info("Before shadowErrorHandler, the nodes are: {}", Arrays.toString(this.nodes));
         List<DatanodeInfo> originalNodes = new ArrayList<DatanodeInfo>();
-        for(int i=0;i<15;i++){
+
+        for(int i=0;i<getNodesLength();i++){
           LOG.info("testing");
         }
 //        originalNodes.addAll(Arrays.asList(this.nodes));
