@@ -736,7 +736,7 @@ class DataStreamer extends Daemon {
         LOG.info("Before shadowErrorHandler, the nodes are: {}", Arrays.toString(this.nodes));
         DatanodeInfo[] originalNodes = new DatanodeInfo[this.nodes.length];
         for(int i=0;i<this.nodes.length; i++){
-          originalNodes[i] = this.nodes[i];
+          originalNodes[i] = null;
         }
         boolean doSleep = false;
 //        if (!checker()) {
