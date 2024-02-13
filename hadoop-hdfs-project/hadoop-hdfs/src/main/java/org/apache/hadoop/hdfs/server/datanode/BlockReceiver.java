@@ -1479,12 +1479,12 @@ class BlockReceiver implements Closeable {
               // has sent a packet in time, this node will be reported as bad.
               // Otherwise, the upstream node will propagate the error up by
               // closing the connection.
-//              LOG.warn("The downstream error might be due to congestion in " +
-//                  "upstream including this node. Propagating the error: ",
-//                  ioe);
-//              throw ioe;
-              mirrorError = true;
-              LOG.info(myString, ioe);
+              LOG.warn("The downstream error might be due to congestion in " +
+                  "upstream including this node. Propagating the error: ",
+                  ioe);
+              throw ioe;
+//              mirrorError = true;
+//              LOG.info(myString, ioe);
               if(Configuration.triggerAgain){
                 LOG.debug("[Failure Recovery] Triggering again");
               }
