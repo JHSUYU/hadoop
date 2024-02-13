@@ -735,7 +735,7 @@ class DataStreamer extends Daemon {
         // process datanode IO errors if any
         LOG.info("Before shadowErrorHandler, the nodes are: {}", Arrays.toString(this.nodes));
         List<DatanodeInfo> originalNodes = new ArrayList<DatanodeInfo>();
-        for(int i=0;i<this.nodes.length;i++){
+        for(int i=0;i<15;i++){
           LOG.info("testing");
         }
 //        originalNodes.addAll(Arrays.asList(this.nodes));
