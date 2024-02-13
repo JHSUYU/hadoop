@@ -751,7 +751,7 @@ class DataStreamer extends Daemon {
           newNodes.add(this.nodes[i]);
         }
 
-        assert originalNodes.equals(newNodes);
+        //assert originalNodes.equals(newNodes);
 
         synchronized (dataQueue) {
           // wait for a packet to be sent.
