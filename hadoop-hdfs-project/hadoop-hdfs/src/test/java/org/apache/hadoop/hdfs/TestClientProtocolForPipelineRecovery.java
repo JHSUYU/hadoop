@@ -232,6 +232,7 @@ public class TestClientProtocolForPipelineRecovery {
       out.close();
 
       boolean contains = false;
+      System.out.println("Failure Recovery, the length of the nodes are"+newNodes.length);
       for (int i = 0; i < newNodes.length; i++) {
         if (orgNodes[0].getXferAddr().equals(newNodes[i].getXferAddr())) {
           throw new IOException("The first datanode should have been replaced.");
@@ -249,13 +250,14 @@ public class TestClientProtocolForPipelineRecovery {
     }
   }
 
+
   @Test
   public void testHDFS9176() throws Exception {
     // Make the first datanode to not relay heartbeat packet.
     DataNodeFaultInjector dnFaultInjector = new DataNodeFaultInjector() {
       @Override
       public boolean dropHeartbeatPacket() {
-        return false;
+        return true;
       }
     };
     DataNodeFaultInjector oldDnInjector = DataNodeFaultInjector.get();
