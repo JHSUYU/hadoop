@@ -486,7 +486,7 @@ class DataStreamer extends Daemon {
 
   /** Nodes have been used in the pipeline before and have failed. */
   private final List<DatanodeInfo> failed = new ArrayList<>();
-  public static HashMap<DatanodeInfo, Integer> erroredNodes = new HashMap<>();
+
   private final List<DatanodeInfo> shadowFailed = new ArrayList<>();
   /** Restarting Nodes */
   private List<DatanodeInfo> restartingNodes = new ArrayList<>();
@@ -1947,7 +1947,7 @@ class DataStreamer extends Daemon {
   boolean handleBadDatanode() {
     final int badNodeIndex = errorState.getBadNodeIndex();
     if (badNodeIndex >= 0) {
-      erroredNodes.put(nodes[badNodeIndex],erroredNodes.getOrDefault(nodes[badNodeIndex],0)+1);
+      DFSOutputStream.erroredNodes.put(nodes[badNodeIndex],DFSOutputStream.erroredNodes.getOrDefault(nodes[badNodeIndex],0)+1);
       if (nodes.length <= 1) {
         lastException.set(new IOException("All datanodes "
             + Arrays.toString(nodes) + " are bad. Aborting..."));
