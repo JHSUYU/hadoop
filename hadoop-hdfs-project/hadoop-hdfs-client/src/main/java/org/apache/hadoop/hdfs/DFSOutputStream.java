@@ -132,6 +132,7 @@ public class DFSOutputStream extends FSOutputSummer
   private FileEncryptionInfo fileEncryptionInfo;
   private int writePacketSize;
   private boolean leaseRecovered = false;
+  public static HashMap<DatanodeInfo, Integer> erroredNodes = new HashMap<>();
 
   /** Use {@link ByteArrayManager} to create buffer for non-heartbeat packets.*/
   protected DFSPacket createPacket(int packetSize, int chunksPerPkt,
@@ -179,7 +180,7 @@ public class DFSOutputStream extends FSOutputSummer
 
   @VisibleForTesting
   public synchronized HashMap<DatanodeInfo, Integer> getBadDataNode() {
-    return DataStreamer.erroredNodes;
+    return erroredNodes;
   }
 
   /**
