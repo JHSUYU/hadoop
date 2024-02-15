@@ -228,10 +228,6 @@ public class Configuration implements Iterable<Map.Entry<String,String>>,
                                       Writable {
   public static boolean triggerAgain = false;
 
-  public static int error_count=0;
-
-  public static int process_count=0;
-
   private static final Logger LOG =
       LoggerFactory.getLogger(Configuration.class);
 

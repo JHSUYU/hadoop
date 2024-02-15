@@ -167,4 +167,6 @@ public class DataNodeFaultInjector {
    * Just delay run diff record a while.
    */
   public void delayDiffRecord() {}
+
+  public void markBadNode(String dnAddr) throws IOException{}
 }

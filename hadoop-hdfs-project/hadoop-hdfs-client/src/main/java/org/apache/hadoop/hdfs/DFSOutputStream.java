@@ -23,6 +23,7 @@ import java.io.InterruptedIOException;
 import java.nio.ByteBuffer;
 import java.nio.channels.ClosedChannelException;
 import java.util.EnumSet;
+import java.util.HashMap;
 import java.util.concurrent.atomic.AtomicReference;
 
 import org.apache.hadoop.HadoopIllegalArgumentException;
@@ -174,6 +175,11 @@ public class DFSOutputStream extends FSOutputSummer
     DatanodeInfo[] value = new DatanodeInfo[currentNodes.length];
     System.arraycopy(currentNodes, 0, value, 0, currentNodes.length);
     return value;
+  }
+
+  @VisibleForTesting
+  public synchronized HashMap<DatanodeInfo, Integer> getBadDataNode() {
+    return DataStreamer.erroredNodes;
   }
 
   /**

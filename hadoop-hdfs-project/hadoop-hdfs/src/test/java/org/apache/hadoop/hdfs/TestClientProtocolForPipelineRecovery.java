@@ -22,10 +22,7 @@ import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
 import java.io.IOException;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
-import java.util.Random;
+import java.util.*;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -250,9 +247,68 @@ public class TestClientProtocolForPipelineRecovery {
     }
   }
 
+  @Test
+  public void testHDFS9176Rule2andRule3() throws Exception {
+    // Make the first datanode to not relay heartbeat packet.
+    DataNodeFaultInjector dnFaultInjector = new DataNodeFaultInjector() {
+      @Override
+      public boolean dropHeartbeatPacket() {
+        return true;
+      }
+    };
+    DataNodeFaultInjector oldDnInjector = DataNodeFaultInjector.get();
+    DataNodeFaultInjector.set(dnFaultInjector);
+
+    // Setting the timeout to be 3 seconds. Normally heartbeat packet
+    // would be sent every 1.5 seconds if there is no data traffic.
+    Configuration conf = new HdfsConfiguration();
+    conf.set(HdfsClientConfigKeys.DFS_CLIENT_SOCKET_TIMEOUT_KEY, "3000");
+    MiniDFSCluster cluster = null;
+
+
+    try {
+      int numDataNodes = 4;
+      cluster = new MiniDFSCluster.Builder(conf).numDataNodes(numDataNodes).build();
+      cluster.waitActive();
+      FileSystem fs = cluster.getFileSystem();
+
+      FSDataOutputStream out = fs.create(new Path("noheartbeat.dat"), (short)2);
+      out.write(0x31);
+      out.hflush();
+
+      DFSOutputStream dfsOut = (DFSOutputStream)out.getWrappedStream();
+
+      // original pipeline
+      DatanodeInfo[] orgNodes = dfsOut.getPipeline();
+      DatanodeInfo silentNode = orgNodes[1];
+
+
+      // Cause the second datanode to timeout on reading packet
+      Thread.sleep(3500);
+      out.write(0x32);
+      out.hflush();
+
+      Assert.assertEquals(1, (int) dfsOut.getBadDataNode().get(silentNode));
+
+      Thread.sleep(3500);
+      out.write(0x33);
+
+      // new pipeline
+      DatanodeInfo[] newNodes = dfsOut.getPipeline();
+      out.close();
+      Assert.assertEquals(1, (int) dfsOut.getBadDataNode().get(silentNode));
+      Assert.assertEquals(2, dfsOut.getBadDataNode().keySet().size());
+
+    } finally {
+      DataNodeFaultInjector.set(oldDnInjector);
+      if (cluster != null) {
+        cluster.shutdown();
+      }
+    }
+  }
 
   @Test
-  public void testHDFS9176() throws Exception {
+  public void testHDFS9176Rule1() throws Exception {
     // Make the first datanode to not relay heartbeat packet.
     DataNodeFaultInjector dnFaultInjector = new DataNodeFaultInjector() {
       @Override
@@ -270,12 +326,12 @@ public class TestClientProtocolForPipelineRecovery {
     MiniDFSCluster cluster = null;
 
     try {
-      int numDataNodes = 8;
+      int numDataNodes = 2;
       cluster = new MiniDFSCluster.Builder(conf).numDataNodes(numDataNodes).build();
       cluster.waitActive();
       FileSystem fs = cluster.getFileSystem();
 
-      FSDataOutputStream out = fs.create(new Path("noheartbeat.dat"), (short)4);
+      FSDataOutputStream out = fs.create(new Path("noheartbeat.dat"), (short)2);
       out.write(0x31);
       out.hflush();
 
@@ -285,29 +341,144 @@ public class TestClientProtocolForPipelineRecovery {
       DatanodeInfo[] orgNodes = dfsOut.getPipeline();
 
       // Cause the second datanode to timeout on reading packet
-      //Thread.sleep(3500);
+      Thread.sleep(3500);
       out.write(0x32);
-      out.hflush();
-
-      // Cause the second datanode to timeout on reading packet
-      //Thread.sleep(3500);
-      out.write(0x33);
       out.hflush();
 
       // new pipeline
       DatanodeInfo[] newNodes = dfsOut.getPipeline();
       out.close();
 
-//      boolean contains = false;
-//      for (int i = 0; i < newNodes.length; i++) {
-//        if (orgNodes[0].getXferAddr().equals(newNodes[i].getXferAddr())) {
-//          throw new IOException("The first datanode should have been replaced.");
-//        }
-//        if (orgNodes[1].getXferAddr().equals(newNodes[i].getXferAddr())) {
-//          contains = true;
-//        }
-//      }
-//      Assert.assertTrue(contains);
+
+      Assert.assertArrayEquals(orgNodes, newNodes);
+    } finally {
+      DataNodeFaultInjector.set(oldDnInjector);
+      if (cluster != null) {
+        cluster.shutdown();
+      }
+    }
+  }
+
+  @Test
+  public void testDefaultRule1() throws Exception {
+    // Make the first datanode to not relay heartbeat packet.
+    DataNodeFaultInjector oldDnInjector = DataNodeFaultInjector.get();
+
+    // Setting the timeout to be 3 seconds. Normally heartbeat packet
+    // would be sent every 1.5 seconds if there is no data traffic.
+    Configuration conf = new HdfsConfiguration();
+    conf.set(HdfsClientConfigKeys.DFS_CLIENT_SOCKET_TIMEOUT_KEY, "3000");
+    MiniDFSCluster cluster = null;
+
+    try {
+      int numDataNodes = 4;
+      cluster = new MiniDFSCluster.Builder(conf).numDataNodes(numDataNodes).build();
+      cluster.waitActive();
+      FileSystem fs = cluster.getFileSystem();
+
+      FSDataOutputStream out = fs.create(new Path("noheartbeat.dat"), (short)2);
+      out.write(0x31);
+      out.hflush();
+
+      DFSOutputStream dfsOut = (DFSOutputStream)out.getWrappedStream();
+
+      // original pipeline
+      DatanodeInfo[] orgNodes = dfsOut.getPipeline();
+      final String lastDn = orgNodes[1].getXferAddr(false);
+
+      DataNodeFaultInjector.set(new DataNodeFaultInjector() {
+        @Override
+        public void markBadNode(String dnAddr) throws IOException {
+          if (dnAddr.equals(lastDn)) {
+            throw new IOException("Remove bad datanode");
+          }
+        }
+      });
+
+      // Cause the second datanode to be removed
+      out.write(0x32);
+      out.hflush();
+
+      // new pipeline
+      DatanodeInfo[] newNodes = dfsOut.getPipeline();
+      out.close();
+
+      //verify rule1: The bad datanode should not be removed.
+      Assert.assertTrue(Arrays.asList(newNodes).contains(orgNodes[1]));
+      Assert.assertArrayEquals(orgNodes, newNodes);
+    } finally {
+      DataNodeFaultInjector.set(oldDnInjector);
+      if (cluster != null) {
+        cluster.shutdown();
+      }
+    }
+  }
+
+  @Test
+  public void testDefaultRule2andRule3() throws Exception {
+    // Make the first datanode to not relay heartbeat packet.
+    DataNodeFaultInjector oldDnInjector = DataNodeFaultInjector.get();
+
+    // Setting the timeout to be 3 seconds. Normally heartbeat packet
+    // would be sent every 1.5 seconds if there is no data traffic.
+    Configuration conf = new HdfsConfiguration();
+    conf.set(HdfsClientConfigKeys.DFS_CLIENT_SOCKET_TIMEOUT_KEY, "3000");
+    MiniDFSCluster cluster = null;
+
+    try {
+      int numDataNodes = 4;
+      cluster = new MiniDFSCluster.Builder(conf).numDataNodes(numDataNodes).build();
+      cluster.waitActive();
+      FileSystem fs = cluster.getFileSystem();
+
+      FSDataOutputStream out = fs.create(new Path("noheartbeat.dat"), (short)2);
+      out.write(0x31);
+      out.hflush();
+
+      DFSOutputStream dfsOut = (DFSOutputStream)out.getWrappedStream();
+
+      // original pipeline
+      DatanodeInfo[] orgNodes = dfsOut.getPipeline();
+      DatanodeInfo silentNode = orgNodes[1];
+      final String errorDn = silentNode.getXferAddr(false);
+
+      DataNodeFaultInjector.set(new DataNodeFaultInjector() {
+        @Override
+        public void markBadNode(String dnAddr) throws IOException {
+          if (dnAddr.equals(errorDn)) {
+            throw new IOException("Remove bad datanode");
+          }
+        }
+      });
+
+      // Cause the second datanode to be removed
+      out.write(0x32);
+      out.hflush();
+
+      //dfs.getBadDataNode() returns a HashMap<Datanode, Integer>
+      Assert.assertEquals(1, (int) dfsOut.getBadDataNode().get(silentNode));
+
+      // new pipeline
+      DatanodeInfo[] newNodes = dfsOut.getPipeline();
+      final String errorDnAddress = newNodes[1].getXferAddr(false);
+
+      DataNodeFaultInjector.set(new DataNodeFaultInjector() {
+        @Override
+        public void markBadNode(String dnAddr) throws IOException {
+          if (dnAddr.equals(errorDnAddress)) {
+            throw new IOException("Remove bad datanode Default Case");
+          }
+        }
+      });
+      out.write(0x33);
+      out.hflush();
+      out.close();
+      int sum=0;
+      for(int i:dfsOut.getBadDataNode().values()){
+        sum+=i;
+      }
+      Assert.assertEquals(1, (int) dfsOut.getBadDataNode().get(silentNode));
+      Assert.assertEquals(2, sum);
     } finally {
       DataNodeFaultInjector.set(oldDnInjector);
       if (cluster != null) {
