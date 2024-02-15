@@ -1964,8 +1964,6 @@ class DataStreamer extends Daemon {
           + Arrays.toString(nodes) + ": datanode " + badNodeIndex
           + "("+ nodes[badNodeIndex] + ") is " + reason);
       failed.add(nodes[badNodeIndex]);
-      assert ! erroredNodes.contains(nodes[badNodeIndex]);
-      erroredNodes.add(nodes[badNodeIndex]);
 
       DatanodeInfo[] newnodes = new DatanodeInfo[nodes.length-1];
       arraycopy(nodes, newnodes, badNodeIndex);
