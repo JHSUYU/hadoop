@@ -485,6 +485,10 @@ public class TestClientProtocolForPipelineRecovery {
         if(key.getXferAddr().equals(silentNode.getXferAddr()))
           Assert.assertEquals(1, (int) dfsOut.getBadDataNode().get(key));
       }
+      //Print the items in the badDataNode HashMap
+        for (Map.Entry<DatanodeInfo, Integer> entry : dfsOut.getBadDataNode().entrySet()) {
+            LOG.info("Key = " + entry.getKey() + ", Value = " + entry.getValue());
+        }
       LOG.info("Failure Recovery Count: "+sum);
     } finally {
       DataNodeFaultInjector.set(oldDnInjector);
