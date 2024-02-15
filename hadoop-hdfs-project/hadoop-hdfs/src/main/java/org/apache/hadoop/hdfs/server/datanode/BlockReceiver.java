@@ -1472,7 +1472,6 @@ class BlockReceiver implements Closeable {
             if (Thread.interrupted()) {
               isInterrupted = true;
             } else if (ioe instanceof EOFException && !packetSentInTime()) {
-              Configuration.error_count++;
               // The downstream error was caused by upstream including this
               // node not sending packet in time. Let the upstream determine
               // who is at fault.  If the immediate upstream node thinks it
@@ -1491,7 +1490,6 @@ class BlockReceiver implements Closeable {
 //              Configuration.triggerAgain = true;
 
             } else {
-              Configuration.error_count++;
               // continue to run even if can not read from mirror
               // notify client of the error
               // and wait for the client to shut down the pipeline
