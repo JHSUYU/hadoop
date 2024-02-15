@@ -456,7 +456,11 @@ public class TestClientProtocolForPipelineRecovery {
       out.hflush();
 
       //dfs.getBadDataNode() returns a HashMap<Datanode, Integer>
-      Assert.assertEquals(1, (int) dfsOut.getBadDataNode().get(silentNode));
+      for (DatanodeInfo key:dfsOut.getBadDataNode().keySet()){
+        if(key.getXferAddr().equals(silentNode.getXferAddr()))
+        Assert.assertEquals(1, (int) dfsOut.getBadDataNode().get(key));
+      }
+
 
       // new pipeline
       DatanodeInfo[] newNodes = dfsOut.getPipeline();
@@ -477,7 +481,10 @@ public class TestClientProtocolForPipelineRecovery {
       for(int i:dfsOut.getBadDataNode().values()){
         sum+=i;
       }
-      Assert.assertEquals(1, (int) dfsOut.getBadDataNode().get(silentNode));
+      for (DatanodeInfo key:dfsOut.getBadDataNode().keySet()){
+        if(key.getXferAddr().equals(silentNode.getXferAddr()))
+          Assert.assertEquals(1, (int) dfsOut.getBadDataNode().get(key));
+      }
       Assert.assertEquals(2, sum);
     } finally {
       DataNodeFaultInjector.set(oldDnInjector);
