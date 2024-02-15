@@ -247,6 +247,7 @@ public class DFSOutputStream extends FSOutputSummer
           blockSize + ").");
     }
     this.byteArrayManager = dfsClient.getClientContext().getByteArrayManager();
+    erroredNodes = new HashMap<>();
   }
 
   /**
