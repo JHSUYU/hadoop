@@ -741,7 +741,7 @@ class DataStreamer extends Daemon {
 //          revert2Original();
 //          //processDatanodeOrExternalError();
 //        }
-        //doSleep = processDatanodeOrExternalError();
+        doSleep = processDatanodeOrExternalError();
 
         //assert originalNodes.equals(newNodes);
 
@@ -1536,7 +1536,7 @@ class DataStreamer extends Daemon {
       return false;
     }
 
-    setupPipelineForAppendOrRecovery();
+    //setupPipelineForAppendOrRecovery();
 
     if (!streamerClosed && dfsClient.clientRunning) {
       if (stage == BlockConstructionStage.PIPELINE_CLOSE) {
