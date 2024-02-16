@@ -461,6 +461,8 @@ public class TestClientProtocolForPipelineRecovery {
         Assert.assertEquals(1, (int) dfsOut.getBadDataNode().get(key));
       }
 
+      out.write(0x32);
+      out.hflush();
 
       // new pipeline
       DatanodeInfo[] newNodes = dfsOut.getPipeline();
