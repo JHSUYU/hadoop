@@ -426,12 +426,12 @@ public class TestClientProtocolForPipelineRecovery {
     MiniDFSCluster cluster = null;
 
     try {
-      int numDataNodes = 4;
+      int numDataNodes = 5;
       cluster = new MiniDFSCluster.Builder(conf).numDataNodes(numDataNodes).build();
       cluster.waitActive();
       FileSystem fs = cluster.getFileSystem();
 
-      FSDataOutputStream out = fs.create(new Path("noheartbeat.dat"), (short)2);
+      FSDataOutputStream out = fs.create(new Path("noheartbeat.dat"), (short)3);
       out.write(0x31);
       out.hflush();
 
@@ -466,6 +466,7 @@ public class TestClientProtocolForPipelineRecovery {
 
       // new pipeline
       DatanodeInfo[] newNodes = dfsOut.getPipeline();
+
       final String errorDnAddress = newNodes[1].getXferAddr(false);
 
       DataNodeFaultInjector.set(new DataNodeFaultInjector() {
