@@ -1417,6 +1417,7 @@ class BlockReceiver implements Closeable {
               DataNodeFaultInjector.get().failPipeline(replicaInfo, mirrorAddr);
               // read an ack from downstream datanode
               ack.readFields(downstreamIn);
+              DataNodeFaultInjector.get().markBadNode(mirrorAddr);
               ackRecvNanoTime = System.nanoTime();
               if (LOG.isDebugEnabled()) {
                 LOG.debug(myString + " got " + ack);

@@ -489,7 +489,7 @@ public class TestClientProtocolForPipelineRecovery {
         for (Map.Entry<DatanodeInfo, Integer> entry : dfsOut.getBadDataNode().entrySet()) {
             LOG.info("Key = " + entry.getKey() + ", Value = " + entry.getValue());
         }
-      LOG.info("Failure Recovery Count: "+sum);
+      Assert.assertEquals(2, sum);
     } finally {
       DataNodeFaultInjector.set(oldDnInjector);
       if (cluster != null) {
