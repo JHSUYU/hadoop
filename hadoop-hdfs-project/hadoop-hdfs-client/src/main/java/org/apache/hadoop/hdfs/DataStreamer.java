@@ -1550,7 +1550,7 @@ class DataStreamer extends Daemon {
       return false;
     }
 
-    //setupPipelineForAppendOrRecovery();
+    setupPipelineForAppendOrRecovery();
 
     if (!streamerClosed && dfsClient.clientRunning) {
       if (stage == BlockConstructionStage.PIPELINE_CLOSE) {
@@ -2009,7 +2009,7 @@ class DataStreamer extends Daemon {
       String reason = "bad.";
       if (errorState.getRestartingNodeIndex() == badNodeIndex) {
         reason = "restarting.";
-        restartingNodes.add(nodes[badNodeIndex]);
+        restartingNodes.add(this.shadowNodes[badNodeIndex]);
       }
       LOG.warn("Error Recovery for " + block + " in pipeline "
               + Arrays.toString(nodes) + ": datanode " + badNodeIndex
@@ -2026,13 +2026,13 @@ class DataStreamer extends Daemon {
       System.arraycopy(this.storageTypes, 0, this.shadowStorageTypes, 0, this.storageTypes.length);
 
       DatanodeInfo[] newnodes = new DatanodeInfo[nodes.length-1];
-      arraycopy(nodes, newnodes, badNodeIndex);
+      arraycopy(this.shadowNodes, newnodes, badNodeIndex);
 
       final StorageType[] newStorageTypes = new StorageType[newnodes.length];
-      arraycopy(storageTypes, newStorageTypes, badNodeIndex);
+      arraycopy(this.shadowStorageTypes, newStorageTypes, badNodeIndex);
 
       final String[] newStorageIDs = new String[newnodes.length];
-      arraycopy(storageIDs, newStorageIDs, badNodeIndex);
+      arraycopy(this.shadowStorageIDs, newStorageIDs, badNodeIndex);
 
 
       setShadowPipeline(newnodes, newStorageTypes, newStorageIDs);
