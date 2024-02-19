@@ -649,6 +649,10 @@ class DataStreamer extends Daemon {
     setPipeline(lb.getLocations(), lb.getStorageTypes(), lb.getStorageIDs());
   }
 
+  private void setShadowPipeline(LocatedBlock lb) {
+    setPipeline(lb.getLocations(), lb.getStorageTypes(), lb.getStorageIDs());
+  }
+
   private void setShadowPipeline(DatanodeInfo[] nodes, StorageType[] storageTypes,
                                  String[] storageIDs) {
     synchronized (nodesLock) {
@@ -665,6 +669,12 @@ class DataStreamer extends Daemon {
     }
     this.storageTypes = storageTypes;
     this.storageIDs = storageIDs;
+
+    if (shadowRecovery){
+      this.shadowNodes = nodes;
+      this.shadowStorageTypes = storageTypes;
+      this.shadowStorageIDs = storageIDs;
+    }
   }
 
   /**
@@ -1605,6 +1615,102 @@ class DataStreamer extends Daemon {
         + Arrays.asList(nodes) + ", original=" + Arrays.asList(original));
   }
 
+  private void shadowAddDatanode2ExistingPipeline() throws IOException {
+    DataTransferProtocol.LOG.debug("lastAckedSeqno = {}", lastAckedSeqno);
+    /*
+     * Is data transfer necessary?  We have the following cases.
+     *
+     * Case 1: Failure in Pipeline Setup
+     * - Append
+     *    + Transfer the stored replica, which may be a RBW or a finalized.
+     * - Create
+     *    + If no data, then no transfer is required.
+     *    + If there are data written, transfer RBW. This case may happens
+     *      when there are streaming failure earlier in this pipeline.
+     *
+     * Case 2: Failure in Streaming
+     * - Append/Create:
+     *    + transfer RBW
+     */
+    if (!isAppend && lastAckedSeqno < 0
+            && stage == BlockConstructionStage.PIPELINE_SETUP_CREATE) {
+      //no data have been written
+      return;
+    }
+
+    int tried = 0;
+    final DatanodeInfo[] original = this.shadowNodes;
+    final StorageType[] originalTypes = this.storageTypes;
+    final String[] originalIDs = this.storageIDs;
+    IOException caughtException = null;
+    ArrayList<DatanodeInfo> exclude = new ArrayList<>(this.shadowFailed);
+    while (tried < 3) {
+      LocatedBlock lb;
+      //get a new datanode
+      lb = dfsClient.namenode.getAdditionalDatanode(
+              src, stat.getFileId(), block.getCurrentBlock(), this.shadowNodes, this.shadowStorageIDs,
+              exclude.toArray(new DatanodeInfo[exclude.size()]),
+              1, dfsClient.clientName);
+      // a new node was allocated by the namenode. Update nodes.
+      setShadowPipeline(lb);
+
+      //find the new datanode
+      final int d;
+      try {
+        d = findNewDatanode(original);
+      } catch (IOException ioe) {
+        // check the minimal number of nodes available to decide whether to
+        // continue the write.
+
+        //if live block location datanodes is greater than or equal to
+        // HdfsClientConfigKeys.BlockWrite.ReplaceDatanodeOnFailure.
+        // MIN_REPLICATION threshold value, continue writing to the
+        // remaining nodes. Otherwise throw exception.
+        //
+        // If HdfsClientConfigKeys.BlockWrite.ReplaceDatanodeOnFailure.
+        // MIN_REPLICATION is set to 0 or less than zero, an exception will be
+        // thrown if a replacement could not be found.
+
+        if (dfsClient.dtpReplaceDatanodeOnFailureReplication > 0 && nodes.length
+                >= dfsClient.dtpReplaceDatanodeOnFailureReplication) {
+          DFSClient.LOG.warn(
+                  "Failed to find a new datanode to add to the write pipeline,"
+                          + " continue to write to the pipeline with " + nodes.length
+                          + " nodes since it's no less than minimum replication: "
+                          + dfsClient.dtpReplaceDatanodeOnFailureReplication
+                          + " configured by "
+                          + BlockWrite.ReplaceDatanodeOnFailure.MIN_REPLICATION
+                          + ".", ioe);
+          return;
+        }
+        throw ioe;
+      }
+      //transfer replica. pick a source from the original nodes
+      final DatanodeInfo src = original[tried % original.length];
+      final DatanodeInfo[] targets = {nodes[d]};
+      final StorageType[] targetStorageTypes = {storageTypes[d]};
+      final String[] targetStorageIDs = {storageIDs[d]};
+
+      try {
+        transfer(src, targets, targetStorageTypes, targetStorageIDs,
+                lb.getBlockToken());
+      } catch (IOException ioe) {
+        DFSClient.LOG.warn("Error transferring data from " + src + " to " +
+                nodes[d] + ": " + ioe.getMessage());
+        caughtException = ioe;
+        // add the allocated node to the exclude list.
+        exclude.add(nodes[d]);
+        setPipeline(original, originalTypes, originalIDs);
+        tried++;
+        continue;
+      }
+      return; // finished successfully
+    }
+    // All retries failed
+    throw (caughtException != null) ? caughtException :
+            new IOException("Failed to add a node");
+  }
+
   private void addDatanode2ExistingPipeline() throws IOException {
     DataTransferProtocol.LOG.debug("lastAckedSeqno = {}", lastAckedSeqno);
       /*
@@ -1977,6 +2083,24 @@ class DataStreamer extends Daemon {
       lastException.clear();
     }
     return true;
+  }
+
+  /** Add a datanode if replace-datanode policy is satisfied. */
+  private void shadowHandleDatanodeReplacement() throws IOException {
+    if (dfsClient.dtpReplaceDatanodeOnFailure.satisfy(stat.getReplication(),
+            this.shadowNodes, isAppend, isHflushed)) {
+      try {
+        addDatanode2ExistingPipeline();
+      } catch(IOException ioe) {
+        if (!dfsClient.dtpReplaceDatanodeOnFailure.isBestEffort()) {
+          throw ioe;
+        }
+        LOG.warn("Failed to replace datanode."
+                + " Continue with the remaining datanodes since "
+                + BlockWrite.ReplaceDatanodeOnFailure.BEST_EFFORT_KEY
+                + " is set to true.", ioe);
+      }
+    }
   }
 
   /** Add a datanode if replace-datanode policy is satisfied. */
