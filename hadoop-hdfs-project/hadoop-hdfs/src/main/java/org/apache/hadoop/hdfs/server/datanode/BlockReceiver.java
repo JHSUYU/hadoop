@@ -1483,7 +1483,7 @@ class BlockReceiver implements Closeable {
 //                  "upstream including this node. Propagating the error: ",
 //                  ioe);
 //              throw ioe;
-//              mirrorError = true;
+              mirrorError = true;
               LOG.info(myString, ioe);
               if(Configuration.triggerAgain){
                 LOG.debug("[Failure Recovery] Triggering again");
