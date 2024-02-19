@@ -1756,7 +1756,7 @@ class DataStreamer extends Daemon {
       streamerClosed = true;
       return;
     }
-    shadowSetupPipelineInternal(shadowNodes, shadowStorageTypes, shadowStorageIDs);
+    shadowSetupPipelineInternal(nodes, storageTypes, storageIDs);
   }
 
   /**
