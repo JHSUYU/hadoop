@@ -758,7 +758,7 @@ class DataStreamer extends Daemon {
       try {
         // process datanode IO errors if any
         LOG.info("Before shadowErrorHandler, the nodes are: {}", Arrays.toString(this.nodes));
-        boolean doSleep = shadowProcessDatanodeOrExternalError();
+        boolean doSleep = processDatanodeOrExternalError()o;
 
         synchronized (dataQueue) {
           // wait for a packet to be sent.
