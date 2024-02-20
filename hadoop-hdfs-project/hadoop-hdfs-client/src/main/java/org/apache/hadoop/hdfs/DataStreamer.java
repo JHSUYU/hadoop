@@ -1854,7 +1854,13 @@ class DataStreamer extends Daemon {
     // Check number of datanodes. Note that if there is no healthy datanode,
     // this must be internal error because we mark external error in striped
     // outputstream only when all the streamers are in the DATA_STREAMING stage
-    if (this.shadowNodes == null || this.shadowNodes.length == 0) {
+    DatanodeInfo[] curNodes = null;
+    if(shadowRecovery){
+      curNodes = this.shadowNodes;
+    }else{
+      curNodes = this.nodes;
+    }
+    if (curNodes == null || curNodes.length == 0) {
       String msg = "Could not get block locations. " + "Source file \""
               + src + "\" - Aborting..." + this;
       LOG.warn(msg);
