@@ -1901,7 +1901,7 @@ class DataStreamer extends Daemon {
         return;
       }
 
-      handleDatanodeReplacement();
+      //handleDatanodeReplacement();
 
       // get a new generation stamp and an access token
       final LocatedBlock lb = updateBlockForPipeline();
@@ -1909,7 +1909,7 @@ class DataStreamer extends Daemon {
       accessToken = lb.getBlockToken();
 
       // set up the pipeline again with the remaining nodes
-      LOG.debug("[Failure Recovery]: after update the nodes length is"+this.shadowNodes.length);
+      LOG.info("[Failure Recovery]: after update the nodes length is"+this.shadowNodes.length);
       success = createBlockOutputStream(this.shadowNodes, this.shadowStorageTypes, this.shadowStorageIDs, newGS,
               isRecovery);
 
@@ -2022,7 +2022,7 @@ class DataStreamer extends Daemon {
       System.arraycopy(this.nodes, 0, this.shadowNodes, 0, this.nodes.length);
       this.shadowStorageIDs = new String[storageIDs.length];
       System.arraycopy(this.storageIDs, 0, this.shadowStorageIDs, 0, this.storageIDs.length);
-      this.shadowStorageTypes = storageTypes;
+      this.shadowStorageTypes = new StorageType[storageTypes.length];
       System.arraycopy(this.storageTypes, 0, this.shadowStorageTypes, 0, this.storageTypes.length);
 
       DatanodeInfo[] newnodes = new DatanodeInfo[nodes.length-1];
@@ -2067,6 +2067,7 @@ class DataStreamer extends Daemon {
           + Arrays.toString(nodes) + ": datanode " + badNodeIndex
           + "("+ nodes[badNodeIndex] + ") is " + reason);
       failed.add(nodes[badNodeIndex]);
+      this.shadowFailed.add(nodes[badNodeIndex]);
 
       DatanodeInfo[] newnodes = new DatanodeInfo[nodes.length-1];
       arraycopy(nodes, newnodes, badNodeIndex);
