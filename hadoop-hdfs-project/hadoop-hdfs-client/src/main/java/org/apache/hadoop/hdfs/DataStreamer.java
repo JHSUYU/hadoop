@@ -650,7 +650,7 @@ class DataStreamer extends Daemon {
   }
 
   private void setShadowPipeline(LocatedBlock lb) {
-    setPipeline(lb.getLocations(), lb.getStorageTypes(), lb.getStorageIDs());
+    setShadowPipeline(lb.getLocations(), lb.getStorageTypes(), lb.getStorageIDs());
   }
 
   private void setShadowPipeline(DatanodeInfo[] nodes, StorageType[] storageTypes,
@@ -1590,6 +1590,31 @@ class DataStreamer extends Daemon {
     isHflushed = true;
   }
 
+  private int shadowFindNewDatanode(final DatanodeInfo[] original
+  ) throws IOException {
+    if (this.shadowNodes.length != original.length + 1) {
+      throw new IOException(
+              "Failed to replace a bad datanode on the existing pipeline "
+                      + "due to no more good datanodes being available to try. "
+                      + "(Nodes: current=" + Arrays.asList(shadowNodes)
+                      + ", original=" + Arrays.asList(original) + "). "
+                      + "The current failed datanode replacement policy is "
+                      + dfsClient.dtpReplaceDatanodeOnFailure
+                      + ", and a client may configure this via '"
+                      + BlockWrite.ReplaceDatanodeOnFailure.POLICY_KEY
+                      + "' in its configuration.");
+    }
+    for(int i = 0; i < shadowNodes.length; i++) {
+      int j = 0;
+      for(; j < original.length && !this.shadowNodes[i].equals(original[j]); j++);
+      if (j == original.length) {
+        return i;
+      }
+    }
+    throw new IOException("Failed: new datanode not found: nodes="
+            + Arrays.asList(this.shadowNodes) + ", original=" + Arrays.asList(original));
+  }
+
   private int findNewDatanode(final DatanodeInfo[] original
   ) throws IOException {
     if (nodes.length != original.length + 1) {
@@ -1640,10 +1665,10 @@ class DataStreamer extends Daemon {
 
     int tried = 0;
     final DatanodeInfo[] original = this.shadowNodes;
-    final StorageType[] originalTypes = this.storageTypes;
-    final String[] originalIDs = this.storageIDs;
+    final StorageType[] originalTypes = this.shadowStorageTypes;
+    final String[] originalIDs = this.shadowStorageIDs;
     IOException caughtException = null;
-    ArrayList<DatanodeInfo> exclude = new ArrayList<>(this.shadowFailed);
+    ArrayList<DatanodeInfo> exclude = new ArrayList<>(this.failed);
     while (tried < 3) {
       LocatedBlock lb;
       //get a new datanode
@@ -1657,7 +1682,7 @@ class DataStreamer extends Daemon {
       //find the new datanode
       final int d;
       try {
-        d = findNewDatanode(original);
+        d = shadowFindNewDatanode(original);
       } catch (IOException ioe) {
         // check the minimal number of nodes available to decide whether to
         // continue the write.
@@ -1687,9 +1712,9 @@ class DataStreamer extends Daemon {
       }
       //transfer replica. pick a source from the original nodes
       final DatanodeInfo src = original[tried % original.length];
-      final DatanodeInfo[] targets = {nodes[d]};
-      final StorageType[] targetStorageTypes = {storageTypes[d]};
-      final String[] targetStorageIDs = {storageIDs[d]};
+      final DatanodeInfo[] targets = {this.shadowNodes[d]};
+      final StorageType[] targetStorageTypes = {this.shadowStorageTypes[d]};
+      final String[] targetStorageIDs = {this.shadowStorageIDs[d]};
 
       try {
         transfer(src, targets, targetStorageTypes, targetStorageIDs,
@@ -1907,7 +1932,12 @@ class DataStreamer extends Daemon {
         return;
       }
 
-      handleDatanodeReplacement();
+      if(shadowRecovery){
+        shadowHandleDatanodeReplacement();
+      }else{
+        handleDatanodeReplacement();
+      }
+
 
       // get a new generation stamp and an access token
       final LocatedBlock lb = updateBlockForPipeline();
@@ -2097,7 +2127,7 @@ class DataStreamer extends Daemon {
     if (dfsClient.dtpReplaceDatanodeOnFailure.satisfy(stat.getReplication(),
             this.shadowNodes, isAppend, isHflushed)) {
       try {
-        addDatanode2ExistingPipeline();
+        shadowAddDatanode2ExistingPipeline();
       } catch(IOException ioe) {
         if (!dfsClient.dtpReplaceDatanodeOnFailure.isBestEffort()) {
           throw ioe;
