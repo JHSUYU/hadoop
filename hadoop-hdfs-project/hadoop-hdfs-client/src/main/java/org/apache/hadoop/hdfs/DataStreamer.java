@@ -807,7 +807,7 @@ class DataStreamer extends Daemon {
           initDataStreaming();
         } else if (stage == BlockConstructionStage.PIPELINE_SETUP_APPEND) {
           LOG.debug("Append to block {}", block);
-          shadowSetupPipelineForAppendOrRecovery();
+          setupPipelineForAppendOrRecovery();
           if (streamerClosed) {
             continue;
           }
