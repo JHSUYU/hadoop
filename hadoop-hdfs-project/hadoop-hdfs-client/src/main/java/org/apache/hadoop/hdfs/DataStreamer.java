@@ -1932,11 +1932,7 @@ class DataStreamer extends Daemon {
         return;
       }
 
-      if(shadowRecovery){
-        shadowHandleDatanodeReplacement();
-      }else{
-        handleDatanodeReplacement();
-      }
+      //shadowHandleDatanodeReplacement();
 
 
       // get a new generation stamp and an access token
