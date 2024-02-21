@@ -2035,7 +2035,6 @@ class DataStreamer extends Daemon {
   boolean shadowHandleBadDatanode() {
     final int badNodeIndex = errorState.getBadNodeIndex();
     if (badNodeIndex >= 0) {
-      this.shadowRecovery = true;
       this.shadowFailed.clear();
       this.shadowFailed.addAll(failed);
       this.shadowNodes = new DatanodeInfo[nodes.length];
@@ -2055,15 +2054,16 @@ class DataStreamer extends Daemon {
               + Arrays.toString(nodes) + ": datanode " + badNodeIndex
               + "("+ nodes[badNodeIndex] + ") is " + reason);
 
+      if(!shadowRecovery){
+        System.arraycopy(this.nodes, 0, this.shadowNodes, 0, this.nodes.length);
+        this.shadowStorageIDs = new String[storageIDs.length];
+        System.arraycopy(this.storageIDs, 0, this.shadowStorageIDs, 0, this.storageIDs.length);
+        this.shadowStorageTypes = new StorageType[storageTypes.length];
+        System.arraycopy(this.storageTypes, 0, this.shadowStorageTypes, 0, this.storageTypes.length);
+      }
 
-      System.arraycopy(this.nodes, 0, this.shadowNodes, 0, this.nodes.length);
       DFSOutputStream.erroredNodes.put(shadowNodes[badNodeIndex],DFSOutputStream.erroredNodes.getOrDefault(shadowNodes[badNodeIndex],0)+1);
       failed.add(shadowNodes[badNodeIndex]);
-      this.shadowStorageIDs = new String[storageIDs.length];
-      System.arraycopy(this.storageIDs, 0, this.shadowStorageIDs, 0, this.storageIDs.length);
-      this.shadowStorageTypes = new StorageType[storageTypes.length];
-      System.arraycopy(this.storageTypes, 0, this.shadowStorageTypes, 0, this.storageTypes.length);
-
       DatanodeInfo[] newnodes = new DatanodeInfo[nodes.length-1];
       arraycopy(this.shadowNodes, newnodes, badNodeIndex);
 
@@ -2078,6 +2078,7 @@ class DataStreamer extends Daemon {
 
       errorState.adjustState4RestartingNode();
       lastException.clear();
+      this.shadowRecovery = true;
     }
     return true;
   }
