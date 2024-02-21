@@ -655,9 +655,7 @@ class DataStreamer extends Daemon {
 
   private void setShadowPipeline(DatanodeInfo[] nodes, StorageType[] storageTypes,
                                  String[] storageIDs) {
-    synchronized (nodesLock) {
-      this.shadowNodes = nodes;
-    }
+    this.shadowNodes = nodes;
     this.shadowStorageTypes = storageTypes;
     this.shadowStorageIDs = storageIDs;
   }
@@ -1592,6 +1590,7 @@ class DataStreamer extends Daemon {
 
   private int shadowFindNewDatanode(final DatanodeInfo[] original
   ) throws IOException {
+    assert this.shadowNodes != null;
     if (this.shadowNodes.length != original.length + 1) {
       throw new IOException(
               "Failed to replace a bad datanode on the existing pipeline "
@@ -1696,7 +1695,7 @@ class DataStreamer extends Daemon {
         // MIN_REPLICATION is set to 0 or less than zero, an exception will be
         // thrown if a replacement could not be found.
 
-        if (dfsClient.dtpReplaceDatanodeOnFailureReplication > 0 && nodes.length
+        if (dfsClient.dtpReplaceDatanodeOnFailureReplication > 0 && this.shadowNodes.length
                 >= dfsClient.dtpReplaceDatanodeOnFailureReplication) {
           DFSClient.LOG.warn(
                   "Failed to find a new datanode to add to the write pipeline,"
@@ -1724,8 +1723,8 @@ class DataStreamer extends Daemon {
                 nodes[d] + ": " + ioe.getMessage());
         caughtException = ioe;
         // add the allocated node to the exclude list.
-        exclude.add(nodes[d]);
-        setPipeline(original, originalTypes, originalIDs);
+        exclude.add(this.shadowNodes[d]);
+        setShadowPipeline(original, originalTypes, originalIDs);
         tried++;
         continue;
       }
@@ -2043,7 +2042,7 @@ class DataStreamer extends Daemon {
       String reason = "bad.";
       if (errorState.getRestartingNodeIndex() == badNodeIndex) {
         reason = "restarting.";
-        restartingNodes.add(this.shadowNodes[badNodeIndex]);
+        restartingNodes.add(this.nodes[badNodeIndex]);
       }
       LOG.warn("Error Recovery for " + block + " in pipeline "
               + Arrays.toString(nodes) + ": datanode " + badNodeIndex
@@ -2181,6 +2180,17 @@ class DataStreamer extends Daemon {
     block.setGenerationStamp(newGS);
   }
 
+
+  /** update pipeline at the namenode */
+  @VisibleForTesting
+  public void shadowUpdatePipeline(long newGS) throws IOException {
+    final ExtendedBlock oldBlock = block.getCurrentBlock();
+    // the new GS has been propagated to all DN, it should be ok to update the
+    // local block state
+    updateBlockGS(newGS);
+    dfsClient.namenode.updatePipeline(dfsClient.clientName, oldBlock,
+            block.getCurrentBlock(), shadowNodes, this.shadowStorageIDs);
+  }
   /** update pipeline at the namenode */
   @VisibleForTesting
   public void updatePipeline(long newGS) throws IOException {
