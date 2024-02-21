@@ -1950,7 +1950,7 @@ class DataStreamer extends Daemon {
     } // while
 
     if (success) {
-      updatePipeline(newGS);
+      shadowUpdatePipeline(newGS);
     }
   }
 
@@ -2032,7 +2032,14 @@ class DataStreamer extends Daemon {
     if (badNodeIndex >= 0) {
       this.shadowFailed.clear();
       this.shadowFailed.addAll(failed);
-      if (shadowNodes.length <= 1) {
+
+      DatanodeInfo[] curNodes = null;
+      if(shadowRecovery){
+        curNodes = this.shadowNodes;
+      }else{
+        curNodes = this.nodes;
+      }
+      if (curNodes.length <= 1) {
         lastException.set(new IOException("All datanodes "
                 + Arrays.toString(nodes) + " are bad. Aborting..."));
         streamerClosed = true;
