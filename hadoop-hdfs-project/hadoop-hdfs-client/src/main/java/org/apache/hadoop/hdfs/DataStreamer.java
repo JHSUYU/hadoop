@@ -2037,7 +2037,6 @@ class DataStreamer extends Daemon {
     if (badNodeIndex >= 0) {
       this.shadowFailed.clear();
       this.shadowFailed.addAll(failed);
-      this.shadowNodes = new DatanodeInfo[nodes.length];
       if (shadowNodes.length <= 1) {
         lastException.set(new IOException("All datanodes "
                 + Arrays.toString(nodes) + " are bad. Aborting..."));
@@ -2055,6 +2054,7 @@ class DataStreamer extends Daemon {
               + "("+ nodes[badNodeIndex] + ") is " + reason);
 
       if(!shadowRecovery){
+        this.shadowNodes = new DatanodeInfo[nodes.length];
         System.arraycopy(this.nodes, 0, this.shadowNodes, 0, this.nodes.length);
         this.shadowStorageIDs = new String[storageIDs.length];
         System.arraycopy(this.storageIDs, 0, this.shadowStorageIDs, 0, this.storageIDs.length);
