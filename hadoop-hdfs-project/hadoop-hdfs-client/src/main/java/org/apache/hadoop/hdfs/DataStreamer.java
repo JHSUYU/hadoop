@@ -2056,6 +2056,7 @@ class DataStreamer extends Daemon {
               + "("+ nodes[badNodeIndex] + ") is " + reason);
 
       System.arraycopy(this.nodes, 0, this.shadowNodes, 0, this.nodes.length);
+      DFSOutputStream.erroredNodes.put(shadowNodes[badNodeIndex],DFSOutputStream.erroredNodes.getOrDefault(shadowNodes[badNodeIndex],0)+1);
       this.shadowStorageIDs = new String[storageIDs.length];
       System.arraycopy(this.storageIDs, 0, this.shadowStorageIDs, 0, this.storageIDs.length);
       this.shadowStorageTypes = new StorageType[storageTypes.length];
