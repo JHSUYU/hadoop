@@ -467,7 +467,7 @@ public class TestClientProtocolForPipelineRecovery {
       // new pipeline
       DatanodeInfo[] newNodes = dfsOut.getPipeline();
 
-      final String errorDnAddress = newNodes[1].getXferAddr(false);
+      final String errorDnAddress = newNodes[2].getXferAddr(false);
 
       DataNodeFaultInjector.set(new DataNodeFaultInjector() {
         @Override
