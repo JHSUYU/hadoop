@@ -267,12 +267,12 @@ public class TestClientProtocolForPipelineRecovery {
 
 
     try {
-      int numDataNodes = 4;
+      int numDataNodes = 8;
       cluster = new MiniDFSCluster.Builder(conf).numDataNodes(numDataNodes).build();
       cluster.waitActive();
       FileSystem fs = cluster.getFileSystem();
 
-      FSDataOutputStream out = fs.create(new Path("noheartbeat.dat"), (short)2);
+      FSDataOutputStream out = fs.create(new Path("noheartbeat.dat"), (short)4);
       out.write(0x31);
       out.hflush();
 
@@ -292,6 +292,7 @@ public class TestClientProtocolForPipelineRecovery {
 
       Thread.sleep(3500);
       out.write(0x33);
+      out.hflush();
 
       // new pipeline
       DatanodeInfo[] newNodes = dfsOut.getPipeline();
@@ -326,12 +327,12 @@ public class TestClientProtocolForPipelineRecovery {
     MiniDFSCluster cluster = null;
 
     try {
-      int numDataNodes = 2;
+      int numDataNodes = 8;
       cluster = new MiniDFSCluster.Builder(conf).numDataNodes(numDataNodes).build();
       cluster.waitActive();
       FileSystem fs = cluster.getFileSystem();
 
-      FSDataOutputStream out = fs.create(new Path("noheartbeat.dat"), (short)2);
+      FSDataOutputStream out = fs.create(new Path("noheartbeat.dat"), (short)4);
       out.write(0x31);
       out.hflush();
 
