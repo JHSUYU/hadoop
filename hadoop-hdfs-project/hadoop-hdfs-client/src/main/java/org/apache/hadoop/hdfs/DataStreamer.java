@@ -541,11 +541,11 @@ class DataStreamer extends Daemon {
   private final EnumSet<AddBlockFlag> addBlockFlags;
   public boolean shadowRecovery = false;
 
-  public DataStreamer cloneForShadowExecution(){
-      ErrorState errorState = new ErrorState(0);
-      errorState.setBadNodeIndex(getErrorState().badNodeIndex);
-
-  }
+//  public DataStreamer cloneForShadowExecution(){
+//      ErrorState errorState = new ErrorState(0);
+//      errorState.setBadNodeIndex(getErrorState().badNodeIndex);
+//
+//  }
 
 
   private DataStreamer(HdfsFileStatus stat, ExtendedBlock block,
