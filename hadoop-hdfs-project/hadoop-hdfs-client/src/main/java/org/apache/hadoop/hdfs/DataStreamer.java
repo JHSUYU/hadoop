@@ -541,6 +541,13 @@ class DataStreamer extends Daemon {
   private final EnumSet<AddBlockFlag> addBlockFlags;
   public boolean shadowRecovery = false;
 
+  public DataStreamer cloneForShadowExecution(){
+      ErrorState errorState = new ErrorState(0);
+      errorState.setBadNodeIndex(getErrorState().badNodeIndex);
+
+  }
+
+
   private DataStreamer(HdfsFileStatus stat, ExtendedBlock block,
                        DFSClient dfsClient, String src,
                        Progressable progress, DataChecksum checksum,
@@ -756,7 +763,7 @@ class DataStreamer extends Daemon {
       try {
         // process datanode IO errors if any
         LOG.info("Before shadowErrorHandler, the nodes are: {}", Arrays.toString(this.nodes));
-        boolean doSleep = shadowProcessDatanodeOrExternalError();
+        boolean doSleep = processDatanodeOrExternalError();
 
         synchronized (dataQueue) {
           // wait for a packet to be sent.
@@ -1417,18 +1424,6 @@ class DataStreamer extends Daemon {
     return errorState.hasExternalError() && blockStream != null;
   }
 
-  private void shadowCopy(){
-    if (shadowRecovery){
-      return;
-    }
-    this.shadowAckQueue.clear();
-    this.shadowDataQueue.clear();
-    this.shadowPacketSendTime.clear();
-    this.shadowDataQueue.addAll(0, dataQueue);
-    this.shadowAckQueue.addAll(0, ackQueue);
-    this.shadowPacketSendTime.putAll(packetSendTime);
-    shadowRecovery = true;
-  }
 
   /**
    * If this stream has encountered any errors, shutdown threads
