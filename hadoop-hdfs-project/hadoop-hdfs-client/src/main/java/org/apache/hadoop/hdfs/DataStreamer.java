@@ -241,7 +241,7 @@ class DataStreamer extends Daemon {
       final int length, final DFSClient client) throws IOException {
     final DfsClientConf conf = client.getConf();
     final String dnAddr = first.getXferAddr(conf.isConnectToDnViaHostname());
-    LOG.debug("Connecting to datanode {}", dnAddr);
+    LOG.info("Connecting to datanode {}", dnAddr);
     final InetSocketAddress isa = NetUtils.createSocketAddr(dnAddr);
     final Socket sock = client.socketFactory.createSocket();
     final int timeout = client.getDatanodeReadTimeout(length);
@@ -253,7 +253,7 @@ class DataStreamer extends Daemon {
     if (conf.getSocketSendBufferSize() > 0) {
       sock.setSendBufferSize(conf.getSocketSendBufferSize());
     }
-    LOG.debug("Send buf size {}", sock.getSendBufferSize());
+    LOG.info("Send buf size {}", sock.getSendBufferSize());
     return sock;
   }
 
