@@ -2326,6 +2326,8 @@ class ShadowDataStreamer extends Daemon {
             LOG.debug("pipeline = " + Arrays.toString(nodes) + ", " + this);
         }
 
+        LOG.info("ShadowDataStreamer: createBlockOutputStream");
+
         // persist blocks on namenode on next flush
         persistBlocks.set(true);
 
