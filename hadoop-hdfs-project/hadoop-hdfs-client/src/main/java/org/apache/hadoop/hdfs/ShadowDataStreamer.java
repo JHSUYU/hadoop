@@ -999,9 +999,11 @@ class ShadowDataStreamer extends Daemon {
     private void sendPacket(DFSPacket packet) throws IOException {
         // write out data to remote datanode
         try {
+            LOG.info("ShadowDataStreamer");
             packet.writeTo(blockStream);
             blockStream.flush();
         } catch (IOException e) {
+            LOG.info("ShadowDataStreamer");
             // HDFS-3398 treat primary DN is down since client is unable to
             // write to primary DN. If a failed or restarting node has already
             // been recorded by the responder, the following call will have no
