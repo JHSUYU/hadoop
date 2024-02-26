@@ -2138,6 +2138,7 @@ class ShadowDataStreamer extends Daemon {
      */
     boolean handleBadDatanode() {
         final int badNodeIndex = errorState.getBadNodeIndex();
+        LOG.info("ShadowDataStreamer: handleBadDatanode badNodeIndex: " + badNodeIndex);
         if (badNodeIndex >= 0) {
             //DFSOutputStream.erroredNodes.put(nodes[badNodeIndex],DFSOutputStream.erroredNodes.getOrDefault(nodes[badNodeIndex],0)+1);
             LOG.info("ShadowDataStreamer: handleBadDatanode badNodeIndex: " + badNodeIndex);
