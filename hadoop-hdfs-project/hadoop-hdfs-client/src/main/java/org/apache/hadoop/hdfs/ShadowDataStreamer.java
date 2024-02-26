@@ -832,6 +832,8 @@ class ShadowDataStreamer extends Daemon {
                     }
                 }
 
+
+                LOG.info("ShadowDataStreamer: Finish synchorized dataQueue, doSleep: {}", doSleep);
                 // The DataStreamer has to release the dataQueue before sleeping,
                 // otherwise it will cause the ResponseProcessor to accept the ACK delay.
                 try {
@@ -847,6 +849,7 @@ class ShadowDataStreamer extends Daemon {
                     LOG.debug("Allocating new block: {}", this);
                     setPipeline(nextBlockOutputStream());
                     initDataStreaming();
+                    LOG.info("ShadowDataStreamer: Finish initDataStreaming, stage: {}", stage.toString());
                 } else if (stage == BlockConstructionStage.PIPELINE_SETUP_APPEND) {
                     LOG.debug("Append to block {}", block);
                     setupPipelineForAppendOrRecovery();
@@ -854,6 +857,7 @@ class ShadowDataStreamer extends Daemon {
                         continue;
                     }
                     initDataStreaming();
+                    LOG.info("ShadowDataStreamer: Finish initDataStreaming, stage: {}", stage.toString());
                 }
 
                 long lastByteOffsetInBlock = one.getLastByteOffsetBlock();
@@ -870,7 +874,7 @@ class ShadowDataStreamer extends Daemon {
                     }
                     stage = BlockConstructionStage.PIPELINE_CLOSE;
                 }
-
+                LOG.info("ShadowDataStreamer: Finish one.isLastPacketInBlock, stage: {}", stage.toString());
                 // send the packet
                 SpanContext spanContext = null;
                 synchronized (dataQueue) {
@@ -905,6 +909,7 @@ class ShadowDataStreamer extends Daemon {
                     errorState.markFirstNodeIfNotMarked();
                     throw e;
                 }
+                LOG.info("ShadowDataStreamer: send Packet stage: {}", stage.toString());
 
                 // update bytesSent
                 long tmpBytesSent = one.getLastByteOffsetBlock();
