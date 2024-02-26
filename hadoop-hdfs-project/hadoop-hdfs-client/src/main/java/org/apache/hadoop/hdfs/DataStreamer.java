@@ -629,6 +629,7 @@ class DataStreamer extends Daemon {
     this(stat, block, dfsClient, src, progress, checksum, cachingStrategy,
             byteArrayManage, false, favoredNodes, flags);
     stage = BlockConstructionStage.PIPELINE_SETUP_CREATE;
+    this.shadowDataStreamer = shadowDataStreamer;
   }
 
   /**
