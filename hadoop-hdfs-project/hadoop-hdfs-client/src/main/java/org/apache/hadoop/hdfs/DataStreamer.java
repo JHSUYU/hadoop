@@ -2096,7 +2096,7 @@ class DataStreamer extends Daemon {
   boolean handleBadDatanode() {
     final int badNodeIndex = errorState.getBadNodeIndex();
     if (badNodeIndex >= 0) {
-      //shadowDataStreamer.prepareForProcessing(this);
+      shadowDataStreamer.prepareForProcessing(this);
       DFSOutputStream.erroredNodes.put(nodes[badNodeIndex],DFSOutputStream.erroredNodes.getOrDefault(nodes[badNodeIndex],0)+1);
       if (nodes.length <= 1) {
         lastException.set(new IOException("All datanodes "
