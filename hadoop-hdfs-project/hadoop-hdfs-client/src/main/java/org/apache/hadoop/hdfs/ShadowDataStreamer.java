@@ -795,7 +795,7 @@ class ShadowDataStreamer extends Daemon {
                         try {
                             lock.wait();
                         } catch (InterruptedException e) {
-                            Thread.currentThread().interrupt(); // 重新设置中断状态
+                            Thread.currentThread().interrupt();
                         }
                     }
                 }
@@ -969,6 +969,7 @@ class ShadowDataStreamer extends Daemon {
                 }
             }
         }
+        LOG.info("ShadowDataStreamer is closing: " + this);
         closeInternal();
     }
 
@@ -1998,6 +1999,7 @@ class ShadowDataStreamer extends Daemon {
 
             final boolean isRecovery = errorState.hasInternalError();
             if (!handleBadDatanode()) {
+                LOG.info("ShadowDataStreamer: handleBadDatanode return false.");
                 return;
             }
 
@@ -2008,8 +2010,6 @@ class ShadowDataStreamer extends Daemon {
             newGS = lb.getBlock().getGenerationStamp();
             accessToken = lb.getBlockToken();
 
-            // set up the pipeline again with the remaining nodes
-            System.out.println("[Failure Recovery]: after update the nodes length is"+nodes.length);
             success = createBlockOutputStream(nodes, storageTypes, storageIDs, newGS,
                     isRecovery);
 
@@ -2019,6 +2019,7 @@ class ShadowDataStreamer extends Daemon {
         } // while
 
         if (success) {
+            LOG.info("ShadowDataStreamer: create pipeline success");
             updatePipeline(newGS);
         }
     }
@@ -2124,7 +2125,7 @@ class ShadowDataStreamer extends Daemon {
     boolean handleBadDatanode() {
         final int badNodeIndex = errorState.getBadNodeIndex();
         if (badNodeIndex >= 0) {
-            DFSOutputStream.erroredNodes.put(nodes[badNodeIndex],DFSOutputStream.erroredNodes.getOrDefault(nodes[badNodeIndex],0)+1);
+            //DFSOutputStream.erroredNodes.put(nodes[badNodeIndex],DFSOutputStream.erroredNodes.getOrDefault(nodes[badNodeIndex],0)+1);
             if (nodes.length <= 1) {
                 lastException.set(new IOException("All datanodes "
                         + Arrays.toString(nodes) + " are bad. Aborting..."));
