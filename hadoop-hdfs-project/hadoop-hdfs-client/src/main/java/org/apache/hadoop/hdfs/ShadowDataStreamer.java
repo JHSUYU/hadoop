@@ -906,6 +906,7 @@ class ShadowDataStreamer extends Daemon {
                     // effect. Pipeline recovery can handle only one node error at a
                     // time. If the primary node fails again during the recovery, it
                     // will be taken out then.
+                    LOG.info("Error Recovery for writing to {} failed. ", nodes[0]);
                     errorState.markFirstNodeIfNotMarked();
                     throw e;
                 }
