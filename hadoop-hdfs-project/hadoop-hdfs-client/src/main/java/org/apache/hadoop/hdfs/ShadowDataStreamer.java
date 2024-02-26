@@ -110,7 +110,7 @@ import javax.annotation.Nonnull;
 @InterfaceAudience.Private
 class ShadowDataStreamer extends Daemon {
     static final Logger LOG = LoggerFactory.getLogger(DataStreamer.class);
-    public static final int     DFS_SHADOW_DATANODE_DEFAULT_PORT = 9899;
+    public static final int     DFS_SHADOW_DATANODE_DEFAULT_PORT = 44210;
 
 
     private class RefetchEncryptionKeyPolicy {
