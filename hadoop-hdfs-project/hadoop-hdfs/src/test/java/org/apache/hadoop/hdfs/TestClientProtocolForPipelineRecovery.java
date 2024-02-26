@@ -188,6 +188,7 @@ public class TestClientProtocolForPipelineRecovery {
 
   @Test
   public void testPacketTransmissionDelay() throws Exception {
+
     // Make the first datanode to not relay heartbeat packet.
     DataNodeFaultInjector dnFaultInjector = new DataNodeFaultInjector() {
       @Override
@@ -377,7 +378,7 @@ public class TestClientProtocolForPipelineRecovery {
       cluster.waitActive();
       FileSystem fs = cluster.getFileSystem();
 
-      FSDataOutputStream out = fs.create(new Path("noheartbeat.dat"), (short)3);
+      FSDataOutputStream out = fs.create(new Path("noheartbeat.dat"), (short)2);
       out.write(0x31);
       out.hflush();
 
