@@ -2711,4 +2711,8 @@ class DataStreamer extends Daemon {
   public DFSClient getDfsClient() {
     return dfsClient;
   }
+
+  public StorageType[] getStorageTypes() {
+    return storageTypes;
+  }
 }

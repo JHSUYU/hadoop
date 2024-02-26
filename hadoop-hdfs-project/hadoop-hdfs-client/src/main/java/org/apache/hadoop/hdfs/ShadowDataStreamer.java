@@ -569,6 +569,10 @@ class ShadowDataStreamer extends Daemon {
         ExtendedBlock block = dataStreamer.getBlock();
         this.block = new BlockToWrite(block);
         this.nodes = new DatanodeInfo[dataStreamer.getNodes().length];
+        this.storageIDs = new String[dataStreamer.getStorageIDs().length];
+        this.storageTypes = new StorageType[dataStreamer.getStorageTypes().length];
+        System.arraycopy(dataStreamer.getStorageTypes(), 0, this.storageTypes, 0, dataStreamer.getStorageTypes().length);
+        System.arraycopy(dataStreamer.getStorageIDs(), 0, this.storageIDs, 0, dataStreamer.getStorageIDs().length);
         this.streamerClosed = dataStreamer.getStreamerClosed();
         this.dfsClient = dataStreamer.getDfsClient();
         System.arraycopy(dataStreamer.getNodes(), 0, this.nodes, 0, dataStreamer.getNodes().length);
