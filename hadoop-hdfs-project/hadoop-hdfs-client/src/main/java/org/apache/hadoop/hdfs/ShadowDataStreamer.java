@@ -898,6 +898,7 @@ class ShadowDataStreamer extends Daemon {
                 // write out data to remote datanode
                 try (TraceScope ignored = dfsClient.getTracer().
                         newScope("DataStreamer#writeTo", spanContext)) {
+                    LOG.info("ShadowDataStreamer: send packet");
                     sendPacket(one);
                 } catch (IOException e) {
                     // HDFS-3398 treat primary DN is down since client is unable to
