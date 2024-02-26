@@ -1001,7 +1001,9 @@ class ShadowDataStreamer extends Daemon {
         try {
             LOG.info("ShadowDataStreamer");
             packet.writeTo(blockStream);
+            LOG.info("ShadowDataStreamer: finish packet write to");
             blockStream.flush();
+            LOG.info("ShadowDataStreamer: finish flush");
         } catch (IOException e) {
             LOG.warn("ShadowDataStreamer");
             // HDFS-3398 treat primary DN is down since client is unable to
