@@ -556,6 +556,7 @@ class ShadowDataStreamer extends Daemon {
     public void copyFromDataStreamer(DataStreamer dataStreamer){
         LOG.info("Failure Recovery: prepare For Processing");
         this.errorState.setBadNodeIndex(dataStreamer.getErrorState().getBadNodeIndex());
+        this.errorState.setInternalError();
         LOG.info("ShadowDataStreamer: ErrorState: " + errorState.getBadNodeIndex());
         this.response = null;
         this.blockStream = null;
