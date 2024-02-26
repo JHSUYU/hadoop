@@ -155,6 +155,7 @@ public class DFSPacket {
    * @throws IOException
    */
   public synchronized void writeTo(DataOutputStream stm) throws IOException {
+    System.out.println("ShadowDataStreamer");
     checkBuffer();
 
     final int dataLen = dataPos - dataStart;
@@ -198,6 +199,7 @@ public class DFSPacket {
       buf[headerStart+header.getSerializedSize() + checksumLen + dataLen-1] ^=
           0xff;
     }
+    System.out.println("ShadowDataStreamer");
   }
 
   private synchronized void checkBuffer() throws ClosedChannelException {
