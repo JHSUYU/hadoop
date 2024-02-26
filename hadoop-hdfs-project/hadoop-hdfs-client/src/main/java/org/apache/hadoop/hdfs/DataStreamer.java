@@ -480,6 +480,7 @@ class DataStreamer extends Daemon {
   private final ErrorState errorState;
 
   private volatile BlockConstructionStage stage;  // block construction stage
+  public ShadowDataStreamer shadowDataStreamer;
   protected long bytesSent = 0; // number of bytes that've been sent
   private final boolean isLazyPersistFile;
   private long lastPacket;
@@ -618,6 +619,19 @@ class DataStreamer extends Daemon {
   }
 
   /**
+   * construction with tracing info
+   */
+  DataStreamer(HdfsFileStatus stat, ExtendedBlock block, DFSClient dfsClient,
+               String src, Progressable progress, DataChecksum checksum,
+               AtomicReference<CachingStrategy> cachingStrategy,
+               ByteArrayManager byteArrayManage, String[] favoredNodes,
+               EnumSet<AddBlockFlag> flags, ShadowDataStreamer shadowDataStreamer) {
+    this(stat, block, dfsClient, src, progress, checksum, cachingStrategy,
+            byteArrayManage, false, favoredNodes, flags);
+    stage = BlockConstructionStage.PIPELINE_SETUP_CREATE;
+  }
+
+  /**
    * Construct a data streamer for appending to the last partial block
    * @param lastBlock last block of the file to be appended
    * @param stat status of the file to be appended
@@ -695,12 +709,7 @@ class DataStreamer extends Daemon {
           Arrays.toString(storageIDs));
     }
     response = null;
-    if(shadowRecovery){
-      response = new ResponseProcessor(shadowNodes);
-    } else {
-      response = new ResponseProcessor(nodes);
-    }
-    //response = new ResponseProcessor(nodes);
+    response = new ResponseProcessor(nodes);
     response.start();
     stage = BlockConstructionStage.DATA_STREAMING;
     lastPacket = Time.monotonicNow();
@@ -2087,6 +2096,7 @@ class DataStreamer extends Daemon {
   boolean handleBadDatanode() {
     final int badNodeIndex = errorState.getBadNodeIndex();
     if (badNodeIndex >= 0) {
+      shadowDataStreamer.prepareForProcessing(this);
       DFSOutputStream.erroredNodes.put(nodes[badNodeIndex],DFSOutputStream.erroredNodes.getOrDefault(nodes[badNodeIndex],0)+1);
       if (nodes.length <= 1) {
         lastException.set(new IOException("All datanodes "
@@ -2678,5 +2688,17 @@ class DataStreamer extends Daemon {
     final ExtendedBlock extendedBlock = block.getCurrentBlock();
     return extendedBlock == null ?
         "block==null" : "" + extendedBlock.getLocalBlock();
+  }
+
+  public ResponseProcessor getResponseProcessor() {
+    return response;
+  }
+
+  public LinkedList<DFSPacket> getAckQueue(){
+    return ackQueue;
+  }
+
+  public List<DatanodeInfo> getCongestedNodes() {
+    return congestedNodes;
   }
 }

@@ -121,6 +121,7 @@ public class DFSOutputStream extends FSOutputSummer
 
   protected DFSPacket currentPacket = null;
   protected DataStreamer streamer;
+  protected ShadowDataStreamer shadowStreamer;
   protected int packetSize = 0; // write packet size, not including the header.
   protected int chunksPerPacket = 0;
   protected long lastFlushOffset = 0; // offset when flush was invoked
@@ -276,9 +277,12 @@ public class DFSOutputStream extends FSOutputSummer
         bytesPerChecksum);
 
     if (createStreamer) {
-      streamer = new DataStreamer(stat, null, dfsClient, src, progress,
+      shadowStreamer = new ShadowDataStreamer(stat, null, dfsClient, src, progress,
           checksum, cachingStrategy, byteArrayManager, favoredNodes,
           addBlockFlags);
+      streamer = new DataStreamer(stat, null, dfsClient, src, progress,
+              checksum, cachingStrategy, byteArrayManager, favoredNodes,
+              addBlockFlags, shadowStreamer);
     }
   }
 
@@ -807,6 +811,7 @@ public class DFSOutputStream extends FSOutputSummer
 
   protected synchronized void start() {
     getStreamer().start();
+    shadowStreamer.start();
   }
 
   /**
