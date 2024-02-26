@@ -506,7 +506,7 @@ class ShadowDataStreamer extends Daemon {
     private final LastExceptionInStreamer lastException = new LastExceptionInStreamer();
     private Socket s;
 
-    protected final DFSClient dfsClient;
+    protected DFSClient dfsClient;
     protected final String src;
     /** Only for DataTransferProtocol.writeBlock(..) */
     final DataChecksum checksum4WriteBlock;
@@ -568,6 +568,8 @@ class ShadowDataStreamer extends Daemon {
         ExtendedBlock block = dataStreamer.getBlock();
         this.block = new BlockToWrite(block);
         this.nodes = new DatanodeInfo[dataStreamer.getNodes().length];
+        this.streamerClosed = dataStreamer.getStreamerClosed();
+        this.dfsClient = dataStreamer.getDfsClient();
         System.arraycopy(dataStreamer.getNodes(), 0, this.nodes, 0, dataStreamer.getNodes().length);
     }
 
@@ -2006,6 +2008,7 @@ class ShadowDataStreamer extends Daemon {
             throws IOException {
         boolean success = false;
         long newGS = 0L;
+        LOG.info("ShadowDataStreamer: setupPipelineInternal");
         while (!success && !streamerClosed && dfsClient.clientRunning) {
             if (!handleRestartingDatanode()) {
                 return;

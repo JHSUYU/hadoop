@@ -2703,4 +2703,12 @@ class DataStreamer extends Daemon {
   public List<DatanodeInfo> getCongestedNodes() {
     return congestedNodes;
   }
+
+  public boolean getStreamerClosed() {
+    return streamerClosed;
+  }
+
+  public DFSClient getDfsClient() {
+    return dfsClient;
+  }
 }
