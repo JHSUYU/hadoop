@@ -554,6 +554,7 @@ class ShadowDataStreamer extends Daemon {
 //  }
 
     public void copyFromDataStreamer(DataStreamer dataStreamer){
+        LOG.info("Failure Recovery: prepare For Processing");
         this.errorState.setBadNodeIndex(dataStreamer.getErrorState().getBadNodeIndex());
         this.response = null;
         this.blockStream = null;
@@ -569,8 +570,9 @@ class ShadowDataStreamer extends Daemon {
 
     public void prepareForProcessing(DataStreamer dataStreamer) {
         copyFromDataStreamer(dataStreamer);
+        LOG.info("Failure Recovery: prepare For Processing2");
         synchronized (lock) {
-            LOG.info("Failure Recovery: prepare For Processing");
+            LOG.info("Failure Recovery: prepare For Processing3");
             readyToProcess = true;
             //lock.notify();
         }
