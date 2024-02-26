@@ -571,7 +571,7 @@ class ShadowDataStreamer extends Daemon {
         copyFromDataStreamer(dataStreamer);
         synchronized (lock) {
             readyToProcess = true;
-            lock.notify();
+            //lock.notify();
         }
     }
 
