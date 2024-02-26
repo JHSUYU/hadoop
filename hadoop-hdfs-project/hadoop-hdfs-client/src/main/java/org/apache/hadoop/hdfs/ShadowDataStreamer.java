@@ -893,6 +893,8 @@ class ShadowDataStreamer extends Daemon {
                     }
                 }
 
+                LOG.info("ShadowDataStreamer: Finish move packet from dataQueue to ackQueue");
+
                 LOG.debug("{} sending {}", this, one);
 
                 // write out data to remote datanode
