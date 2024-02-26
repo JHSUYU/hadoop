@@ -1563,6 +1563,7 @@ class ShadowDataStreamer extends Daemon {
      * @return true if it should sleep for a while after returning.
      */
     private boolean processDatanodeOrExternalError() throws IOException {
+        LOG.info("SDS: 1566");
         if (!errorState.hasDatanodeError() && !shouldHandleExternalError()) {
             return false;
         }
@@ -1573,6 +1574,7 @@ class ShadowDataStreamer extends Daemon {
             return true;
         }
         closeStream();
+        LOG.info("SDS: 1577");
 
         // move packets from ack queue to front of the data queue
         synchronized (dataQueue) {
@@ -1596,7 +1598,7 @@ class ShadowDataStreamer extends Daemon {
             streamerClosed = true;
             return false;
         }
-
+        LOG.info("SDS: 1601");
         setupPipelineForAppendOrRecovery();
 
         if (!streamerClosed && dfsClient.clientRunning) {
