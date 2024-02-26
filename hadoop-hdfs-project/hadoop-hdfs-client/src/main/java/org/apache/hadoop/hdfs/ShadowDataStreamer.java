@@ -570,6 +570,7 @@ class ShadowDataStreamer extends Daemon {
     public void prepareForProcessing(DataStreamer dataStreamer) {
         copyFromDataStreamer(dataStreamer);
         synchronized (lock) {
+            LOG.info("Failure Recovery: prepare For Processing");
             readyToProcess = true;
             //lock.notify();
         }
