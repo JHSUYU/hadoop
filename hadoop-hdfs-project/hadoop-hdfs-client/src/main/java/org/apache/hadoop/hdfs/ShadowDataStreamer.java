@@ -567,6 +567,8 @@ class ShadowDataStreamer extends Daemon {
         this.ackQueue.addAll(dataStreamer.getAckQueue());
         ExtendedBlock block = dataStreamer.getBlock();
         this.block = new BlockToWrite(block);
+        this.nodes = new DatanodeInfo[dataStreamer.getNodes().length];
+        System.arraycopy(dataStreamer.getNodes(), 0, this.nodes, 0, dataStreamer.getNodes().length);
     }
 
     public void prepareForProcessing(DataStreamer dataStreamer) {
