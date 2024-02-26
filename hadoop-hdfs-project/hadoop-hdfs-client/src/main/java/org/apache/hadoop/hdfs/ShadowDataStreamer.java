@@ -292,7 +292,7 @@ class ShadowDataStreamer extends Daemon {
             if (thrown != null) {
                 if (LOG.isTraceEnabled()) {
                     // wrap and print the exception to know when the check is called
-                    LOG.trace("Got Exception while checking, " + DataStreamer.this,
+                    LOG.trace("Got Exception while checking, " + ShadowDataStreamer.this,
                             new Throwable(thrown));
                 }
                 super.check(resetToNull);
