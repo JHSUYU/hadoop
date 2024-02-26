@@ -574,7 +574,7 @@ class ShadowDataStreamer extends Daemon {
         synchronized (lock) {
             LOG.info("Failure Recovery: prepare For Processing3");
             readyToProcess = true;
-            //lock.notify();
+            lock.notify();
         }
     }
 
