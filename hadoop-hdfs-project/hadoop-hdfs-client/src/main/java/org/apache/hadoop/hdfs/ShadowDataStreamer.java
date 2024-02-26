@@ -799,6 +799,7 @@ class ShadowDataStreamer extends Daemon {
                         }
                     }
                 }
+                LOG.info("Failure Recovery: invoke from lock");
                 boolean doSleep = processDatanodeOrExternalError();
 
                 synchronized (dataQueue) {
