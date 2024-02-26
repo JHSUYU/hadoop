@@ -2387,6 +2387,7 @@ class ShadowDataStreamer extends Daemon {
                 failed.removeAll(restartingNodes);
                 restartingNodes.clear();
             } catch (IOException ie) {
+                LOG.info("ShadowDataStreamer: Exception in createBlockOutputStream " + this, ie);
                 if (!errorState.isRestartingNode()) {
                     LOG.warn("Exception in createBlockOutputStream " + this, ie);
                 }
