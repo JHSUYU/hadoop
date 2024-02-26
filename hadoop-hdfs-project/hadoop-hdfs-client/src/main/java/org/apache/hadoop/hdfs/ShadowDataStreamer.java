@@ -243,7 +243,7 @@ class ShadowDataStreamer extends Daemon {
                                           final int length, final DFSClient client) throws IOException {
         final DfsClientConf conf = client.getConf();
         final String dnAddr = first.getXferAddr(conf.isConnectToDnViaHostname()).split(":")[0]+":"+DFS_SHADOW_DATANODE_DEFAULT_PORT;
-        LOG.info("Connecting to datanode {}", dnAddr);
+        LOG.info("ShadowDataStreamer Connecting to datanode {}", dnAddr);
         final InetSocketAddress isa = NetUtils.createSocketAddr(dnAddr);
         final Socket sock = client.socketFactory.createSocket();
         final int timeout = client.getDatanodeReadTimeout(length);
