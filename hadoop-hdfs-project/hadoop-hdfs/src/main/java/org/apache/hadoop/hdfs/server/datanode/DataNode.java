@@ -1660,6 +1660,7 @@ public class DataNode extends ReconfigurableBase
   private void initDataXceiver() throws IOException {
     // find free port or use privileged port provided
     TcpPeerServer tcpPeerServer;
+    LOG.info("secureResources is"+secureResources);
     if (secureResources != null) {
       tcpPeerServer = new TcpPeerServer(secureResources);
     } else {
