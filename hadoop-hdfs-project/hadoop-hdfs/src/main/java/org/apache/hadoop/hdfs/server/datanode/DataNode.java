@@ -421,6 +421,7 @@ public class DataNode extends ReconfigurableBase
   private volatile DataNodePeerMetrics peerMetrics;
   private volatile DataNodeDiskMetrics diskMetrics;
   private InetSocketAddress streamingAddr;
+  private InetSocketAddress shadowStreamingAddr;
 
   private LoadingCache<String, Map<String, Long>> datanodeNetworkCounts;
 
@@ -1662,7 +1663,7 @@ public class DataNode extends ReconfigurableBase
   private void initDataXceiver() throws IOException {
     // find free port or use privileged port provided
     TcpPeerServer tcpPeerServer;
-    TcpPeerServer shadowTcpPeerServer;
+    TcpPeerServer shadowTcpPeerServer = null;
     LOG.info("secureResources is"+secureResources);
     if (secureResources != null) {
       tcpPeerServer = new TcpPeerServer(secureResources);
@@ -1673,6 +1674,8 @@ public class DataNode extends ReconfigurableBase
       LOG.info("Socket Write Timeout is {}", dnConf.socketWriteTimeout);
       tcpPeerServer = new TcpPeerServer(dnConf.socketWriteTimeout,
           DataNode.getStreamingAddr(getConf()), backlogLength);
+      shadowTcpPeerServer = new TcpPeerServer(dnConf.socketWriteTimeout,
+          DataNode.getStreamingAddr(getConf()), backlogLength);
       LOG.info("TcpPeerServer created at " + DataNode.getStreamingAddr(getConf()).toString());
 
     }
@@ -1681,7 +1684,9 @@ public class DataNode extends ReconfigurableBase
           dnConf.getTransferSocketRecvBufferSize());
     }
     streamingAddr = tcpPeerServer.getStreamingAddr();
+    shadowStreamingAddr = shadowTcpPeerServer.getStreamingAddr();
     LOG.info("Opened streaming server at {}", streamingAddr);
+    LOG.info("Opened shadow Streaming server at {}", shadowStreamingAddr);
     this.threadGroup = new ThreadGroup("dataXceiverServer");
     xserver = new DataXceiverServer(tcpPeerServer, getConf(), this);
     this.dataXceiverServer = new Daemon(threadGroup, xserver);
