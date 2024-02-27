@@ -1667,6 +1667,7 @@ public class DataNode extends ReconfigurableBase
       int backlogLength = getConf().getInt(
           CommonConfigurationKeysPublic.IPC_SERVER_LISTEN_QUEUE_SIZE_KEY,
           CommonConfigurationKeysPublic.IPC_SERVER_LISTEN_QUEUE_SIZE_DEFAULT);
+      LOG.info("Socket Write Timeout is {}", dnConf.socketWriteTimeout);
       tcpPeerServer = new TcpPeerServer(dnConf.socketWriteTimeout,
           DataNode.getStreamingAddr(getConf()), backlogLength);
     }
