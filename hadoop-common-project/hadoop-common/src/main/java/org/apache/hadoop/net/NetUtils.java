@@ -160,7 +160,6 @@ public class NetUtils {
    * @return socket addr.
    */
   public static InetSocketAddress createSocketAddr(String target) {
-    LOG.info("createSocketAddr: target=" + target);
     return createSocketAddr(target, -1);
   }
 

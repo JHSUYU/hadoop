@@ -400,7 +400,9 @@ public class DataNode extends ReconfigurableBase
 
   final AtomicInteger xmitsInProgress = new AtomicInteger();
   Daemon dataXceiverServer = null;
+  Daemon shadowDataXceiverServer = null;
   DataXceiverServer xserver = null;
+  DataXceiverServer shadowXserver = null;
   Daemon localDataXceiverServer = null;
   ShortCircuitRegistry shortCircuitRegistry = null;
   ThreadGroup threadGroup = null;
@@ -1660,6 +1662,7 @@ public class DataNode extends ReconfigurableBase
   private void initDataXceiver() throws IOException {
     // find free port or use privileged port provided
     TcpPeerServer tcpPeerServer;
+    TcpPeerServer shadowTcpPeerServer;
     LOG.info("secureResources is"+secureResources);
     if (secureResources != null) {
       tcpPeerServer = new TcpPeerServer(secureResources);
@@ -1670,6 +1673,8 @@ public class DataNode extends ReconfigurableBase
       LOG.info("Socket Write Timeout is {}", dnConf.socketWriteTimeout);
       tcpPeerServer = new TcpPeerServer(dnConf.socketWriteTimeout,
           DataNode.getStreamingAddr(getConf()), backlogLength);
+      LOG.info("TcpPeerServer created at " + DataNode.getStreamingAddr(getConf()).toString());
+
     }
     if (dnConf.getTransferSocketRecvBufferSize() > 0) {
       tcpPeerServer.setReceiveBufferSize(
