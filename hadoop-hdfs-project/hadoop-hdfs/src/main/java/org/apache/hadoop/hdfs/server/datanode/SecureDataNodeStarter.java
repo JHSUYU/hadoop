@@ -144,6 +144,7 @@ public class SecureDataNodeStarter implements Daemon {
               + "context. Needed " + streamingAddr.getPort() + ", got "
               + ss.getLocalPort());
     }
+    System.out.println("Failure Recovery, the local port is"+ss.getLocalPort());
     isRpcPrivileged = SecurityUtil.isPrivilegedPort(ss.getLocalPort());
     System.err.println("Opened streaming server at " + streamingAddr);
 
