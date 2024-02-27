@@ -44,16 +44,19 @@ public class DatanodeID implements Comparable<DatanodeID> {
   public static final DatanodeID EMPTY_DATANODE_ID = new DatanodeID("null",
       "null", "null", 0, 0, 0, 0);
 
-  private String ipAddr;     // IP address
+  private String ipAddr;// IP address
+  private String shadowIpAddr;
   private ByteString ipAddrBytes; // ipAddr ByteString to save on PB serde
   private String hostName;   // hostname claimed by datanode
   private ByteString hostNameBytes; // hostName ByteString to save on PB serde
   private String peerHostName; // hostname from the actual connection
   private int xferPort;      // data streaming port
+  private int shadowxferPort;      // data streaming port
   private int infoPort;      // info server port
   private int infoSecurePort; // info server port
   private int ipcPort;       // IPC server port
   private String xferAddr;
+  private String shadowxferAddr;
 
   /**
    * UUID identifying a given datanode. For upgraded Datanodes this is the
@@ -101,6 +104,31 @@ public class DatanodeID implements Comparable<DatanodeID> {
         hostName, getByteString(hostName),
         datanodeUuid, getByteString(datanodeUuid),
         xferPort, infoPort, infoSecurePort, ipcPort);
+  }
+
+  public DatanodeID(String ipAddr, String shadowIpAddr, String hostName, String datanodeUuid,
+                    int xferPort, int shadowxferPort, int infoPort, int infoSecurePort, int ipcPort) {
+    this(ipAddr, shadowIpAddr, getByteString(ipAddr),
+            hostName, getByteString(hostName),
+            datanodeUuid, getByteString(datanodeUuid),
+            xferPort, shadowxferPort, infoPort, infoSecurePort, ipcPort);
+  }
+
+  private DatanodeID(String ipAddr, String shadowIpAddr, ByteString ipAddrBytes,
+                     String hostName, ByteString hostNameBytes,
+                     String datanodeUuid, ByteString datanodeUuidBytes,
+                     int xferPort, int shadowxferPort, int infoPort, int infoSecurePort, int ipcPort) {
+    setIpAndXferPort(ipAddr, ipAddrBytes, xferPort);
+    this.shadowIpAddr = shadowIpAddr;
+    this.shadowxferPort = shadowxferPort;
+    this.shadowxferAddr = this.shadowIpAddr + ":" + shadowxferPort;
+    this.hostName = hostName;
+    this.hostNameBytes = hostNameBytes;
+    this.datanodeUuid = checkDatanodeUuid(datanodeUuid);
+    this.datanodeUuidBytes = datanodeUuidBytes;
+    this.infoPort = infoPort;
+    this.infoSecurePort = infoSecurePort;
+    this.ipcPort = ipcPort;
   }
 
   private DatanodeID(String ipAddr, ByteString ipAddrBytes,
@@ -197,6 +225,10 @@ public class DatanodeID implements Comparable<DatanodeID> {
     return xferAddr;
   }
 
+  public String getShadowXferAddr() {
+    return shadowIpAddr + ":" + shadowxferPort;
+  }
+
   /**
    * @return IP:ipcPort string
    */
@@ -225,6 +257,10 @@ public class DatanodeID implements Comparable<DatanodeID> {
     return hostName + ":" + xferPort;
   }
 
+  public String getShadowXferAddrWithHostname() {
+    return hostName + ":" + shadowxferPort;
+  }
+
   /**
    * @return hostname:ipcPort
    */
@@ -238,6 +274,10 @@ public class DatanodeID implements Comparable<DatanodeID> {
    */
   public String getXferAddr(boolean useHostname) {
     return useHostname ? getXferAddrWithHostname() : getXferAddr();
+  }
+
+  public String getShadowXferAddr(boolean useHostname) {
+    return useHostname ? getShadowXferAddrWithHostname() : getShadowXferAddr();
   }
 
   /**
