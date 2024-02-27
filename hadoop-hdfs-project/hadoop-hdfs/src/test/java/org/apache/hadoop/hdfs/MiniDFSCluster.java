@@ -1790,6 +1790,7 @@ public class MiniDFSCluster implements AutoCloseable {
       }
 
       SecureResources secureResources = null;
+      System.out.println("secureResources is"+secureResources)
       if (UserGroupInformation.isSecurityEnabled() &&
           conf.get(DFS_DATA_TRANSFER_PROTECTION_KEY) == null) {
         try {
