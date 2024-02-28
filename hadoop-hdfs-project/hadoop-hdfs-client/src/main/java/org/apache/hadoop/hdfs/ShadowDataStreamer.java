@@ -2030,9 +2030,9 @@ class ShadowDataStreamer extends Daemon {
             handleDatanodeReplacement();
 
             // get a new generation stamp and an access token
-            final LocatedBlock lb = updateBlockForPipeline();
-            newGS = lb.getBlock().getGenerationStamp();
-            accessToken = lb.getBlockToken();
+//            final LocatedBlock lb = updateBlockForPipeline();
+//            newGS = lb.getBlock().getGenerationStamp();
+//            accessToken = lb.getBlockToken();
 
             success = createBlockOutputStream(nodes, storageTypes, storageIDs, newGS,
                     isRecovery);
