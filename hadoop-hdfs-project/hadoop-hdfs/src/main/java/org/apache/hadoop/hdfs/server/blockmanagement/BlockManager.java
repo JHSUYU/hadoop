@@ -5448,6 +5448,8 @@ public class BlockManager implements BlockStatsMXBean {
 
   public static LocatedBlock newLocatedBlock(ExtendedBlock eb, BlockInfo info,
       DatanodeStorageInfo[] locs, long offset) throws IOException {
+    System.out.println("Failure Recovery: newLocatedBLock"+ locs[0].getDatanodeDescriptor().shadowxferPort);
+    System.out.println("Failure Recovery: newLocatedBlock"+ locs[0].getDatanodeDescriptor().getXferPort());
     final LocatedBlock lb;
     if (info.isStriped()) {
       lb = newLocatedStripedBlock(eb, locs,
