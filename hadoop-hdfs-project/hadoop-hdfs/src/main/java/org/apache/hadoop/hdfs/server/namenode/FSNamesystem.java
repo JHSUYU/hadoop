@@ -3075,6 +3075,9 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
     DatanodeStorageInfo[] targets = FSDirWriteFileOp.chooseTargetForNewBlock(
         blockManager, src, excludedNodes, favoredNodes, flags, r);
 
+    LOG.info("Failure Recovery: the shadow port is"+ targets[0].getDatanodeDescriptor().shadowxferPort);
+    LOG.info("Failure Recovery: the shadow port is"+ targets[0].getDatanodeDescriptor().getXferPort());
+
     checkOperation(OperationCategory.WRITE);
     writeLock();
     LocatedBlock lb;
