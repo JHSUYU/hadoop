@@ -1281,7 +1281,7 @@ public class DatanodeManager {
       DatanodeDescriptor nodeDescr 
         = new DatanodeDescriptor(nodeReg, NetworkTopology.DEFAULT_RACK);
       LOG.info("Failure Recovery: nodeDescr is"+nodeReg.getShadowXferAddr());
-      LOG.info("Failure Recovery: nodeDescr is"+nodeDescr.getShadowXferAddr());
+      LOG.info("Failure Recovery: nodeDescr shadow port is"+nodeDescr.shadowxferPort);
       boolean success = false;
       try {
         // resolve network location
