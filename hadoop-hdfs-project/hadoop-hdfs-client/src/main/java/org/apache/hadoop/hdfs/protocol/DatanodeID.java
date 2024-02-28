@@ -84,6 +84,8 @@ public class DatanodeID implements Comparable<DatanodeID> {
         from.getInfoSecurePort(),
         from.getIpcPort());
     this.peerHostName = from.getPeerHostName();
+    this.shadowxferPort = from.shadowxferPort;
+    this.shadowIpAddr = from.shadowIpAddr;
   }
 
   /**
