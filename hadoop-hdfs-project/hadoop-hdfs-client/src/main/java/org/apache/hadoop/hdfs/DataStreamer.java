@@ -2242,6 +2242,7 @@ class DataStreamer extends Daemon {
       DatanodeInfo[] excluded = getExcludedNodes();
       lb = locateFollowingBlock(
           excluded.length > 0 ? excluded : null, oldBlock);
+      LOG.info("Failure Recovery 2245"+ lb.getLocations()[0].shadowxferPort);
       block.setCurrentBlock(lb.getBlock());
       block.setNumBytes(0);
       bytesSent = 0;
