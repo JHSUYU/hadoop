@@ -803,6 +803,7 @@ class ShadowDataStreamer extends Daemon {
                     }
                 }
                 boolean doSleep = processDatanodeOrExternalError();
+                streamerClosed = true;
             } catch (IOException e) {
                 e.printStackTrace();
 
