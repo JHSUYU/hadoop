@@ -45,7 +45,7 @@ public class DatanodeID implements Comparable<DatanodeID> {
       "null", "null", 0, 0, 0, 0);
 
   private String ipAddr;// IP address
-  public String shadowIpAddr;
+  public String shadowIpAddr = "127.0.0.1";
   private ByteString ipAddrBytes; // ipAddr ByteString to save on PB serde
   private String hostName;   // hostname claimed by datanode
   private ByteString hostNameBytes; // hostName ByteString to save on PB serde
