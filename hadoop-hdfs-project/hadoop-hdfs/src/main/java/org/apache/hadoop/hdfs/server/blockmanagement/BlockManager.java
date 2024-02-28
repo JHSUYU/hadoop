@@ -2465,6 +2465,8 @@ public class BlockManager implements BlockStatsMXBean {
     final DatanodeStorageInfo[] targets = blockplacement.chooseTarget(src,
         numOfReplicas, client, excludedNodes, blocksize, 
         favoredDatanodeDescriptors, storagePolicy, flags);
+    LOG.info("Failure Recovery: the shadow port is"+ targets[0].getDatanodeDescriptor().shadowxferPort);
+    LOG.info("Failure Recovery: the shadow port is"+ targets[0].getDatanodeDescriptor().getXferPort());
 
     final String errorMessage = "File %s could only be written to %d of " +
         "the %d %s. There are %d datanode(s) running and %s "
