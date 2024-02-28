@@ -253,6 +253,9 @@ public class DatanodeDescriptor extends DatanodeInfo {
   public DatanodeDescriptor(DatanodeID nodeID, 
                             String networkLocation) {
     super(nodeID, networkLocation);
+    this.shadowIpAddr = nodeID.shadowIpAddr;
+    this.shadowxferAddr = nodeID.shadowxferAddr;
+    this.shadowxferPort = nodeID.shadowxferPort;
     setLastUpdate(Time.now());
     setLastUpdateMonotonic(Time.monotonicNow());
   }

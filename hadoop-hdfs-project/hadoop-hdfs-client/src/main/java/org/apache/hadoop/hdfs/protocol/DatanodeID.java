@@ -45,18 +45,18 @@ public class DatanodeID implements Comparable<DatanodeID> {
       "null", "null", 0, 0, 0, 0);
 
   private String ipAddr;// IP address
-  private String shadowIpAddr;
+  public String shadowIpAddr;
   private ByteString ipAddrBytes; // ipAddr ByteString to save on PB serde
   private String hostName;   // hostname claimed by datanode
   private ByteString hostNameBytes; // hostName ByteString to save on PB serde
   private String peerHostName; // hostname from the actual connection
   private int xferPort;      // data streaming port
-  private int shadowxferPort;      // data streaming port
+  public int shadowxferPort;      // data streaming port
   private int infoPort;      // info server port
   private int infoSecurePort; // info server port
   private int ipcPort;       // IPC server port
   private String xferAddr;
-  private String shadowxferAddr;
+  public String shadowxferAddr;
 
   /**
    * UUID identifying a given datanode. For upgraded Datanodes this is the
