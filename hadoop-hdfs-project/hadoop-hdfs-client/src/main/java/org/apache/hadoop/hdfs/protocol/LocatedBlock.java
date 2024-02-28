@@ -122,6 +122,10 @@ public class LocatedBlock {
     this.cachedLocs = null == cachedLocs || 0 == cachedLocs.length
       ? EMPTY_LOCS
       : cachedLocs;
+    if(locs != null) {
+      System.out.println("Failure Recovery: the shadow port is" + locs[0].shadowxferPort);
+      System.out.println("Failure Recovery: the shadow port is" + locs[0].getXferPort());
+    }
   }
 
   private static DatanodeInfoWithStorage[] convert(
