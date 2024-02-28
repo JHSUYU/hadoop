@@ -780,12 +780,42 @@ class ShadowDataStreamer extends Daemon {
         return this.nodes.length;
     }
 
+    @Override
+    public void run() {
+        while (!streamerClosed && dfsClient.clientRunning) {
+            // if the Responder encountered an error, shutdown Responder
+            if (errorState.hasError()) {
+                closeResponder();
+            }
+
+            DFSPacket one;
+            try {
+                // process datanode IO errors if any
+                LOG.info("Before shadowErrorHandler, the nodes are: {}", Arrays.toString(this.nodes));
+
+                synchronized (lock) {
+                    while (!readyToProcess) {
+                        try {
+                            lock.wait();
+                        } catch (InterruptedException e) {
+                            Thread.currentThread().interrupt();
+                        }
+                    }
+                }
+                boolean doSleep = processDatanodeOrExternalError();
+            } catch (IOException e) {
+                e.printStackTrace();
+
+            }
+        }
+    }
+
     /*
      * streamer thread is the only thread that opens streams to datanode,
      * and closes them. Any error recovery is also done by this thread.
      */
-    @Override
-    public void run() {
+
+    public void shadowRun() {
         TraceScope scope = null;
         while (!streamerClosed && dfsClient.clientRunning) {
             // if the Responder encountered an error, shutdown Responder
@@ -808,6 +838,7 @@ class ShadowDataStreamer extends Daemon {
                     }
                 }
                 boolean doSleep = processDatanodeOrExternalError();
+
                 LOG.info("ShadowDataStreamer: Finish processDatanodeOrExternalError, doSleep: {}", doSleep);
 
                 synchronized (dataQueue) {
