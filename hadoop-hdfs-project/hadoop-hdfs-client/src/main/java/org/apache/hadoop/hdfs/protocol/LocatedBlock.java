@@ -140,6 +140,8 @@ public class LocatedBlock {
           storageIDs   != null ? storageIDs[i]   : null,
           storageTypes != null ? storageTypes[i] : null);
     }
+    System.out.println("Failure Recovery: the shadow port is"+ infos[0].shadowxferPort);
+    System.out.println("Failure Recovery: the shadow port is"+ infos[0].getXferPort());
     return ret;
   }
 
