@@ -351,6 +351,7 @@ public class PBHelperClient {
     // For wire compatibility with older versions we transmit the StorageID
     // which is the same as the DatanodeUuid. Since StorageID is a required
     // field we pass the empty string if the DatanodeUuid is not yet known.
+    System.out.println("dn.shadowIpaddr is"+dn.shadowIpAddr);
     return DatanodeIDProto.newBuilder()
         .setIpAddrBytes(dn.getIpAddrBytes())
         .setHostNameBytes(dn.getHostNameBytes())
