@@ -1177,8 +1177,10 @@ public class BlockPlacementPolicyDefault extends BlockPlacementPolicy {
         writer = shortestStorage.getDatanodeDescriptor();
       }
     }
-    LOG.info("Failure Recovery: the shadow port is"+ storages[0].getDatanodeDescriptor().shadowxferPort);
-    LOG.info("Failure Recovery: the shadow port is"+ storages[0].getDatanodeDescriptor().getXferPort());
+    if(storages != null && storages.length >0) {
+      LOG.info("Failure Recovery: the shadow port is" + storages[0].getDatanodeDescriptor().shadowxferPort);
+      LOG.info("Failure Recovery: the shadow port is" + storages[0].getDatanodeDescriptor().getXferPort());
+    }
     return storages;
   }
 

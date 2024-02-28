@@ -496,6 +496,7 @@ public class ClientNamenodeProtocolTranslatorPB implements
       req.addAllFlags(PBHelperClient.convertAddBlockFlags(
           addBlockFlags));
     }
+    System.out.println("Failure Recovery in ClientNamenodeProtocol, rpc proxy is"+rpcProxy.toString());
     return PBHelperClient.convertLocatedBlockProto(
         ipc(() -> rpcProxy.addBlock(null, req.build())).getBlock());
   }

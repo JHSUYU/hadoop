@@ -108,8 +108,10 @@ public class LocatedBlock {
     this(b, convert(locs, storageIDs, storageTypes),
         storageIDs, storageTypes, startOffset, corrupt,
         null == cachedLocs || 0 == cachedLocs.length ? EMPTY_LOCS : cachedLocs);
-    System.out.println("Failure Recovery: 108 the shadow port is"+ locs[0].shadowxferPort);
-    System.out.println("Failure Recovery: 108 the shadow port is"+ locs[0].getXferPort());
+    if(locs != null && locs.length >0) {
+      System.out.println("Failure Recovery: 108 the shadow port is" + locs[0].shadowxferPort);
+      System.out.println("Failure Recovery: 108 the shadow port is" + locs[0].getXferPort());
+    }
   }
 
   public LocatedBlock(ExtendedBlock b, DatanodeInfoWithStorage[] locs,
@@ -142,8 +144,10 @@ public class LocatedBlock {
           storageIDs   != null ? storageIDs[i]   : null,
           storageTypes != null ? storageTypes[i] : null);
     }
-    System.out.println("Failure Recovery: convert DatanodeInfoWithStorage the shadow port is"+ infos[0].shadowxferPort);
-    System.out.println("Failure Recovery: convert DatanodeInfoWithStorage the shadow port is"+ infos[0].getXferPort());
+    if(infos != null && infos.length>0) {
+      System.out.println("Failure Recovery: convert DatanodeInfoWithStorage the shadow port is" + infos[0].shadowxferPort);
+      System.out.println("Failure Recovery: convert DatanodeInfoWithStorage the shadow port is" + infos[0].getXferPort());
+    }
     return ret;
   }
 
