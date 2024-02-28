@@ -701,6 +701,8 @@ public class DatanodeInfo extends DatanodeID implements Node {
     private long lastBlockReportMonotonic = 0L;
     private int numBlocks = 0;
     private String softwareVersion;
+    private String shadowAddr;
+    private int shadowXferPort;
 
     // Please use setNumBlocks explicitly to set numBlocks as this method doesn't have
     // sufficient info about numBlocks
@@ -735,6 +737,8 @@ public class DatanodeInfo extends DatanodeID implements Node {
       this.infoPort = nodeID.getInfoPort();
       this.infoSecurePort = nodeID.getInfoSecurePort();
       this.ipcPort = nodeID.getIpcPort();
+      this.shadowAddr = nodeID.shadowIpAddr;
+      this.shadowXferPort = nodeID.shadowxferPort;
       return this;
     }
 
