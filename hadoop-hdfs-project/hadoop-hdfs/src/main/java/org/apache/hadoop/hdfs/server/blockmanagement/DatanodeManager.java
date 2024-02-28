@@ -1280,6 +1280,7 @@ public class DatanodeManager {
 
       DatanodeDescriptor nodeDescr 
         = new DatanodeDescriptor(nodeReg, NetworkTopology.DEFAULT_RACK);
+      LOG.info("Failure Recovery: nodeDescr is"+nodeReg.getShadowXferAddr());
       LOG.info("Failure Recovery: nodeDescr is"+nodeDescr.getShadowXferAddr());
       boolean success = false;
       try {
