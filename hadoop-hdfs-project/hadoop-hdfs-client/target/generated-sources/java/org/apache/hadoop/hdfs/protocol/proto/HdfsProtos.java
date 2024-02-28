@@ -2892,13 +2892,18 @@ public final class HdfsProtos {
     int getShadowPort();
 
     /**
-     * <code>optional uint32 shadowAddr = 9 [default = 0];</code>
+     * <code>optional string shadowAddr = 9 [default = ""];</code>
      */
     boolean hasShadowAddr();
     /**
-     * <code>optional uint32 shadowAddr = 9 [default = 0];</code>
+     * <code>optional string shadowAddr = 9 [default = ""];</code>
      */
-    int getShadowAddr();
+    java.lang.String getShadowAddr();
+    /**
+     * <code>optional string shadowAddr = 9 [default = ""];</code>
+     */
+    org.apache.hadoop.thirdparty.protobuf.ByteString
+        getShadowAddrBytes();
   }
   /**
    * <pre>
@@ -2921,6 +2926,7 @@ public final class HdfsProtos {
       ipAddr_ = "";
       hostName_ = "";
       datanodeUuid_ = "";
+      shadowAddr_ = "";
     }
 
     @java.lang.Override
@@ -2990,9 +2996,10 @@ public final class HdfsProtos {
               shadowPort_ = input.readUInt32();
               break;
             }
-            case 72: {
+            case 74: {
+              org.apache.hadoop.thirdparty.protobuf.ByteString bs = input.readBytes();
               bitField0_ |= 0x00000100;
-              shadowAddr_ = input.readUInt32();
+              shadowAddr_ = bs;
               break;
             }
             default: {
@@ -3302,18 +3309,45 @@ public final class HdfsProtos {
     }
 
     public static final int SHADOWADDR_FIELD_NUMBER = 9;
-    private int shadowAddr_;
+    private volatile java.lang.Object shadowAddr_;
     /**
-     * <code>optional uint32 shadowAddr = 9 [default = 0];</code>
+     * <code>optional string shadowAddr = 9 [default = ""];</code>
      */
     public boolean hasShadowAddr() {
       return ((bitField0_ & 0x00000100) != 0);
     }
     /**
-     * <code>optional uint32 shadowAddr = 9 [default = 0];</code>
+     * <code>optional string shadowAddr = 9 [default = ""];</code>
      */
-    public int getShadowAddr() {
-      return shadowAddr_;
+    public java.lang.String getShadowAddr() {
+      java.lang.Object ref = shadowAddr_;
+      if (ref instanceof java.lang.String) {
+        return (java.lang.String) ref;
+      } else {
+        org.apache.hadoop.thirdparty.protobuf.ByteString bs = 
+            (org.apache.hadoop.thirdparty.protobuf.ByteString) ref;
+        java.lang.String s = bs.toStringUtf8();
+        if (bs.isValidUtf8()) {
+          shadowAddr_ = s;
+        }
+        return s;
+      }
+    }
+    /**
+     * <code>optional string shadowAddr = 9 [default = ""];</code>
+     */
+    public org.apache.hadoop.thirdparty.protobuf.ByteString
+        getShadowAddrBytes() {
+      java.lang.Object ref = shadowAddr_;
+      if (ref instanceof java.lang.String) {
+        org.apache.hadoop.thirdparty.protobuf.ByteString b = 
+            org.apache.hadoop.thirdparty.protobuf.ByteString.copyFromUtf8(
+                (java.lang.String) ref);
+        shadowAddr_ = b;
+        return b;
+      } else {
+        return (org.apache.hadoop.thirdparty.protobuf.ByteString) ref;
+      }
     }
 
     private byte memoizedIsInitialized = -1;
@@ -3379,7 +3413,7 @@ public final class HdfsProtos {
         output.writeUInt32(8, shadowPort_);
       }
       if (((bitField0_ & 0x00000100) != 0)) {
-        output.writeUInt32(9, shadowAddr_);
+        org.apache.hadoop.thirdparty.protobuf.GeneratedMessageV3.writeString(output, 9, shadowAddr_);
       }
       unknownFields.writeTo(output);
     }
@@ -3420,8 +3454,7 @@ public final class HdfsProtos {
           .computeUInt32Size(8, shadowPort_);
       }
       if (((bitField0_ & 0x00000100) != 0)) {
-        size += org.apache.hadoop.thirdparty.protobuf.CodedOutputStream
-          .computeUInt32Size(9, shadowAddr_);
+        size += org.apache.hadoop.thirdparty.protobuf.GeneratedMessageV3.computeStringSize(9, shadowAddr_);
       }
       size += unknownFields.getSerializedSize();
       memoizedSize = size;
@@ -3480,8 +3513,8 @@ public final class HdfsProtos {
       }
       if (hasShadowAddr() != other.hasShadowAddr()) return false;
       if (hasShadowAddr()) {
-        if (getShadowAddr()
-            != other.getShadowAddr()) return false;
+        if (!getShadowAddr()
+            .equals(other.getShadowAddr())) return false;
       }
       if (!unknownFields.equals(other.unknownFields)) return false;
       return true;
@@ -3528,7 +3561,7 @@ public final class HdfsProtos {
       }
       if (hasShadowAddr()) {
         hash = (37 * hash) + SHADOWADDR_FIELD_NUMBER;
-        hash = (53 * hash) + getShadowAddr();
+        hash = (53 * hash) + getShadowAddr().hashCode();
       }
       hash = (29 * hash) + unknownFields.hashCode();
       memoizedHashCode = hash;
@@ -3684,7 +3717,7 @@ public final class HdfsProtos {
         bitField0_ = (bitField0_ & ~0x00000040);
         shadowPort_ = 0;
         bitField0_ = (bitField0_ & ~0x00000080);
-        shadowAddr_ = 0;
+        shadowAddr_ = "";
         bitField0_ = (bitField0_ & ~0x00000100);
         return this;
       }
@@ -3747,9 +3780,9 @@ public final class HdfsProtos {
           to_bitField0_ |= 0x00000080;
         }
         if (((from_bitField0_ & 0x00000100) != 0)) {
-          result.shadowAddr_ = shadowAddr_;
           to_bitField0_ |= 0x00000100;
         }
+        result.shadowAddr_ = shadowAddr_;
         result.bitField0_ = to_bitField0_;
         onBuilt();
         return result;
@@ -3830,7 +3863,9 @@ public final class HdfsProtos {
           setShadowPort(other.getShadowPort());
         }
         if (other.hasShadowAddr()) {
-          setShadowAddr(other.getShadowAddr());
+          bitField0_ |= 0x00000100;
+          shadowAddr_ = other.shadowAddr_;
+          onChanged();
         }
         this.mergeUnknownFields(other.unknownFields);
         onChanged();
@@ -4412,34 +4447,78 @@ public final class HdfsProtos {
         return this;
       }
 
-      private int shadowAddr_ ;
+      private java.lang.Object shadowAddr_ = "";
       /**
-       * <code>optional uint32 shadowAddr = 9 [default = 0];</code>
+       * <code>optional string shadowAddr = 9 [default = ""];</code>
        */
       public boolean hasShadowAddr() {
         return ((bitField0_ & 0x00000100) != 0);
       }
       /**
-       * <code>optional uint32 shadowAddr = 9 [default = 0];</code>
+       * <code>optional string shadowAddr = 9 [default = ""];</code>
        */
-      public int getShadowAddr() {
-        return shadowAddr_;
+      public java.lang.String getShadowAddr() {
+        java.lang.Object ref = shadowAddr_;
+        if (!(ref instanceof java.lang.String)) {
+          org.apache.hadoop.thirdparty.protobuf.ByteString bs =
+              (org.apache.hadoop.thirdparty.protobuf.ByteString) ref;
+          java.lang.String s = bs.toStringUtf8();
+          if (bs.isValidUtf8()) {
+            shadowAddr_ = s;
+          }
+          return s;
+        } else {
+          return (java.lang.String) ref;
+        }
       }
       /**
-       * <code>optional uint32 shadowAddr = 9 [default = 0];</code>
+       * <code>optional string shadowAddr = 9 [default = ""];</code>
        */
-      public Builder setShadowAddr(int value) {
-        bitField0_ |= 0x00000100;
+      public org.apache.hadoop.thirdparty.protobuf.ByteString
+          getShadowAddrBytes() {
+        java.lang.Object ref = shadowAddr_;
+        if (ref instanceof String) {
+          org.apache.hadoop.thirdparty.protobuf.ByteString b = 
+              org.apache.hadoop.thirdparty.protobuf.ByteString.copyFromUtf8(
+                  (java.lang.String) ref);
+          shadowAddr_ = b;
+          return b;
+        } else {
+          return (org.apache.hadoop.thirdparty.protobuf.ByteString) ref;
+        }
+      }
+      /**
+       * <code>optional string shadowAddr = 9 [default = ""];</code>
+       */
+      public Builder setShadowAddr(
+          java.lang.String value) {
+        if (value == null) {
+    throw new NullPointerException();
+  }
+  bitField0_ |= 0x00000100;
         shadowAddr_ = value;
         onChanged();
         return this;
       }
       /**
-       * <code>optional uint32 shadowAddr = 9 [default = 0];</code>
+       * <code>optional string shadowAddr = 9 [default = ""];</code>
        */
       public Builder clearShadowAddr() {
         bitField0_ = (bitField0_ & ~0x00000100);
-        shadowAddr_ = 0;
+        shadowAddr_ = getDefaultInstance().getShadowAddr();
+        onChanged();
+        return this;
+      }
+      /**
+       * <code>optional string shadowAddr = 9 [default = ""];</code>
+       */
+      public Builder setShadowAddrBytes(
+          org.apache.hadoop.thirdparty.protobuf.ByteString value) {
+        if (value == null) {
+    throw new NullPointerException();
+  }
+  bitField0_ |= 0x00000100;
+        shadowAddr_ = value;
         onChanged();
         return this;
       }
@@ -60193,243 +60272,243 @@ public final class HdfsProtos {
       "nStamp\030\003 \002(\004\022\023\n\010numBytes\030\004 \001(\004:\0010\"[\n\034Pro" +
       "videdStorageLocationProto\022\014\n\004path\030\001 \002(\t\022" +
       "\016\n\006offset\030\002 \002(\003\022\016\n\006length\030\003 \002(\003\022\r\n\005nonce" +
-      "\030\004 \002(\014\"\307\001\n\017DatanodeIDProto\022\016\n\006ipAddr\030\001 \002" +
+      "\030\004 \002(\014\"\306\001\n\017DatanodeIDProto\022\016\n\006ipAddr\030\001 \002" +
       "(\t\022\020\n\010hostName\030\002 \002(\t\022\024\n\014datanodeUuid\030\003 \002" +
       "(\t\022\020\n\010xferPort\030\004 \002(\r\022\020\n\010infoPort\030\005 \002(\r\022\017" +
       "\n\007ipcPort\030\006 \002(\r\022\031\n\016infoSecurePort\030\007 \001(\r:" +
-      "\0010\022\025\n\nshadowPort\030\010 \001(\r:\0010\022\025\n\nshadowAddr\030" +
-      "\t \001(\r:\0010\"X\n\026DatanodeLocalInfoProto\022\027\n\017so" +
-      "ftwareVersion\030\001 \002(\t\022\025\n\rconfigVersion\030\002 \002" +
-      "(\t\022\016\n\006uptime\030\003 \002(\004\"\315\001\n\027DatanodeVolumeInf" +
-      "oProto\022\014\n\004path\030\001 \002(\t\0222\n\013storageType\030\002 \002(" +
-      "\0162\035.hadoop.hdfs.StorageTypeProto\022\021\n\tused" +
-      "Space\030\003 \002(\004\022\021\n\tfreeSpace\030\004 \002(\004\022\025\n\rreserv" +
-      "edSpace\030\005 \002(\004\022 \n\030reservedSpaceForReplica" +
-      "s\030\006 \002(\004\022\021\n\tnumBlocks\030\007 \002(\004\"G\n\022DatanodeIn" +
-      "fosProto\0221\n\tdatanodes\030\001 \003(\0132\036.hadoop.hdf" +
-      "s.DatanodeInfoProto\"\207\005\n\021DatanodeInfoProt" +
-      "o\022(\n\002id\030\001 \002(\0132\034.hadoop.hdfs.DatanodeIDPr" +
-      "oto\022\023\n\010capacity\030\002 \001(\004:\0010\022\022\n\007dfsUsed\030\003 \001(" +
-      "\004:\0010\022\024\n\tremaining\030\004 \001(\004:\0010\022\030\n\rblockPoolU" +
-      "sed\030\005 \001(\004:\0010\022\025\n\nlastUpdate\030\006 \001(\004:\0010\022\027\n\014x" +
-      "ceiverCount\030\007 \001(\r:\0010\022\020\n\010location\030\010 \001(\t\022\022" +
-      "\n\nnonDfsUsed\030\t \001(\004\022E\n\nadminState\030\n \001(\0162)" +
-      ".hadoop.hdfs.DatanodeInfoProto.AdminStat" +
-      "e:\006NORMAL\022\030\n\rcacheCapacity\030\013 \001(\004:\0010\022\024\n\tc" +
-      "acheUsed\030\014 \001(\004:\0010\022\036\n\023lastUpdateMonotonic" +
-      "\030\r \001(\004:\0010\022\025\n\rupgradeDomain\030\016 \001(\t\022\036\n\023last" +
-      "BlockReportTime\030\017 \001(\004:\0010\022#\n\030lastBlockRep" +
-      "ortMonotonic\030\020 \001(\004:\0010\022\024\n\tnumBlocks\030\021 \001(\r" +
-      ":\0010\022\027\n\017softwareVersion\030\022 \001(\t\"w\n\nAdminSta" +
-      "te\022\n\n\006NORMAL\020\000\022\033\n\027DECOMMISSION_INPROGRES" +
-      "S\020\001\022\022\n\016DECOMMISSIONED\020\002\022\030\n\024ENTERING_MAIN" +
-      "TENANCE\020\003\022\022\n\016IN_MAINTENANCE\020\004\"\336\001\n\024Datano" +
-      "deStorageProto\022\023\n\013storageUuid\030\001 \002(\t\022E\n\005s" +
-      "tate\030\002 \001(\0162..hadoop.hdfs.DatanodeStorage" +
-      "Proto.StorageState:\006NORMAL\0228\n\013storageTyp" +
-      "e\030\003 \001(\0162\035.hadoop.hdfs.StorageTypeProto:\004" +
-      "DISK\"0\n\014StorageState\022\n\n\006NORMAL\020\000\022\024\n\020READ" +
-      "_ONLY_SHARED\020\001\"\364\001\n\022StorageReportProto\022\027\n" +
-      "\013storageUuid\030\001 \002(\tB\002\030\001\022\025\n\006failed\030\002 \001(\010:\005" +
-      "false\022\023\n\010capacity\030\003 \001(\004:\0010\022\022\n\007dfsUsed\030\004 " +
-      "\001(\004:\0010\022\024\n\tremaining\030\005 \001(\004:\0010\022\030\n\rblockPoo" +
-      "lUsed\030\006 \001(\004:\0010\0222\n\007storage\030\007 \001(\0132!.hadoop" +
-      ".hdfs.DatanodeStorageProto\022\022\n\nnonDfsUsed" +
-      "\030\010 \001(\004\022\r\n\005mount\030\t \001(\t\"\332\002\n\023ContentSummary" +
-      "Proto\022\016\n\006length\030\001 \002(\004\022\021\n\tfileCount\030\002 \002(\004" +
-      "\022\026\n\016directoryCount\030\003 \002(\004\022\r\n\005quota\030\004 \002(\004\022" +
-      "\025\n\rspaceConsumed\030\005 \002(\004\022\022\n\nspaceQuota\030\006 \002" +
-      "(\004\022?\n\016typeQuotaInfos\030\007 \001(\0132\'.hadoop.hdfs" +
-      ".StorageTypeQuotaInfosProto\022\026\n\016snapshotL" +
-      "ength\030\010 \001(\004\022\031\n\021snapshotFileCount\030\t \001(\004\022\036" +
-      "\n\026snapshotDirectoryCount\030\n \001(\004\022\035\n\025snapsh" +
-      "otSpaceConsumed\030\013 \001(\004\022\033\n\023erasureCodingPo" +
-      "licy\030\014 \001(\t\"\253\001\n\017QuotaUsageProto\022\035\n\025fileAn" +
-      "dDirectoryCount\030\001 \002(\004\022\r\n\005quota\030\002 \002(\004\022\025\n\r" +
-      "spaceConsumed\030\003 \002(\004\022\022\n\nspaceQuota\030\004 \002(\004\022" +
-      "?\n\016typeQuotaInfos\030\005 \001(\0132\'.hadoop.hdfs.St" +
-      "orageTypeQuotaInfosProto\"[\n\032StorageTypeQ" +
-      "uotaInfosProto\022=\n\rtypeQuotaInfo\030\001 \003(\0132&." +
-      "hadoop.hdfs.StorageTypeQuotaInfoProto\"o\n" +
-      "\031StorageTypeQuotaInfoProto\0221\n\004type\030\001 \001(\016" +
-      "2\035.hadoop.hdfs.StorageTypeProto:\004DISK\022\r\n" +
-      "\005quota\030\002 \002(\004\022\020\n\010consumed\030\003 \002(\004\"7\n\026Corrup" +
-      "tFileBlocksProto\022\r\n\005files\030\001 \003(\t\022\016\n\006cooki" +
-      "e\030\002 \002(\t\"H\n\021StorageTypesProto\0223\n\014storageT" +
-      "ypes\030\001 \003(\0162\035.hadoop.hdfs.StorageTypeProt" +
-      "o\"\364\001\n\027BlockStoragePolicyProto\022\020\n\010policyI" +
-      "d\030\001 \002(\r\022\014\n\004name\030\002 \002(\t\0226\n\016creationPolicy\030" +
-      "\003 \002(\0132\036.hadoop.hdfs.StorageTypesProto\022>\n" +
-      "\026creationFallbackPolicy\030\004 \001(\0132\036.hadoop.h" +
-      "dfs.StorageTypesProto\022A\n\031replicationFall" +
-      "backPolicy\030\005 \001(\0132\036.hadoop.hdfs.StorageTy" +
-      "pesProto\"\342\002\n\021LocatedBlockProto\022*\n\001b\030\001 \002(" +
-      "\0132\037.hadoop.hdfs.ExtendedBlockProto\022\016\n\006of" +
-      "fset\030\002 \002(\004\022,\n\004locs\030\003 \003(\0132\036.hadoop.hdfs.D" +
-      "atanodeInfoProto\022\017\n\007corrupt\030\004 \002(\010\022-\n\nblo" +
-      "ckToken\030\005 \002(\0132\031.hadoop.common.TokenProto" +
-      "\022\024\n\010isCached\030\006 \003(\010B\002\020\001\0223\n\014storageTypes\030\007" +
-      " \003(\0162\035.hadoop.hdfs.StorageTypeProto\022\022\n\ns" +
-      "torageIDs\030\010 \003(\t\022\024\n\014blockIndices\030\t \001(\014\022.\n" +
-      "\013blockTokens\030\n \003(\0132\031.hadoop.common.Token" +
-      "Proto\"Q\n\026BatchedListingKeyProto\022\020\n\010check" +
-      "sum\030\001 \002(\014\022\021\n\tpathIndex\030\002 \002(\r\022\022\n\nstartAft" +
-      "er\030\003 \002(\014\"\223\001\n\026DataEncryptionKeyProto\022\r\n\005k" +
-      "eyId\030\001 \002(\r\022\023\n\013blockPoolId\030\002 \002(\t\022\r\n\005nonce" +
-      "\030\003 \002(\014\022\025\n\rencryptionKey\030\004 \002(\014\022\022\n\nexpiryD" +
-      "ate\030\005 \002(\004\022\033\n\023encryptionAlgorithm\030\006 \001(\t\"\323" +
-      "\001\n\027FileEncryptionInfoProto\022,\n\005suite\030\001 \002(" +
-      "\0162\035.hadoop.hdfs.CipherSuiteProto\022F\n\025cryp" +
-      "toProtocolVersion\030\002 \002(\0162\'.hadoop.hdfs.Cr" +
-      "yptoProtocolVersionProto\022\013\n\003key\030\003 \002(\014\022\n\n" +
-      "\002iv\030\004 \002(\014\022\017\n\007keyName\030\005 \002(\t\022\030\n\020ezKeyVersi" +
-      "onName\030\006 \002(\t\"O\n\032PerFileEncryptionInfoPro" +
-      "to\022\013\n\003key\030\001 \002(\014\022\n\n\002iv\030\002 \002(\014\022\030\n\020ezKeyVers" +
-      "ionName\030\003 \002(\t\"\337\001\n\027ZoneEncryptionInfoProt" +
-      "o\022,\n\005suite\030\001 \002(\0162\035.hadoop.hdfs.CipherSui" +
-      "teProto\022F\n\025cryptoProtocolVersion\030\002 \002(\0162\'" +
-      ".hadoop.hdfs.CryptoProtocolVersionProto\022" +
-      "\017\n\007keyName\030\003 \002(\t\022=\n\021reencryptionProto\030\004 " +
-      "\001(\0132\".hadoop.hdfs.ReencryptionInfoProto\"" +
-      "\262\001\n\025ReencryptionInfoProto\022\030\n\020ezKeyVersio" +
-      "nName\030\001 \002(\t\022\026\n\016submissionTime\030\002 \002(\004\022\020\n\010c" +
-      "anceled\030\003 \002(\010\022\026\n\016numReencrypted\030\004 \002(\003\022\023\n" +
-      "\013numFailures\030\005 \002(\003\022\026\n\016completionTime\030\006 \001" +
-      "(\004\022\020\n\010lastFile\030\007 \001(\t\"}\n\021CipherOptionProt" +
-      "o\022,\n\005suite\030\001 \002(\0162\035.hadoop.hdfs.CipherSui" +
-      "teProto\022\r\n\005inKey\030\002 \001(\014\022\014\n\004inIv\030\003 \001(\014\022\016\n\006" +
-      "outKey\030\004 \001(\014\022\r\n\005outIv\030\005 \001(\014\"\276\002\n\022LocatedB" +
-      "locksProto\022\022\n\nfileLength\030\001 \002(\004\022.\n\006blocks" +
-      "\030\002 \003(\0132\036.hadoop.hdfs.LocatedBlockProto\022\031" +
-      "\n\021underConstruction\030\003 \002(\010\0221\n\tlastBlock\030\004" +
-      " \001(\0132\036.hadoop.hdfs.LocatedBlockProto\022\033\n\023" +
-      "isLastBlockComplete\030\005 \002(\010\022@\n\022fileEncrypt" +
-      "ionInfo\030\006 \001(\0132$.hadoop.hdfs.FileEncrypti" +
-      "onInfoProto\0227\n\010ecPolicy\030\007 \001(\0132%.hadoop.h" +
-      "dfs.ErasureCodingPolicyProto\"6\n\030ECSchema" +
-      "OptionEntryProto\022\013\n\003key\030\001 \002(\t\022\r\n\005value\030\002" +
-      " \002(\t\"\202\001\n\rECSchemaProto\022\021\n\tcodecName\030\001 \002(" +
-      "\t\022\021\n\tdataUnits\030\002 \002(\r\022\023\n\013parityUnits\030\003 \002(" +
-      "\r\0226\n\007options\030\004 \003(\0132%.hadoop.hdfs.ECSchem" +
-      "aOptionEntryProto\"\261\001\n\030ErasureCodingPolic" +
-      "yProto\022\014\n\004name\030\001 \001(\t\022*\n\006schema\030\002 \001(\0132\032.h" +
-      "adoop.hdfs.ECSchemaProto\022\020\n\010cellSize\030\003 \001" +
-      "(\r\022\n\n\002id\030\004 \002(\r\022=\n\005state\030\005 \001(\0162%.hadoop.h" +
-      "dfs.ErasureCodingPolicyState:\007ENABLED\"\177\n" +
-      "#AddErasureCodingPolicyResponseProto\0225\n\006" +
-      "policy\030\001 \002(\0132%.hadoop.hdfs.ErasureCoding" +
-      "PolicyProto\022\017\n\007succeed\030\002 \002(\010\022\020\n\010errorMsg" +
-      "\030\003 \001(\t\"K\n\035ECTopologyVerifierResultProto\022" +
-      "\025\n\rresultMessage\030\001 \002(\t\022\023\n\013isSupported\030\002 " +
-      "\002(\010\"C\n\023HdfsPathHandleProto\022\017\n\007inodeId\030\001 " +
-      "\001(\004\022\r\n\005mtime\030\002 \001(\004\022\014\n\004path\030\003 \001(\t\"\315\005\n\023Hdf" +
-      "sFileStatusProto\022;\n\010fileType\030\001 \002(\0162).had" +
-      "oop.hdfs.HdfsFileStatusProto.FileType\022\014\n" +
-      "\004path\030\002 \002(\014\022\016\n\006length\030\003 \002(\004\0222\n\npermissio" +
-      "n\030\004 \002(\0132\036.hadoop.hdfs.FsPermissionProto\022" +
-      "\r\n\005owner\030\005 \002(\t\022\r\n\005group\030\006 \002(\t\022\031\n\021modific" +
-      "ation_time\030\007 \002(\004\022\023\n\013access_time\030\010 \002(\004\022\017\n" +
-      "\007symlink\030\t \001(\014\022\034\n\021block_replication\030\n \001(" +
-      "\r:\0010\022\024\n\tblocksize\030\013 \001(\004:\0010\0222\n\tlocations\030" +
-      "\014 \001(\0132\037.hadoop.hdfs.LocatedBlocksProto\022\021" +
-      "\n\006fileId\030\r \001(\004:\0010\022\027\n\013childrenNum\030\016 \001(\005:\002" +
-      "-1\022@\n\022fileEncryptionInfo\030\017 \001(\0132$.hadoop." +
-      "hdfs.FileEncryptionInfoProto\022\030\n\rstorageP" +
-      "olicy\030\020 \001(\r:\0010\0227\n\010ecPolicy\030\021 \001(\0132%.hadoo" +
-      "p.hdfs.ErasureCodingPolicyProto\022\020\n\005flags" +
-      "\030\022 \001(\r:\0010\022\021\n\tnamespace\030\023 \001(\t\"3\n\010FileType" +
-      "\022\n\n\006IS_DIR\020\001\022\013\n\007IS_FILE\020\002\022\016\n\nIS_SYMLINK\020" +
-      "\003\"E\n\005Flags\022\013\n\007HAS_ACL\020\001\022\r\n\tHAS_CRYPT\020\002\022\n" +
-      "\n\006HAS_EC\020\004\022\024\n\020SNAPSHOT_ENABLED\020\010\"y\n\031Bloc" +
-      "kChecksumOptionsProto\022F\n\021blockChecksumTy" +
-      "pe\030\001 \001(\0162#.hadoop.hdfs.BlockChecksumType" +
-      "Proto:\006MD5CRC\022\024\n\014stripeLength\030\002 \001(\004\"\344\002\n\025" +
-      "FsServerDefaultsProto\022\021\n\tblockSize\030\001 \002(\004" +
-      "\022\030\n\020bytesPerChecksum\030\002 \002(\r\022\027\n\017writePacke" +
-      "tSize\030\003 \002(\r\022\023\n\013replication\030\004 \002(\r\022\026\n\016file" +
-      "BufferSize\030\005 \002(\r\022\"\n\023encryptDataTransfer\030" +
-      "\006 \001(\010:\005false\022\030\n\rtrashInterval\030\007 \001(\004:\0010\022D" +
-      "\n\014checksumType\030\010 \001(\0162\036.hadoop.hdfs.Check" +
-      "sumTypeProto:\016CHECKSUM_CRC32\022\026\n\016keyProvi" +
-      "derUri\030\t \001(\t\022\023\n\010policyId\030\n \001(\r:\0010\022\'\n\030sna" +
-      "pshotTrashRootEnabled\030\013 \001(\010:\005false\"k\n\025Di" +
-      "rectoryListingProto\0228\n\016partialListing\030\001 " +
-      "\003(\0132 .hadoop.hdfs.HdfsFileStatusProto\022\030\n" +
-      "\020remainingEntries\030\002 \002(\r\":\n\024RemoteExcepti" +
-      "onProto\022\021\n\tclassName\030\001 \002(\t\022\017\n\007message\030\002 " +
-      "\001(\t\"\241\001\n\034BatchedDirectoryListingProto\0228\n\016" +
-      "partialListing\030\001 \003(\0132 .hadoop.hdfs.HdfsF" +
-      "ileStatusProto\022\021\n\tparentIdx\030\002 \002(\r\0224\n\texc" +
-      "eption\030\003 \001(\0132!.hadoop.hdfs.RemoteExcepti" +
-      "onProto\"\242\001\n!SnapshottableDirectoryStatus" +
-      "Proto\0223\n\tdirStatus\030\001 \002(\0132 .hadoop.hdfs.H" +
-      "dfsFileStatusProto\022\026\n\016snapshot_quota\030\002 \002" +
-      "(\r\022\027\n\017snapshot_number\030\003 \002(\r\022\027\n\017parent_fu" +
-      "llpath\030\004 \002(\014\"\212\001\n\023SnapshotStatusProto\0223\n\t" +
-      "dirStatus\030\001 \002(\0132 .hadoop.hdfs.HdfsFileSt" +
-      "atusProto\022\022\n\nsnapshotID\030\002 \002(\r\022\027\n\017parent_" +
-      "fullpath\030\003 \002(\014\022\021\n\tisDeleted\030\004 \002(\010\"u\n\"Sna" +
-      "pshottableDirectoryListingProto\022O\n\027snaps" +
-      "hottableDirListing\030\001 \003(\0132..hadoop.hdfs.S" +
-      "napshottableDirectoryStatusProto\"Q\n\024Snap" +
-      "shotListingProto\0229\n\017snapshotListing\030\001 \003(" +
-      "\0132 .hadoop.hdfs.SnapshotStatusProto\"_\n\034S" +
-      "napshotDiffReportEntryProto\022\020\n\010fullpath\030" +
-      "\001 \002(\014\022\031\n\021modificationLabel\030\002 \002(\t\022\022\n\ntarg" +
-      "etPath\030\003 \001(\014\"\237\001\n\027SnapshotDiffReportProto" +
-      "\022\024\n\014snapshotRoot\030\001 \002(\t\022\024\n\014fromSnapshot\030\002" +
-      " \002(\t\022\022\n\ntoSnapshot\030\003 \002(\t\022D\n\021diffReportEn" +
-      "tries\030\004 \003(\0132).hadoop.hdfs.SnapshotDiffRe" +
-      "portEntryProto\"\177\n#SnapshotDiffReportList" +
-      "ingEntryProto\022\020\n\010fullpath\030\001 \002(\014\022\r\n\005dirId" +
-      "\030\002 \002(\004\022\023\n\013isReference\030\003 \002(\010\022\022\n\ntargetPat" +
-      "h\030\004 \001(\014\022\016\n\006fileId\030\005 \001(\004\"E\n\035SnapshotDiffR" +
-      "eportCursorProto\022\021\n\tstartPath\030\001 \002(\014\022\021\n\005i" +
-      "ndex\030\002 \002(\005:\002-1\"\322\002\n\036SnapshotDiffReportLis" +
-      "tingProto\022I\n\017modifiedEntries\030\001 \003(\01320.had" +
-      "oop.hdfs.SnapshotDiffReportListingEntryP" +
-      "roto\022H\n\016createdEntries\030\002 \003(\01320.hadoop.hd" +
-      "fs.SnapshotDiffReportListingEntryProto\022H" +
-      "\n\016deletedEntries\030\003 \003(\01320.hadoop.hdfs.Sna" +
-      "pshotDiffReportListingEntryProto\022\025\n\risFr" +
-      "omEarlier\030\004 \002(\010\022:\n\006cursor\030\005 \001(\0132*.hadoop" +
-      ".hdfs.SnapshotDiffReportCursorProto\"D\n\nB" +
-      "lockProto\022\017\n\007blockId\030\001 \002(\004\022\020\n\010genStamp\030\002" +
-      " \002(\004\022\023\n\010numBytes\030\003 \001(\004:\0010\"\245\001\n\021SnapshotIn" +
-      "foProto\022\024\n\014snapshotName\030\001 \002(\t\022\024\n\014snapsho" +
-      "tRoot\030\002 \002(\t\0222\n\npermission\030\003 \002(\0132\036.hadoop" +
-      ".hdfs.FsPermissionProto\022\r\n\005owner\030\004 \002(\t\022\r" +
-      "\n\005group\030\005 \002(\t\022\022\n\ncreateTime\030\006 \002(\t\"J\n\031Rol" +
-      "lingUpgradeStatusProto\022\023\n\013blockPoolId\030\001 " +
-      "\002(\t\022\030\n\tfinalized\030\002 \001(\010:\005false\")\n\021Storage" +
-      "UuidsProto\022\024\n\014storageUuids\030\001 \003(\t\"\377\001\n\025Blo" +
-      "ckTokenSecretProto\022\022\n\nexpiryDate\030\001 \001(\004\022\r" +
-      "\n\005keyId\030\002 \001(\r\022\016\n\006userId\030\003 \001(\t\022\023\n\013blockPo" +
-      "olId\030\004 \001(\t\022\017\n\007blockId\030\005 \001(\004\022+\n\005modes\030\006 \003" +
-      "(\0162\034.hadoop.hdfs.AccessModeProto\0223\n\014stor" +
-      "ageTypes\030\007 \003(\0162\035.hadoop.hdfs.StorageType" +
-      "Proto\022\022\n\nstorageIds\030\010 \003(\t\022\027\n\017handshakeSe" +
-      "cret\030\t \001(\014\"\257\001\n\031RouterFederatedStateProto" +
-      "\022X\n\021namespaceStateIds\030\001 \003(\0132=.hadoop.hdf" +
-      "s.RouterFederatedStateProto.NamespaceSta" +
-      "teIdsEntry\0328\n\026NamespaceStateIdsEntry\022\013\n\003" +
-      "key\030\001 \001(\t\022\r\n\005value\030\002 \001(\003:\0028\001*Z\n\020StorageT" +
-      "ypeProto\022\010\n\004DISK\020\001\022\007\n\003SSD\020\002\022\013\n\007ARCHIVE\020\003" +
-      "\022\014\n\010RAM_DISK\020\004\022\014\n\010PROVIDED\020\005\022\n\n\006NVDIMM\020\006" +
-      "*-\n\016BlockTypeProto\022\016\n\nCONTIGUOUS\020\000\022\013\n\007ST" +
-      "RIPED\020\001*M\n\020CipherSuiteProto\022\013\n\007UNKNOWN\020\001" +
-      "\022\025\n\021AES_CTR_NOPADDING\020\002\022\025\n\021SM4_CTR_NOPAD" +
-      "DING\020\003*P\n\032CryptoProtocolVersionProto\022\034\n\030" +
-      "UNKNOWN_PROTOCOL_VERSION\020\001\022\024\n\020ENCRYPTION" +
-      "_ZONES\020\002*B\n\030ErasureCodingPolicyState\022\014\n\010" +
-      "DISABLED\020\001\022\013\n\007ENABLED\020\002\022\013\n\007REMOVED\020\003*O\n\021" +
-      "ChecksumTypeProto\022\021\n\rCHECKSUM_NULL\020\000\022\022\n\016" +
-      "CHECKSUM_CRC32\020\001\022\023\n\017CHECKSUM_CRC32C\020\002*7\n" +
-      "\026BlockChecksumTypeProto\022\n\n\006MD5CRC\020\001\022\021\n\rC" +
-      "OMPOSITE_CRC\020\002*=\n\017AccessModeProto\022\010\n\004REA" +
-      "D\020\001\022\t\n\005WRITE\020\002\022\010\n\004COPY\020\003\022\013\n\007REPLACE\020\004B6\n" +
-      "%org.apache.hadoop.hdfs.protocol.protoB\n" +
-      "HdfsProtos\240\001\001"
+      "\0010\022\025\n\nshadowPort\030\010 \001(\r:\0010\022\024\n\nshadowAddr\030" +
+      "\t \001(\t:\000\"X\n\026DatanodeLocalInfoProto\022\027\n\017sof" +
+      "twareVersion\030\001 \002(\t\022\025\n\rconfigVersion\030\002 \002(" +
+      "\t\022\016\n\006uptime\030\003 \002(\004\"\315\001\n\027DatanodeVolumeInfo" +
+      "Proto\022\014\n\004path\030\001 \002(\t\0222\n\013storageType\030\002 \002(\016" +
+      "2\035.hadoop.hdfs.StorageTypeProto\022\021\n\tusedS" +
+      "pace\030\003 \002(\004\022\021\n\tfreeSpace\030\004 \002(\004\022\025\n\rreserve" +
+      "dSpace\030\005 \002(\004\022 \n\030reservedSpaceForReplicas" +
+      "\030\006 \002(\004\022\021\n\tnumBlocks\030\007 \002(\004\"G\n\022DatanodeInf" +
+      "osProto\0221\n\tdatanodes\030\001 \003(\0132\036.hadoop.hdfs" +
+      ".DatanodeInfoProto\"\207\005\n\021DatanodeInfoProto" +
+      "\022(\n\002id\030\001 \002(\0132\034.hadoop.hdfs.DatanodeIDPro" +
+      "to\022\023\n\010capacity\030\002 \001(\004:\0010\022\022\n\007dfsUsed\030\003 \001(\004" +
+      ":\0010\022\024\n\tremaining\030\004 \001(\004:\0010\022\030\n\rblockPoolUs" +
+      "ed\030\005 \001(\004:\0010\022\025\n\nlastUpdate\030\006 \001(\004:\0010\022\027\n\014xc" +
+      "eiverCount\030\007 \001(\r:\0010\022\020\n\010location\030\010 \001(\t\022\022\n" +
+      "\nnonDfsUsed\030\t \001(\004\022E\n\nadminState\030\n \001(\0162)." +
+      "hadoop.hdfs.DatanodeInfoProto.AdminState" +
+      ":\006NORMAL\022\030\n\rcacheCapacity\030\013 \001(\004:\0010\022\024\n\tca" +
+      "cheUsed\030\014 \001(\004:\0010\022\036\n\023lastUpdateMonotonic\030" +
+      "\r \001(\004:\0010\022\025\n\rupgradeDomain\030\016 \001(\t\022\036\n\023lastB" +
+      "lockReportTime\030\017 \001(\004:\0010\022#\n\030lastBlockRepo" +
+      "rtMonotonic\030\020 \001(\004:\0010\022\024\n\tnumBlocks\030\021 \001(\r:" +
+      "\0010\022\027\n\017softwareVersion\030\022 \001(\t\"w\n\nAdminStat" +
+      "e\022\n\n\006NORMAL\020\000\022\033\n\027DECOMMISSION_INPROGRESS" +
+      "\020\001\022\022\n\016DECOMMISSIONED\020\002\022\030\n\024ENTERING_MAINT" +
+      "ENANCE\020\003\022\022\n\016IN_MAINTENANCE\020\004\"\336\001\n\024Datanod" +
+      "eStorageProto\022\023\n\013storageUuid\030\001 \002(\t\022E\n\005st" +
+      "ate\030\002 \001(\0162..hadoop.hdfs.DatanodeStorageP" +
+      "roto.StorageState:\006NORMAL\0228\n\013storageType" +
+      "\030\003 \001(\0162\035.hadoop.hdfs.StorageTypeProto:\004D" +
+      "ISK\"0\n\014StorageState\022\n\n\006NORMAL\020\000\022\024\n\020READ_" +
+      "ONLY_SHARED\020\001\"\364\001\n\022StorageReportProto\022\027\n\013" +
+      "storageUuid\030\001 \002(\tB\002\030\001\022\025\n\006failed\030\002 \001(\010:\005f" +
+      "alse\022\023\n\010capacity\030\003 \001(\004:\0010\022\022\n\007dfsUsed\030\004 \001" +
+      "(\004:\0010\022\024\n\tremaining\030\005 \001(\004:\0010\022\030\n\rblockPool" +
+      "Used\030\006 \001(\004:\0010\0222\n\007storage\030\007 \001(\0132!.hadoop." +
+      "hdfs.DatanodeStorageProto\022\022\n\nnonDfsUsed\030" +
+      "\010 \001(\004\022\r\n\005mount\030\t \001(\t\"\332\002\n\023ContentSummaryP" +
+      "roto\022\016\n\006length\030\001 \002(\004\022\021\n\tfileCount\030\002 \002(\004\022" +
+      "\026\n\016directoryCount\030\003 \002(\004\022\r\n\005quota\030\004 \002(\004\022\025" +
+      "\n\rspaceConsumed\030\005 \002(\004\022\022\n\nspaceQuota\030\006 \002(" +
+      "\004\022?\n\016typeQuotaInfos\030\007 \001(\0132\'.hadoop.hdfs." +
+      "StorageTypeQuotaInfosProto\022\026\n\016snapshotLe" +
+      "ngth\030\010 \001(\004\022\031\n\021snapshotFileCount\030\t \001(\004\022\036\n" +
+      "\026snapshotDirectoryCount\030\n \001(\004\022\035\n\025snapsho" +
+      "tSpaceConsumed\030\013 \001(\004\022\033\n\023erasureCodingPol" +
+      "icy\030\014 \001(\t\"\253\001\n\017QuotaUsageProto\022\035\n\025fileAnd" +
+      "DirectoryCount\030\001 \002(\004\022\r\n\005quota\030\002 \002(\004\022\025\n\rs" +
+      "paceConsumed\030\003 \002(\004\022\022\n\nspaceQuota\030\004 \002(\004\022?" +
+      "\n\016typeQuotaInfos\030\005 \001(\0132\'.hadoop.hdfs.Sto" +
+      "rageTypeQuotaInfosProto\"[\n\032StorageTypeQu" +
+      "otaInfosProto\022=\n\rtypeQuotaInfo\030\001 \003(\0132&.h" +
+      "adoop.hdfs.StorageTypeQuotaInfoProto\"o\n\031" +
+      "StorageTypeQuotaInfoProto\0221\n\004type\030\001 \001(\0162" +
+      "\035.hadoop.hdfs.StorageTypeProto:\004DISK\022\r\n\005" +
+      "quota\030\002 \002(\004\022\020\n\010consumed\030\003 \002(\004\"7\n\026Corrupt" +
+      "FileBlocksProto\022\r\n\005files\030\001 \003(\t\022\016\n\006cookie" +
+      "\030\002 \002(\t\"H\n\021StorageTypesProto\0223\n\014storageTy" +
+      "pes\030\001 \003(\0162\035.hadoop.hdfs.StorageTypeProto" +
+      "\"\364\001\n\027BlockStoragePolicyProto\022\020\n\010policyId" +
+      "\030\001 \002(\r\022\014\n\004name\030\002 \002(\t\0226\n\016creationPolicy\030\003" +
+      " \002(\0132\036.hadoop.hdfs.StorageTypesProto\022>\n\026" +
+      "creationFallbackPolicy\030\004 \001(\0132\036.hadoop.hd" +
+      "fs.StorageTypesProto\022A\n\031replicationFallb" +
+      "ackPolicy\030\005 \001(\0132\036.hadoop.hdfs.StorageTyp" +
+      "esProto\"\342\002\n\021LocatedBlockProto\022*\n\001b\030\001 \002(\013" +
+      "2\037.hadoop.hdfs.ExtendedBlockProto\022\016\n\006off" +
+      "set\030\002 \002(\004\022,\n\004locs\030\003 \003(\0132\036.hadoop.hdfs.Da" +
+      "tanodeInfoProto\022\017\n\007corrupt\030\004 \002(\010\022-\n\nbloc" +
+      "kToken\030\005 \002(\0132\031.hadoop.common.TokenProto\022" +
+      "\024\n\010isCached\030\006 \003(\010B\002\020\001\0223\n\014storageTypes\030\007 " +
+      "\003(\0162\035.hadoop.hdfs.StorageTypeProto\022\022\n\nst" +
+      "orageIDs\030\010 \003(\t\022\024\n\014blockIndices\030\t \001(\014\022.\n\013" +
+      "blockTokens\030\n \003(\0132\031.hadoop.common.TokenP" +
+      "roto\"Q\n\026BatchedListingKeyProto\022\020\n\010checks" +
+      "um\030\001 \002(\014\022\021\n\tpathIndex\030\002 \002(\r\022\022\n\nstartAfte" +
+      "r\030\003 \002(\014\"\223\001\n\026DataEncryptionKeyProto\022\r\n\005ke" +
+      "yId\030\001 \002(\r\022\023\n\013blockPoolId\030\002 \002(\t\022\r\n\005nonce\030" +
+      "\003 \002(\014\022\025\n\rencryptionKey\030\004 \002(\014\022\022\n\nexpiryDa" +
+      "te\030\005 \002(\004\022\033\n\023encryptionAlgorithm\030\006 \001(\t\"\323\001" +
+      "\n\027FileEncryptionInfoProto\022,\n\005suite\030\001 \002(\016" +
+      "2\035.hadoop.hdfs.CipherSuiteProto\022F\n\025crypt" +
+      "oProtocolVersion\030\002 \002(\0162\'.hadoop.hdfs.Cry" +
+      "ptoProtocolVersionProto\022\013\n\003key\030\003 \002(\014\022\n\n\002" +
+      "iv\030\004 \002(\014\022\017\n\007keyName\030\005 \002(\t\022\030\n\020ezKeyVersio" +
+      "nName\030\006 \002(\t\"O\n\032PerFileEncryptionInfoProt" +
+      "o\022\013\n\003key\030\001 \002(\014\022\n\n\002iv\030\002 \002(\014\022\030\n\020ezKeyVersi" +
+      "onName\030\003 \002(\t\"\337\001\n\027ZoneEncryptionInfoProto" +
+      "\022,\n\005suite\030\001 \002(\0162\035.hadoop.hdfs.CipherSuit" +
+      "eProto\022F\n\025cryptoProtocolVersion\030\002 \002(\0162\'." +
+      "hadoop.hdfs.CryptoProtocolVersionProto\022\017" +
+      "\n\007keyName\030\003 \002(\t\022=\n\021reencryptionProto\030\004 \001" +
+      "(\0132\".hadoop.hdfs.ReencryptionInfoProto\"\262" +
+      "\001\n\025ReencryptionInfoProto\022\030\n\020ezKeyVersion" +
+      "Name\030\001 \002(\t\022\026\n\016submissionTime\030\002 \002(\004\022\020\n\010ca" +
+      "nceled\030\003 \002(\010\022\026\n\016numReencrypted\030\004 \002(\003\022\023\n\013" +
+      "numFailures\030\005 \002(\003\022\026\n\016completionTime\030\006 \001(" +
+      "\004\022\020\n\010lastFile\030\007 \001(\t\"}\n\021CipherOptionProto" +
+      "\022,\n\005suite\030\001 \002(\0162\035.hadoop.hdfs.CipherSuit" +
+      "eProto\022\r\n\005inKey\030\002 \001(\014\022\014\n\004inIv\030\003 \001(\014\022\016\n\006o" +
+      "utKey\030\004 \001(\014\022\r\n\005outIv\030\005 \001(\014\"\276\002\n\022LocatedBl" +
+      "ocksProto\022\022\n\nfileLength\030\001 \002(\004\022.\n\006blocks\030" +
+      "\002 \003(\0132\036.hadoop.hdfs.LocatedBlockProto\022\031\n" +
+      "\021underConstruction\030\003 \002(\010\0221\n\tlastBlock\030\004 " +
+      "\001(\0132\036.hadoop.hdfs.LocatedBlockProto\022\033\n\023i" +
+      "sLastBlockComplete\030\005 \002(\010\022@\n\022fileEncrypti" +
+      "onInfo\030\006 \001(\0132$.hadoop.hdfs.FileEncryptio" +
+      "nInfoProto\0227\n\010ecPolicy\030\007 \001(\0132%.hadoop.hd" +
+      "fs.ErasureCodingPolicyProto\"6\n\030ECSchemaO" +
+      "ptionEntryProto\022\013\n\003key\030\001 \002(\t\022\r\n\005value\030\002 " +
+      "\002(\t\"\202\001\n\rECSchemaProto\022\021\n\tcodecName\030\001 \002(\t" +
+      "\022\021\n\tdataUnits\030\002 \002(\r\022\023\n\013parityUnits\030\003 \002(\r" +
+      "\0226\n\007options\030\004 \003(\0132%.hadoop.hdfs.ECSchema" +
+      "OptionEntryProto\"\261\001\n\030ErasureCodingPolicy" +
+      "Proto\022\014\n\004name\030\001 \001(\t\022*\n\006schema\030\002 \001(\0132\032.ha" +
+      "doop.hdfs.ECSchemaProto\022\020\n\010cellSize\030\003 \001(" +
+      "\r\022\n\n\002id\030\004 \002(\r\022=\n\005state\030\005 \001(\0162%.hadoop.hd" +
+      "fs.ErasureCodingPolicyState:\007ENABLED\"\177\n#" +
+      "AddErasureCodingPolicyResponseProto\0225\n\006p" +
+      "olicy\030\001 \002(\0132%.hadoop.hdfs.ErasureCodingP" +
+      "olicyProto\022\017\n\007succeed\030\002 \002(\010\022\020\n\010errorMsg\030" +
+      "\003 \001(\t\"K\n\035ECTopologyVerifierResultProto\022\025" +
+      "\n\rresultMessage\030\001 \002(\t\022\023\n\013isSupported\030\002 \002" +
+      "(\010\"C\n\023HdfsPathHandleProto\022\017\n\007inodeId\030\001 \001" +
+      "(\004\022\r\n\005mtime\030\002 \001(\004\022\014\n\004path\030\003 \001(\t\"\315\005\n\023Hdfs" +
+      "FileStatusProto\022;\n\010fileType\030\001 \002(\0162).hado" +
+      "op.hdfs.HdfsFileStatusProto.FileType\022\014\n\004" +
+      "path\030\002 \002(\014\022\016\n\006length\030\003 \002(\004\0222\n\npermission" +
+      "\030\004 \002(\0132\036.hadoop.hdfs.FsPermissionProto\022\r" +
+      "\n\005owner\030\005 \002(\t\022\r\n\005group\030\006 \002(\t\022\031\n\021modifica" +
+      "tion_time\030\007 \002(\004\022\023\n\013access_time\030\010 \002(\004\022\017\n\007" +
+      "symlink\030\t \001(\014\022\034\n\021block_replication\030\n \001(\r" +
+      ":\0010\022\024\n\tblocksize\030\013 \001(\004:\0010\0222\n\tlocations\030\014" +
+      " \001(\0132\037.hadoop.hdfs.LocatedBlocksProto\022\021\n" +
+      "\006fileId\030\r \001(\004:\0010\022\027\n\013childrenNum\030\016 \001(\005:\002-" +
+      "1\022@\n\022fileEncryptionInfo\030\017 \001(\0132$.hadoop.h" +
+      "dfs.FileEncryptionInfoProto\022\030\n\rstoragePo" +
+      "licy\030\020 \001(\r:\0010\0227\n\010ecPolicy\030\021 \001(\0132%.hadoop" +
+      ".hdfs.ErasureCodingPolicyProto\022\020\n\005flags\030" +
+      "\022 \001(\r:\0010\022\021\n\tnamespace\030\023 \001(\t\"3\n\010FileType\022" +
+      "\n\n\006IS_DIR\020\001\022\013\n\007IS_FILE\020\002\022\016\n\nIS_SYMLINK\020\003" +
+      "\"E\n\005Flags\022\013\n\007HAS_ACL\020\001\022\r\n\tHAS_CRYPT\020\002\022\n\n" +
+      "\006HAS_EC\020\004\022\024\n\020SNAPSHOT_ENABLED\020\010\"y\n\031Block" +
+      "ChecksumOptionsProto\022F\n\021blockChecksumTyp" +
+      "e\030\001 \001(\0162#.hadoop.hdfs.BlockChecksumTypeP" +
+      "roto:\006MD5CRC\022\024\n\014stripeLength\030\002 \001(\004\"\344\002\n\025F" +
+      "sServerDefaultsProto\022\021\n\tblockSize\030\001 \002(\004\022" +
+      "\030\n\020bytesPerChecksum\030\002 \002(\r\022\027\n\017writePacket" +
+      "Size\030\003 \002(\r\022\023\n\013replication\030\004 \002(\r\022\026\n\016fileB" +
+      "ufferSize\030\005 \002(\r\022\"\n\023encryptDataTransfer\030\006" +
+      " \001(\010:\005false\022\030\n\rtrashInterval\030\007 \001(\004:\0010\022D\n" +
+      "\014checksumType\030\010 \001(\0162\036.hadoop.hdfs.Checks" +
+      "umTypeProto:\016CHECKSUM_CRC32\022\026\n\016keyProvid" +
+      "erUri\030\t \001(\t\022\023\n\010policyId\030\n \001(\r:\0010\022\'\n\030snap" +
+      "shotTrashRootEnabled\030\013 \001(\010:\005false\"k\n\025Dir" +
+      "ectoryListingProto\0228\n\016partialListing\030\001 \003" +
+      "(\0132 .hadoop.hdfs.HdfsFileStatusProto\022\030\n\020" +
+      "remainingEntries\030\002 \002(\r\":\n\024RemoteExceptio" +
+      "nProto\022\021\n\tclassName\030\001 \002(\t\022\017\n\007message\030\002 \001" +
+      "(\t\"\241\001\n\034BatchedDirectoryListingProto\0228\n\016p" +
+      "artialListing\030\001 \003(\0132 .hadoop.hdfs.HdfsFi" +
+      "leStatusProto\022\021\n\tparentIdx\030\002 \002(\r\0224\n\texce" +
+      "ption\030\003 \001(\0132!.hadoop.hdfs.RemoteExceptio" +
+      "nProto\"\242\001\n!SnapshottableDirectoryStatusP" +
+      "roto\0223\n\tdirStatus\030\001 \002(\0132 .hadoop.hdfs.Hd" +
+      "fsFileStatusProto\022\026\n\016snapshot_quota\030\002 \002(" +
+      "\r\022\027\n\017snapshot_number\030\003 \002(\r\022\027\n\017parent_ful" +
+      "lpath\030\004 \002(\014\"\212\001\n\023SnapshotStatusProto\0223\n\td" +
+      "irStatus\030\001 \002(\0132 .hadoop.hdfs.HdfsFileSta" +
+      "tusProto\022\022\n\nsnapshotID\030\002 \002(\r\022\027\n\017parent_f" +
+      "ullpath\030\003 \002(\014\022\021\n\tisDeleted\030\004 \002(\010\"u\n\"Snap" +
+      "shottableDirectoryListingProto\022O\n\027snapsh" +
+      "ottableDirListing\030\001 \003(\0132..hadoop.hdfs.Sn" +
+      "apshottableDirectoryStatusProto\"Q\n\024Snaps" +
+      "hotListingProto\0229\n\017snapshotListing\030\001 \003(\013" +
+      "2 .hadoop.hdfs.SnapshotStatusProto\"_\n\034Sn" +
+      "apshotDiffReportEntryProto\022\020\n\010fullpath\030\001" +
+      " \002(\014\022\031\n\021modificationLabel\030\002 \002(\t\022\022\n\ntarge" +
+      "tPath\030\003 \001(\014\"\237\001\n\027SnapshotDiffReportProto\022" +
+      "\024\n\014snapshotRoot\030\001 \002(\t\022\024\n\014fromSnapshot\030\002 " +
+      "\002(\t\022\022\n\ntoSnapshot\030\003 \002(\t\022D\n\021diffReportEnt" +
+      "ries\030\004 \003(\0132).hadoop.hdfs.SnapshotDiffRep" +
+      "ortEntryProto\"\177\n#SnapshotDiffReportListi" +
+      "ngEntryProto\022\020\n\010fullpath\030\001 \002(\014\022\r\n\005dirId\030" +
+      "\002 \002(\004\022\023\n\013isReference\030\003 \002(\010\022\022\n\ntargetPath" +
+      "\030\004 \001(\014\022\016\n\006fileId\030\005 \001(\004\"E\n\035SnapshotDiffRe" +
+      "portCursorProto\022\021\n\tstartPath\030\001 \002(\014\022\021\n\005in" +
+      "dex\030\002 \002(\005:\002-1\"\322\002\n\036SnapshotDiffReportList" +
+      "ingProto\022I\n\017modifiedEntries\030\001 \003(\01320.hado" +
+      "op.hdfs.SnapshotDiffReportListingEntryPr" +
+      "oto\022H\n\016createdEntries\030\002 \003(\01320.hadoop.hdf" +
+      "s.SnapshotDiffReportListingEntryProto\022H\n" +
+      "\016deletedEntries\030\003 \003(\01320.hadoop.hdfs.Snap" +
+      "shotDiffReportListingEntryProto\022\025\n\risFro" +
+      "mEarlier\030\004 \002(\010\022:\n\006cursor\030\005 \001(\0132*.hadoop." +
+      "hdfs.SnapshotDiffReportCursorProto\"D\n\nBl" +
+      "ockProto\022\017\n\007blockId\030\001 \002(\004\022\020\n\010genStamp\030\002 " +
+      "\002(\004\022\023\n\010numBytes\030\003 \001(\004:\0010\"\245\001\n\021SnapshotInf" +
+      "oProto\022\024\n\014snapshotName\030\001 \002(\t\022\024\n\014snapshot" +
+      "Root\030\002 \002(\t\0222\n\npermission\030\003 \002(\0132\036.hadoop." +
+      "hdfs.FsPermissionProto\022\r\n\005owner\030\004 \002(\t\022\r\n" +
+      "\005group\030\005 \002(\t\022\022\n\ncreateTime\030\006 \002(\t\"J\n\031Roll" +
+      "ingUpgradeStatusProto\022\023\n\013blockPoolId\030\001 \002" +
+      "(\t\022\030\n\tfinalized\030\002 \001(\010:\005false\")\n\021StorageU" +
+      "uidsProto\022\024\n\014storageUuids\030\001 \003(\t\"\377\001\n\025Bloc" +
+      "kTokenSecretProto\022\022\n\nexpiryDate\030\001 \001(\004\022\r\n" +
+      "\005keyId\030\002 \001(\r\022\016\n\006userId\030\003 \001(\t\022\023\n\013blockPoo" +
+      "lId\030\004 \001(\t\022\017\n\007blockId\030\005 \001(\004\022+\n\005modes\030\006 \003(" +
+      "\0162\034.hadoop.hdfs.AccessModeProto\0223\n\014stora" +
+      "geTypes\030\007 \003(\0162\035.hadoop.hdfs.StorageTypeP" +
+      "roto\022\022\n\nstorageIds\030\010 \003(\t\022\027\n\017handshakeSec" +
+      "ret\030\t \001(\014\"\257\001\n\031RouterFederatedStateProto\022" +
+      "X\n\021namespaceStateIds\030\001 \003(\0132=.hadoop.hdfs" +
+      ".RouterFederatedStateProto.NamespaceStat" +
+      "eIdsEntry\0328\n\026NamespaceStateIdsEntry\022\013\n\003k" +
+      "ey\030\001 \001(\t\022\r\n\005value\030\002 \001(\003:\0028\001*Z\n\020StorageTy" +
+      "peProto\022\010\n\004DISK\020\001\022\007\n\003SSD\020\002\022\013\n\007ARCHIVE\020\003\022" +
+      "\014\n\010RAM_DISK\020\004\022\014\n\010PROVIDED\020\005\022\n\n\006NVDIMM\020\006*" +
+      "-\n\016BlockTypeProto\022\016\n\nCONTIGUOUS\020\000\022\013\n\007STR" +
+      "IPED\020\001*M\n\020CipherSuiteProto\022\013\n\007UNKNOWN\020\001\022" +
+      "\025\n\021AES_CTR_NOPADDING\020\002\022\025\n\021SM4_CTR_NOPADD" +
+      "ING\020\003*P\n\032CryptoProtocolVersionProto\022\034\n\030U" +
+      "NKNOWN_PROTOCOL_VERSION\020\001\022\024\n\020ENCRYPTION_" +
+      "ZONES\020\002*B\n\030ErasureCodingPolicyState\022\014\n\010D" +
+      "ISABLED\020\001\022\013\n\007ENABLED\020\002\022\013\n\007REMOVED\020\003*O\n\021C" +
+      "hecksumTypeProto\022\021\n\rCHECKSUM_NULL\020\000\022\022\n\016C" +
+      "HECKSUM_CRC32\020\001\022\023\n\017CHECKSUM_CRC32C\020\002*7\n\026" +
+      "BlockChecksumTypeProto\022\n\n\006MD5CRC\020\001\022\021\n\rCO" +
+      "MPOSITE_CRC\020\002*=\n\017AccessModeProto\022\010\n\004READ" +
+      "\020\001\022\t\n\005WRITE\020\002\022\010\n\004COPY\020\003\022\013\n\007REPLACE\020\004B6\n%" +
+      "org.apache.hadoop.hdfs.protocol.protoB\nH" +
+      "dfsProtos\240\001\001"
     };
     org.apache.hadoop.thirdparty.protobuf.Descriptors.FileDescriptor.InternalDescriptorAssigner assigner =
         new org.apache.hadoop.thirdparty.protobuf.Descriptors.FileDescriptor.    InternalDescriptorAssigner() {
