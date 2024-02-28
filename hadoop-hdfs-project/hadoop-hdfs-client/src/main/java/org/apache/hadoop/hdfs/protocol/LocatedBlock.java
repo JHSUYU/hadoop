@@ -126,7 +126,7 @@ public class LocatedBlock {
     this.cachedLocs = null == cachedLocs || 0 == cachedLocs.length
       ? EMPTY_LOCS
       : cachedLocs;
-    if(locs != null) {
+    if(locs != null && locs.length>0) {
       System.out.println("Failure Recovery: the shadow port is 113" + locs[0].shadowxferPort);
       System.out.println("Failure Recovery: the shadow port is 113" + locs[0].getXferPort());
     }
