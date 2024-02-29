@@ -336,6 +336,7 @@ class DataXceiver extends Receiver implements Runnable {
         }
         LOG.info("Failure Recovery isShadow is 333" +this.isShadow);
         processOp(op);
+        LOG.info("Failure Recovery isShadow is processOp" +this.isShadow);
         ++opsProcessed;
       } while ((peer != null) &&
           (!peer.isClosed() && dnConf.socketKeepaliveTimeout > 0));
