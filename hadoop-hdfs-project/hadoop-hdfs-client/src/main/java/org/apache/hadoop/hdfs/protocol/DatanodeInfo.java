@@ -165,6 +165,38 @@ public class DatanodeInfo extends DatanodeID implements Node {
     this.softwareVersion =  softwareVersion;
   }
 
+  /** Constructor. */
+  private DatanodeInfo(final String ipAddr, String shadowAddr, final String hostName,
+                       final String datanodeUuid, final int xferPort, int shadowXferPort, final int infoPort,
+                       final int infoSecurePort, final int ipcPort, final long capacity,
+                       final long dfsUsed, final long nonDfsUsed, final long remaining,
+                       final long blockPoolUsed, final long cacheCapacity, final long cacheUsed,
+                       final long lastUpdate, final long lastUpdateMonotonic,
+                       final int xceiverCount, final String networkLocation,
+                       final AdminStates adminState, final String upgradeDomain,
+                       final long lastBlockReportTime, final long lastBlockReportMonotonic,
+                       final int blockCount, final String softwareVersion) {
+    super(ipAddr, shadowAddr, hostName, datanodeUuid, xferPort, shadowXferPort, infoPort, infoSecurePort,
+            ipcPort);
+    this.capacity = capacity;
+    this.dfsUsed = dfsUsed;
+    this.nonDfsUsed = nonDfsUsed;
+    this.remaining = remaining;
+    this.blockPoolUsed = blockPoolUsed;
+    this.cacheCapacity = cacheCapacity;
+    this.cacheUsed = cacheUsed;
+    this.lastUpdate = lastUpdate;
+    this.lastUpdateMonotonic = lastUpdateMonotonic;
+    this.xceiverCount = xceiverCount;
+    this.location = networkLocation;
+    this.adminState = adminState;
+    this.upgradeDomain = upgradeDomain;
+    this.lastBlockReportTime = lastBlockReportTime;
+    this.lastBlockReportMonotonic = lastBlockReportMonotonic;
+    this.numBlocks = blockCount;
+    this.softwareVersion =  softwareVersion;
+  }
+
   /** Network location name. */
   @Override
   public String getName() {
@@ -865,7 +897,7 @@ public class DatanodeInfo extends DatanodeID implements Node {
     }
 
     public DatanodeInfo build() {
-      return new DatanodeInfo(ipAddr, hostName, datanodeUuid, xferPort,
+      return new DatanodeInfo(ipAddr, shadowAddr, hostName, datanodeUuid, xferPort,shadowXferPort,
           infoPort, infoSecurePort, ipcPort, capacity, dfsUsed, nonDfsUsed,
           remaining, blockPoolUsed, cacheCapacity, cacheUsed, lastUpdate,
           lastUpdateMonotonic, xceiverCount, location, adminState,
