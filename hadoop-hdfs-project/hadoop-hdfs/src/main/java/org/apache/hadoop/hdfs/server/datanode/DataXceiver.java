@@ -327,6 +327,7 @@ class DataXceiver extends Receiver implements Runnable {
           firstOp = op;
           incrReadWriteOpMetrics(op);
         }
+        LOG.info("Failure Recovery isShadow is" +this.isShadow);
         processOp(op);
         ++opsProcessed;
       } while ((peer != null) &&
