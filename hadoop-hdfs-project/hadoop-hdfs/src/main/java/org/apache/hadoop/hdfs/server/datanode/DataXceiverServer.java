@@ -55,6 +55,7 @@ class DataXceiverServer implements Runnable {
   private static final int DEFAULT_RECONFIGURE_WAIT = 30;
 
   private final PeerServer peerServer;
+  private boolean isShadow = false;
   private final DataNode datanode;
   private final HashMap<Peer, Thread> peers = new HashMap<>();
   private final HashMap<Peer, DataXceiver> peersXceiver = new HashMap<>();
@@ -205,6 +206,31 @@ class DataXceiverServer implements Runnable {
     initBandwidthPerSec(conf);
   }
 
+  DataXceiverServer(PeerServer peerServer, Configuration conf,
+                    DataNode datanode, boolean isShadow) {
+    this.isShadow = isShadow;
+    this.peerServer = peerServer;
+    this.datanode = datanode;
+
+    this.maxXceiverCount =
+            conf.getInt(DFSConfigKeys.DFS_DATANODE_MAX_RECEIVER_THREADS_KEY,
+                    DFSConfigKeys.DFS_DATANODE_MAX_RECEIVER_THREADS_DEFAULT);
+    Preconditions.checkArgument(this.maxXceiverCount >= 1,
+            DFSConfigKeys.DFS_DATANODE_MAX_RECEIVER_THREADS_KEY +
+                    " should not be less than 1.");
+
+    this.estimateBlockSize = conf.getLongBytes(DFSConfigKeys.DFS_BLOCK_SIZE_KEY,
+            DFSConfigKeys.DFS_BLOCK_SIZE_DEFAULT);
+
+    //set up parameter for cluster balancing
+    this.balanceThrottler = new BlockBalanceThrottler(
+            conf.getLongBytes(DFSConfigKeys.DFS_DATANODE_BALANCE_BANDWIDTHPERSEC_KEY,
+                    DFSConfigKeys.DFS_DATANODE_BALANCE_BANDWIDTHPERSEC_DEFAULT),
+            conf.getInt(DFSConfigKeys.DFS_DATANODE_BALANCE_MAX_NUM_CONCURRENT_MOVES_KEY,
+                    DFSConfigKeys.DFS_DATANODE_BALANCE_MAX_NUM_CONCURRENT_MOVES_DEFAULT));
+    initBandwidthPerSec(conf);
+  }
+
   private void initBandwidthPerSec(Configuration conf) {
     long bandwidthPerSec = conf.getLongBytes(
         DFSConfigKeys.DFS_DATANODE_DATA_TRANSFER_BANDWIDTHPERSEC_KEY,
@@ -250,7 +276,7 @@ class DataXceiverServer implements Runnable {
         }
 
         new Daemon(datanode.threadGroup,
-            DataXceiver.create(peer, datanode, this))
+            DataXceiver.create(peer, datanode, this, this.isShadow))
             .start();
       } catch (SocketTimeoutException ignored) {
         // wake up to see if should continue to run

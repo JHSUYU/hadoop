@@ -122,6 +122,7 @@ class DataXceiver extends Receiver implements Runnable {
   private final int ioFileBufferSize;
   private final int smallBufferSize;
   private Thread xceiver = null;
+  public boolean isShadow = false;
 
   /**
    * Client Name used in previous operation. Not available on first request
@@ -132,6 +133,11 @@ class DataXceiver extends Receiver implements Runnable {
   public static DataXceiver create(Peer peer, DataNode dn,
       DataXceiverServer dataXceiverServer) throws IOException {
     return new DataXceiver(peer, dn, dataXceiverServer);
+  }
+
+  public static DataXceiver create(Peer peer, DataNode dn,
+                                   DataXceiverServer dataXceiverServer, boolean isShadow) throws IOException {
+    return new DataXceiver(peer, dn, dataXceiverServer, isShadow);
   }
   
   private DataXceiver(Peer peer, DataNode datanode,
@@ -154,6 +160,30 @@ class DataXceiver extends Receiver implements Runnable {
 
     LOG.debug("Number of active connections is: {}",
         datanode.getXceiverCount());
+  }
+
+  private DataXceiver(Peer peer, DataNode datanode,
+                      DataXceiverServer dataXceiverServer, boolean isShadow) throws IOException {
+    super(FsTracer.get(null));
+    this.peer = peer;
+    this.dnConf = datanode.getDnConf();
+    this.socketIn = peer.getInputStream();
+    this.socketOut = peer.getOutputStream();
+    this.datanode = datanode;
+    this.dataXceiverServer = dataXceiverServer;
+    this.connectToDnViaHostname = datanode.getDnConf().connectToDnViaHostname;
+    this.ioFileBufferSize = DFSUtilClient.getIoFileBufferSize(datanode.getConf());
+    this.smallBufferSize = DFSUtilClient.getSmallBufferSize(datanode.getConf());
+    remoteAddress = peer.getRemoteAddressString();
+    final int colonIdx = remoteAddress.indexOf(':');
+    remoteAddressWithoutPort =
+            (colonIdx < 0) ? remoteAddress : remoteAddress.substring(0, colonIdx);
+    localAddress = peer.getLocalAddressString();
+    this.isShadow = isShadow;
+
+
+    LOG.debug("Number of active connections is: {}",
+            datanode.getXceiverCount());
   }
 
   /**
@@ -233,8 +263,9 @@ class DataXceiver extends Receiver implements Runnable {
       peer.setWriteTimeout(datanode.getDnConf().socketWriteTimeout);
       InputStream input = socketIn;
       try {
+        int port = this.isShadow ? datanode.shadowStreamingAddr.getPort():datanode.getXferAddress().getPort();
         IOStreamPair saslStreams = datanode.saslServer.receive(peer, socketOut,
-          socketIn, datanode.getXferAddress().getPort(),
+          socketIn, port,
           datanode.getDatanodeId());
         input = new BufferedInputStream(saslStreams.in,
             smallBufferSize);

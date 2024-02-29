@@ -422,7 +422,7 @@ public class DataNode extends ReconfigurableBase
   private volatile DataNodePeerMetrics peerMetrics;
   private volatile DataNodeDiskMetrics diskMetrics;
   private InetSocketAddress streamingAddr;
-  private InetSocketAddress shadowStreamingAddr;
+  public InetSocketAddress shadowStreamingAddr;
 
   private LoadingCache<String, Map<String, Long>> datanodeNetworkCounts;
 
@@ -1691,7 +1691,7 @@ public class DataNode extends ReconfigurableBase
     this.threadGroup = new ThreadGroup("dataXceiverServer");
     this.shadowThreadGroup = new ThreadGroup("shadowDataXceiver");
     xserver = new DataXceiverServer(tcpPeerServer, getConf(), this);
-    shadowXserver = new DataXceiverServer(shadowTcpPeerServer, getConf(), this);
+    shadowXserver = new DataXceiverServer(shadowTcpPeerServer, getConf(), this, true);
     this.dataXceiverServer = new Daemon(threadGroup, xserver);
     this.shadowDataXceiverServer = new Daemon(shadowThreadGroup, shadowXserver);
     this.threadGroup.setDaemon(true); // auto destroy when empty
