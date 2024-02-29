@@ -319,10 +319,14 @@ class DataXceiver extends Receiver implements Runnable {
           throw err;
         }
 
+        LOG.info("Failure Recovery isShadow is 322" +this.isShadow);
+
         // restore normal timeout
         if (opsProcessed != 0) {
           peer.setReadTimeout(dnConf.socketTimeout);
         }
+
+        LOG.info("Failure Recovery isShadow is 329" +this.isShadow);
 
         opStartTime = monotonicNow();
         // compatible with loop retry requests
@@ -330,7 +334,7 @@ class DataXceiver extends Receiver implements Runnable {
           firstOp = op;
           incrReadWriteOpMetrics(op);
         }
-        LOG.info("Failure Recovery isShadow is" +this.isShadow);
+        LOG.info("Failure Recovery isShadow is 333" +this.isShadow);
         processOp(op);
         ++opsProcessed;
       } while ((peer != null) &&
