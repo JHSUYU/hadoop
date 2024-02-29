@@ -538,6 +538,7 @@ public class PBHelperClient {
       throw new EOFException(
           "Unexpected EOF while trying to read response from server");
     }
+    System.out.println("Firstbyte is "+firstByte);
 
     int size = CodedInputStream.readRawVarint32(firstByte, input);
     assert size >= 0;
