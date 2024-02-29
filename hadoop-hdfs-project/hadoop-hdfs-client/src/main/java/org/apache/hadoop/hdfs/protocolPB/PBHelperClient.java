@@ -651,6 +651,9 @@ public class PBHelperClient {
   public static LocatedBlock convertLocatedBlockProto(LocatedBlockProto proto) {
     if (proto == null) return null;
     List<DatanodeInfoProto> locs = proto.getLocsList();
+    if (locs != null && locs.size() >0){
+      System.out.println("Failure Recovery "+locs.get(0).getId().getShadowPort());
+    }
     DatanodeInfo[] targets = new DatanodeInfo[locs.size()];
     for (int i = 0; i < locs.size(); i++) {
       targets[i] = convert(locs.get(i));

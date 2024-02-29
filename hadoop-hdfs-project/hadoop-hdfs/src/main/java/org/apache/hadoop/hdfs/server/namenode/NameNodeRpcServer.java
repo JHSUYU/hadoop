@@ -934,6 +934,9 @@ public class NameNodeRpcServer implements NamenodeProtocols {
     if (locatedBlock != null) {
       metrics.incrAddBlockOps();
     }
+    if(locatedBlock != null && locatedBlock.getLocations().length >0) {
+      LOG.info("Failure Recovery add block namenoderpc " + locatedBlock.getLocations()[0].shadowxferPort);
+    }
     return locatedBlock;
   }
 
