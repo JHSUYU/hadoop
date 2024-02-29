@@ -79,9 +79,13 @@ public class Sender implements DataTransferProtocol {
       final Message proto) throws IOException {
     LOG.trace("Sending DataTransferOp {}: {}",
         proto.getClass().getSimpleName(), proto);
+    LOG.info("Failure Recovery send 7");
     op(out, opcode);
+    LOG.info("Failure Recovery send 8");
     proto.writeDelimitedTo(out);
+    LOG.info("Failure Recovery send 9");
     out.flush();
+    LOG.info("Failure Recovery send 10");
   }
 
   static private CachingStrategyProto getCachingStrategy(
