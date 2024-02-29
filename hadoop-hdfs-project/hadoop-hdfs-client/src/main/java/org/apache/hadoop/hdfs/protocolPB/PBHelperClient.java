@@ -652,7 +652,7 @@ public class PBHelperClient {
     if (proto == null) return null;
     List<DatanodeInfoProto> locs = proto.getLocsList();
     if (locs != null && locs.size() >0){
-      System.out.println("Failure Recovery "+locs.get(0).getId().getShadowPort());
+      System.out.println("Failure Recovery PBHelperClient"+locs.get(0).getId().getShadowPort());
     }
     DatanodeInfo[] targets = new DatanodeInfo[locs.size()];
     for (int i = 0; i < locs.size(); i++) {

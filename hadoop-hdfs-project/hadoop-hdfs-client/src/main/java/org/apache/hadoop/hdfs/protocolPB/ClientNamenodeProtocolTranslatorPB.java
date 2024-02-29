@@ -499,8 +499,12 @@ public class ClientNamenodeProtocolTranslatorPB implements
     if(rpcProxy == null){
       System.out.println("Failure Recovery rpcProxy is null");
     }
-    return PBHelperClient.convertLocatedBlockProto(
-        ipc(() -> rpcProxy.addBlock(null, req.build())).getBlock());
+    LocatedBlock res=PBHelperClient.convertLocatedBlockProto(
+            ipc(() -> rpcProxy.addBlock(null, req.build())).getBlock());
+    if(res.getLocations() != null && res.getLocations().length >0) {
+      System.out.println("Failure Recovery ClientNamenodeProtocol PBHelper shadowport is" + res.getLocations()[0].shadowxferPort);
+    }
+    return res;
   }
 
   @Override
