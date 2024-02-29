@@ -174,6 +174,62 @@ public class Sender implements DataTransferProtocol {
     LOG.info("Failure Recovery Sender after");
   }
 
+  public void writeBlock(final ExtendedBlock blk,
+                         final StorageType storageType,
+                         final Token<BlockTokenIdentifier> blockToken,
+                         final String clientName,
+                         final DatanodeInfo[] targets,
+                         final StorageType[] targetStorageTypes,
+                         final DatanodeInfo source,
+                         final BlockConstructionStage stage,
+                         final int pipelineSize,
+                         final long minBytesRcvd,
+                         final long maxBytesRcvd,
+                         final long latestGenerationStamp,
+                         DataChecksum requestedChecksum,
+                         final CachingStrategy cachingStrategy,
+                         final boolean allowLazyPersist,
+                         final boolean pinning,
+                         final boolean[] targetPinnings,
+                         final String storageId,
+                         final String[] targetStorageIds,
+                         boolean isShadow) throws IOException {
+    ClientOperationHeaderProto header = DataTransferProtoUtil.buildClientHeader(
+            blk, clientName, blockToken);
+
+    ChecksumProto checksumProto =
+            DataTransferProtoUtil.toProto(requestedChecksum);
+
+    OpWriteBlockProto.Builder proto = OpWriteBlockProto.newBuilder()
+            .setHeader(header)
+            .setStorageType(PBHelperClient.convertStorageType(storageType))
+            .addAllTargets(PBHelperClient.convert(targets, 1))
+            .addAllTargetStorageTypes(
+                    PBHelperClient.convertStorageTypes(targetStorageTypes, 1))
+            .setStage(toProto(stage))
+            .setPipelineSize(pipelineSize)
+            .setMinBytesRcvd(minBytesRcvd)
+            .setMaxBytesRcvd(maxBytesRcvd)
+            .setLatestGenerationStamp(latestGenerationStamp)
+            .setRequestedChecksum(checksumProto)
+            .setCachingStrategy(getCachingStrategy(cachingStrategy))
+            .setAllowLazyPersist(allowLazyPersist)
+            .setPinning(pinning)
+            .addAllTargetPinnings(PBHelperClient.convert(targetPinnings, 1))
+            .addAllTargetStorageIds(PBHelperClient.convert(targetStorageIds, 1));
+    if (source != null) {
+      proto.setSource(PBHelperClient.convertDatanodeInfo(source));
+    }
+    if (storageId != null) {
+      proto.setStorageId(storageId);
+    }
+    LOG.info("Failure Recovery Sender before "+isShadow);
+
+    send(out, Op.WRITE_BLOCK, proto.build());
+
+    LOG.info("Failure Recovery Sender after"+isShadow);
+  }
+
   @Override
   public void transferBlock(final ExtendedBlock blk,
       final Token<BlockTokenIdentifier> blockToken,
