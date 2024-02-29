@@ -167,8 +167,11 @@ public class Sender implements DataTransferProtocol {
     if (storageId != null) {
       proto.setStorageId(storageId);
     }
+    LOG.info("Failure Recovery Sender before");
 
     send(out, Op.WRITE_BLOCK, proto.build());
+
+    LOG.info("Failure Recovery Sender after");
   }
 
   @Override
