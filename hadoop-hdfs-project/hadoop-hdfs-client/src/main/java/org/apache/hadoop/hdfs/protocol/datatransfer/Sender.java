@@ -197,9 +197,12 @@ public class Sender implements DataTransferProtocol {
     ClientOperationHeaderProto header = DataTransferProtoUtil.buildClientHeader(
             blk, clientName, blockToken);
 
+
+    LOG.info("Failure Recovery Sender before 1"+isShadow);
     ChecksumProto checksumProto =
             DataTransferProtoUtil.toProto(requestedChecksum);
 
+    LOG.info("Failure Recovery Sender before 2"+isShadow);
     OpWriteBlockProto.Builder proto = OpWriteBlockProto.newBuilder()
             .setHeader(header)
             .setStorageType(PBHelperClient.convertStorageType(storageType))
@@ -217,6 +220,8 @@ public class Sender implements DataTransferProtocol {
             .setPinning(pinning)
             .addAllTargetPinnings(PBHelperClient.convert(targetPinnings, 1))
             .addAllTargetStorageIds(PBHelperClient.convert(targetStorageIds, 1));
+
+    LOG.info("Failure Recovery Sender before 3"+isShadow);
     if (source != null) {
       proto.setSource(PBHelperClient.convertDatanodeInfo(source));
     }
