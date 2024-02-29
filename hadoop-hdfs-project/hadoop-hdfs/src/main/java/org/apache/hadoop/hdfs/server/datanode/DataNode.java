@@ -1675,8 +1675,9 @@ public class DataNode extends ReconfigurableBase
       LOG.info("Socket Write Timeout is {}", dnConf.socketWriteTimeout);
       tcpPeerServer = new TcpPeerServer(dnConf.socketWriteTimeout,
           DataNode.getStreamingAddr(getConf()), backlogLength);
+      LOG.info("Failure Recovery DataNode "+ DataNode.getStreamingAddr(getConf()).toString());
       shadowTcpPeerServer = new TcpPeerServer(dnConf.socketWriteTimeout,
-          DataNode.getStreamingAddr(getConf()), backlogLength);
+          NetUtils.createSocketAddr("127.0.0.1:0"), backlogLength);
       LOG.info("TcpPeerServer created at " + DataNode.getStreamingAddr(getConf()).toString());
 
     }
@@ -3224,6 +3225,7 @@ public class DataNode extends ReconfigurableBase
     dataXceiverServer.start();
     shadowDataXceiverServer.start();
     if (localDataXceiverServer != null) {
+      LOG.info("Failure Recovery: localDataXceiverServer is not null");
       localDataXceiverServer.start();
     }
     ipcServer.setTracer(tracer);
