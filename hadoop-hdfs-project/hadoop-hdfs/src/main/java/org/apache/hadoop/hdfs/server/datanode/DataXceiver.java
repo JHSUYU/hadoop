@@ -254,7 +254,7 @@ class DataXceiver extends Receiver implements Runnable {
     int opsProcessed = 0;
     Op op = null;
     Op firstOp = null;
-
+    LOG.info("Failure Recovery isShadow is 257" +this.isShadow);
     try {
       synchronized(this) {
         xceiver = Thread.currentThread();
@@ -262,6 +262,7 @@ class DataXceiver extends Receiver implements Runnable {
       dataXceiverServer.addPeer(peer, Thread.currentThread(), this);
       peer.setWriteTimeout(datanode.getDnConf().socketWriteTimeout);
       InputStream input = socketIn;
+      LOG.info("Failure Recovery isShadow is 265" +this.isShadow);
       try {
         int port = this.isShadow ? datanode.shadowStreamingAddr.getPort():datanode.getXferAddress().getPort();
         IOStreamPair saslStreams = datanode.saslServer.receive(peer, socketOut,
@@ -285,7 +286,7 @@ class DataXceiver extends Receiver implements Runnable {
         }
         return;
       }
-      
+      LOG.info("Failure Recovery isShadow is 289" +this.isShadow);
       super.initialize(new DataInputStream(input));
       
       // We process requests in a loop, and stay around for a short timeout.
