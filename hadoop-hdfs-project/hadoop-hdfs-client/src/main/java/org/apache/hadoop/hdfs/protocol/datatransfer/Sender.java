@@ -194,6 +194,7 @@ public class Sender implements DataTransferProtocol {
                          final String storageId,
                          final String[] targetStorageIds,
                          boolean isShadow) throws IOException {
+    LOG.info("Failure Recovery Sender before 0"+isShadow);
     ClientOperationHeaderProto header = DataTransferProtoUtil.buildClientHeader(
             blk, clientName, blockToken);
 
