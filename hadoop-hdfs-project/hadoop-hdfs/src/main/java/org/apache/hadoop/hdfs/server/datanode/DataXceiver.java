@@ -302,7 +302,9 @@ class DataXceiver extends Receiver implements Runnable {
           } else {
             peer.setReadTimeout(dnConf.socketTimeout);
           }
+          LOG.info("Failure Recovery isShadow is beforereadOp" +this.isShadow);
           op = readOp();
+          LOG.info("Failure Recovery isShadow is aftereadOp" +this.isShadow);
         } catch (InterruptedIOException ignored) {
           // Time out while we wait for client rpc
           break;
