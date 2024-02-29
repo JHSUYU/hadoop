@@ -2716,4 +2716,8 @@ class DataStreamer extends Daemon {
   public StorageType[] getStorageTypes() {
     return storageTypes;
   }
+
+  public AtomicReference<CachingStrategy> getCachingStrategy() {
+    return cachingStrategy;
+  }
 }

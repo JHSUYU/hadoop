@@ -509,7 +509,7 @@ class ShadowDataStreamer extends Daemon {
     protected DFSClient dfsClient;
     protected final String src;
     /** Only for DataTransferProtocol.writeBlock(..) */
-    final DataChecksum checksum4WriteBlock;
+    DataChecksum checksum4WriteBlock;
     final Progressable progress;
     protected final HdfsFileStatus stat;
     // appending to existing partial block
@@ -521,7 +521,7 @@ class ShadowDataStreamer extends Daemon {
     protected Map<Long, Long> shadowPacketSendTime = new HashMap<>();
     private final LinkedList<DFSPacket> ackQueue = new LinkedList<>();
     protected LinkedList<DFSPacket> shadowAckQueue = new LinkedList<>();
-    private final AtomicReference<CachingStrategy> cachingStrategy;
+    private AtomicReference<CachingStrategy> cachingStrategy;
     private final ByteArrayManager byteArrayManager;
     //persist blocks on namenode
     private final AtomicBoolean persistBlocks = new AtomicBoolean(false);
@@ -576,6 +576,9 @@ class ShadowDataStreamer extends Daemon {
         this.streamerClosed = dataStreamer.getStreamerClosed();
         this.dfsClient = dataStreamer.getDfsClient();
         this.accessToken=new Token<>(dataStreamer.accessToken);
+        this.checksum4WriteBlock = dataStreamer.checksum4WriteBlock;
+        this.cachingStrategy = dataStreamer.getCachingStrategy();
+
         System.arraycopy(dataStreamer.getNodes(), 0, this.nodes, 0, dataStreamer.getNodes().length);
     }
 
