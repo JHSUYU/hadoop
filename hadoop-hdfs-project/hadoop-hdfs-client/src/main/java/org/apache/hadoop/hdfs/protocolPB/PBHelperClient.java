@@ -785,6 +785,7 @@ public class PBHelperClient {
     if (di == null) {
       return null;
     }
+    System.out.println("Failure Recovery convert 788 "+di.getId().getShadowPort());
     DatanodeInfoBuilder dinfo =
         new DatanodeInfoBuilder().setNodeID(convert(di.getId()))
             .setNetworkLocation(di.hasLocation() ? di.getLocation() : null)
@@ -811,7 +812,9 @@ public class PBHelperClient {
       long nonDFSUsed = di.getCapacity() - di.getDfsUsed() - di.getRemaining();
       dinfo.setNonDfsUsed(nonDFSUsed < 0 ? 0 : nonDFSUsed);
     }
-    return dinfo.build();
+    DatanodeInfo res=dinfo.build();
+    System.out.println("Failure Recovery convert 816 "+res.shadowxferPort);
+    return res;
   }
 
   public static StorageType[] convertStorageTypes(
