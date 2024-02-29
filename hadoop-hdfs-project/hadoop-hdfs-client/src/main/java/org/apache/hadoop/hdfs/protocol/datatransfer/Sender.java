@@ -79,13 +79,26 @@ public class Sender implements DataTransferProtocol {
       final Message proto) throws IOException {
     LOG.trace("Sending DataTransferOp {}: {}",
         proto.getClass().getSimpleName(), proto);
-    LOG.info("Failure Recovery send 7");
+    LOG.info("Failure Recovery send 7 ");
     op(out, opcode);
     LOG.info("Failure Recovery send 8");
     proto.writeDelimitedTo(out);
     LOG.info("Failure Recovery send 9");
     out.flush();
     LOG.info("Failure Recovery send 10");
+  }
+
+  private static void send(final DataOutputStream out, final Op opcode,
+                           final Message proto, boolean isShadow) throws IOException {
+    LOG.trace("Sending DataTransferOp {}: {}",
+            proto.getClass().getSimpleName(), proto);
+    LOG.info("Failure Recovery send 7 "+ isShadow);
+    op(out, opcode);
+    LOG.info("Failure Recovery send 8 "+ isShadow);
+    proto.writeDelimitedTo(out);
+    LOG.info("Failure Recovery send 9 "+ isShadow);
+    out.flush();
+    LOG.info("Failure Recovery send 10 "+ isShadow);
   }
 
   static private CachingStrategyProto getCachingStrategy(
@@ -233,9 +246,10 @@ public class Sender implements DataTransferProtocol {
     if (storageId != null) {
       proto.setStorageId(storageId);
     }
-    LOG.info("Failure Recovery Sender before "+isShadow);
+    Message tmp = proto.build();
+    LOG.info("Failure Recovery Sender before 6"+isShadow);
 
-    send(out, Op.WRITE_BLOCK, proto.build());
+    send(out, Op.WRITE_BLOCK, tmp, isShadow);
 
     LOG.info("Failure Recovery Sender after"+isShadow);
   }
