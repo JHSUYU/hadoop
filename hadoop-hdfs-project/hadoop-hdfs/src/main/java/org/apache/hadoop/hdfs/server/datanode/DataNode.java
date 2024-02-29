@@ -406,6 +406,7 @@ public class DataNode extends ReconfigurableBase
   Daemon localDataXceiverServer = null;
   ShortCircuitRegistry shortCircuitRegistry = null;
   ThreadGroup threadGroup = null;
+  ThreadGroup shadowThreadGroup = null;
   private DNConf dnConf;
   private volatile boolean heartbeatsDisabledForTests = false;
   private volatile boolean ibrDisabledForTests = false;
@@ -1688,9 +1689,13 @@ public class DataNode extends ReconfigurableBase
     LOG.info("Opened streaming server at {}", streamingAddr);
     LOG.info("Opened shadow Streaming server at {}", shadowStreamingAddr);
     this.threadGroup = new ThreadGroup("dataXceiverServer");
+    this.shadowThreadGroup = new ThreadGroup("shadowDataXceiver");
     xserver = new DataXceiverServer(tcpPeerServer, getConf(), this);
+    shadowXserver = new DataXceiverServer(shadowTcpPeerServer, getConf(), this);
     this.dataXceiverServer = new Daemon(threadGroup, xserver);
+    this.shadowDataXceiverServer = new Daemon(shadowThreadGroup, shadowXserver);
     this.threadGroup.setDaemon(true); // auto destroy when empty
+    this.shadowThreadGroup.setDaemon(true);
 
     if (getConf().getBoolean(
         HdfsClientConfigKeys.Read.ShortCircuit.KEY,
@@ -3217,6 +3222,7 @@ public class DataNode extends ReconfigurableBase
 
     // start dataXceiveServer
     dataXceiverServer.start();
+    shadowDataXceiverServer.start();
     if (localDataXceiverServer != null) {
       localDataXceiverServer.start();
     }
