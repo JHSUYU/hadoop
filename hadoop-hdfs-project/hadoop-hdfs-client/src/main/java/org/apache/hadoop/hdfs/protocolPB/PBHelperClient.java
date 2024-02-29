@@ -688,6 +688,9 @@ public class PBHelperClient {
 
     final LocatedBlock lb;
     if (indices == null) {
+      if(targets != null && targets.length >0) {
+        System.out.println("Failure Recovery LocatedBlock691 " + targets[0].shadowxferPort);
+      }
       lb = new LocatedBlock(PBHelperClient.convert(proto.getB()), targets,
           storageIDs, storageTypes, proto.getOffset(), proto.getCorrupt(),
           cachedLocs.toArray(new DatanodeInfo[cachedLocs.size()]));
