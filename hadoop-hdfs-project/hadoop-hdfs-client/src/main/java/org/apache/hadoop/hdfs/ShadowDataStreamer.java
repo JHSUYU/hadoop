@@ -571,7 +571,6 @@ class ShadowDataStreamer extends Daemon {
         this.nodes = new DatanodeInfo[dataStreamer.getNodes().length];
         this.storageIDs = new String[dataStreamer.getStorageIDs().length];
         this.storageTypes = new StorageType[dataStreamer.getStorageTypes().length];
-        System.arraycopy(dataStreamer.getNodes(), 0, this.nodes, 0, dataStreamer.getNodes().length);
         System.arraycopy(dataStreamer.getStorageTypes(), 0, this.storageTypes, 0, dataStreamer.getStorageTypes().length);
         System.arraycopy(dataStreamer.getStorageIDs(), 0, this.storageIDs, 0, dataStreamer.getStorageIDs().length);
         this.streamerClosed = dataStreamer.getStreamerClosed();
@@ -593,12 +592,12 @@ class ShadowDataStreamer extends Daemon {
 
 
     private ShadowDataStreamer(HdfsFileStatus stat, ExtendedBlock block,
-                         DFSClient dfsClient, String src,
-                         Progressable progress, DataChecksum checksum,
-                         AtomicReference<CachingStrategy> cachingStrategy,
-                         ByteArrayManager byteArrayManage,
-                         boolean isAppend, String[] favoredNodes,
-                         EnumSet<AddBlockFlag> flags) {
+                               DFSClient dfsClient, String src,
+                               Progressable progress, DataChecksum checksum,
+                               AtomicReference<CachingStrategy> cachingStrategy,
+                               ByteArrayManager byteArrayManage,
+                               boolean isAppend, String[] favoredNodes,
+                               EnumSet<AddBlockFlag> flags) {
         this.block = new BlockToWrite(block);
         this.dfsClient = dfsClient;
         this.src = src;
@@ -652,10 +651,10 @@ class ShadowDataStreamer extends Daemon {
      * construction with tracing info
      */
     ShadowDataStreamer(HdfsFileStatus stat, ExtendedBlock block, DFSClient dfsClient,
-                 String src, Progressable progress, DataChecksum checksum,
-                 AtomicReference<CachingStrategy> cachingStrategy,
-                 ByteArrayManager byteArrayManage, String[] favoredNodes,
-                 EnumSet<AddBlockFlag> flags) {
+                       String src, Progressable progress, DataChecksum checksum,
+                       AtomicReference<CachingStrategy> cachingStrategy,
+                       ByteArrayManager byteArrayManage, String[] favoredNodes,
+                       EnumSet<AddBlockFlag> flags) {
         this(stat, block, dfsClient, src, progress, checksum, cachingStrategy,
                 byteArrayManage, false, favoredNodes, flags);
         stage = BlockConstructionStage.PIPELINE_SETUP_CREATE;
@@ -667,9 +666,9 @@ class ShadowDataStreamer extends Daemon {
      * @param stat status of the file to be appended
      */
     ShadowDataStreamer(LocatedBlock lastBlock, HdfsFileStatus stat, DFSClient dfsClient,
-                 String src, Progressable progress, DataChecksum checksum,
-                 AtomicReference<CachingStrategy> cachingStrategy,
-                 ByteArrayManager byteArrayManage) {
+                       String src, Progressable progress, DataChecksum checksum,
+                       AtomicReference<CachingStrategy> cachingStrategy,
+                       ByteArrayManager byteArrayManage) {
         this(stat, lastBlock.getBlock(), dfsClient, src, progress, checksum, cachingStrategy,
                 byteArrayManage, true, null, null);
         stage = BlockConstructionStage.PIPELINE_SETUP_APPEND;
