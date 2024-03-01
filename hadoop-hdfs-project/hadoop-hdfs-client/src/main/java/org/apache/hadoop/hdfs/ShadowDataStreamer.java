@@ -612,7 +612,7 @@ class ShadowDataStreamer extends Daemon {
                                  final String[] targetStorageIds
                                  ) throws IOException {
 
-
+        LOG.info("ShadowDataStreamer: prepareForSender");
         assert null == s : "Previous socket unclosed";
         assert null == blockReplyStream : "Previous blockReplyStream unclosed";
         s = createSocketForPipeline(nodes[0], nodes.length, dfsClient);
