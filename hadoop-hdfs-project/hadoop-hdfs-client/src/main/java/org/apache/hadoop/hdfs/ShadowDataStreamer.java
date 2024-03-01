@@ -2439,7 +2439,7 @@ class ShadowDataStreamer extends Daemon {
                 unbufIn = saslStreams.in;
                 out = new DataOutputStream(new BufferedOutputStream(unbufOut,
                         DFSUtilClient.getSmallBufferSize(dfsClient.getConfiguration())));
-                this.out = out;
+                this.out = new AtomicReference<>( out);
                 blockReplyStream = new DataInputStream(unbufIn);
 
                 //
