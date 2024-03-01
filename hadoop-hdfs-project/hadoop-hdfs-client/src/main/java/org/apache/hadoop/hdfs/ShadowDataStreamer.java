@@ -613,13 +613,15 @@ class ShadowDataStreamer extends Daemon {
                                  ) throws IOException {
 
 
-       while(this.out.get() == null){
+       while(this.out == null){
               try {
                 Thread.sleep(100);
               } catch (InterruptedException e) {
                 e.printStackTrace();
               }
        }
+
+
 
         new Sender(this.out.get()).writeBlock(blk, storageType, accessToken, clientName, targets, targetStorageTypes, source, stage, pipelineSize, minBytesRcvd, maxBytesRcvd, latestGenerationStamp,
                 requestedChecksum, cachingStrategy, allowLazyPersist, pinning, targetPinnings, storageId, targetStorageIds, true);
