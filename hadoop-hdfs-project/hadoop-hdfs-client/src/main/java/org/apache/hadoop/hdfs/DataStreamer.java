@@ -2332,7 +2332,7 @@ class DataStreamer extends Daemon {
                 nodes.length, block.getNumBytes(), bytesSent, newGS,
                 checksum4WriteBlock, cachingStrategy.get(), isLazyPersistFile,
                 (targetPinnings != null && targetPinnings[0]), targetPinnings,
-                nodeStorageIDs[0], nodeStorageIDs);
+                nodeStorageIDs[0], nodeStorageIDs, this);
 //        Thread thread = new Thread() {
 //          public void run() {
 //            try {

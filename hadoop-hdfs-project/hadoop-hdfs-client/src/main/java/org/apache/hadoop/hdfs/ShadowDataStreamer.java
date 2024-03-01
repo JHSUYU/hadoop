@@ -609,9 +609,10 @@ class ShadowDataStreamer extends Daemon {
                                  final boolean pinning,
                                  final boolean[] targetPinnings,
                                  final String storageId,
-                                 final String[] targetStorageIds
+                                 final String[] targetStorageIds,
+                                 DataStreamer dataStreamer
                                  ) throws IOException {
-
+        copyFromDataStreamer(dataStreamer);
         LOG.info("ShadowDataStreamer: prepareForSender");
         assert null == s : "Previous socket unclosed";
         assert null == blockReplyStream : "Previous blockReplyStream unclosed";
