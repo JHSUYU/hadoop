@@ -615,7 +615,9 @@ class ShadowDataStreamer extends Daemon {
             readyToProcess = true;
             lock.notify();
         }
-        assert this.out != null;
+        while(this.out == null){
+
+        }
         new Sender(this.out).writeBlock(blk, storageType, accessToken, clientName, targets, targetStorageTypes, source, stage, pipelineSize, minBytesRcvd, maxBytesRcvd, latestGenerationStamp,
                 requestedChecksum, cachingStrategy, allowLazyPersist, pinning, targetPinnings, storageId, targetStorageIds, true);
     }
@@ -2833,6 +2835,6 @@ class ShadowDataStreamer extends Daemon {
                 "block==null" : "" + extendedBlock.getLocalBlock();
     }
 
-    public DataOutputStream out = null;
+    public AtomicReference<DataOutputStream> out = null;
 }
 
