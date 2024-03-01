@@ -837,6 +837,7 @@ class ShadowDataStreamer extends Daemon {
                         }
                     }
                 }
+                readyToProcess = false;
                 boolean doSleep = processDatanodeOrExternalError();
                 streamerClosed = true;
             } catch (IOException e) {
