@@ -613,17 +613,21 @@ class ShadowDataStreamer extends Daemon {
                                  ) throws IOException {
 
 
-       while(this.out == null){
-              try {
-                Thread.sleep(100);
-              } catch (InterruptedException e) {
-                e.printStackTrace();
-              }
-       }
+        assert null == s : "Previous socket unclosed";
+        assert null == blockReplyStream : "Previous blockReplyStream unclosed";
+        s = createSocketForPipeline(nodes[0], nodes.length, dfsClient);
+        long writeTimeout = dfsClient.getDatanodeWriteTimeout(nodes.length);
+        long readTimeout = dfsClient.getDatanodeReadTimeout(nodes.length);
 
-
-
-        new Sender(this.out.get()).writeBlock(blk, storageType, accessToken, clientName, targets, targetStorageTypes, source, stage, pipelineSize, minBytesRcvd, maxBytesRcvd, latestGenerationStamp,
+        OutputStream unbufOut = NetUtils.getOutputStream(s, writeTimeout);
+        InputStream unbufIn = NetUtils.getInputStream(s, readTimeout);
+        IOStreamPair saslStreams = dfsClient.saslClient.socketSend(s,
+                unbufOut, unbufIn, dfsClient, accessToken, nodes[0]);
+        unbufOut = saslStreams.out;
+        unbufIn = saslStreams.in;
+        out = new DataOutputStream(new BufferedOutputStream(unbufOut,
+                DFSUtilClient.getSmallBufferSize(dfsClient.getConfiguration())));
+        new Sender(this.out).writeBlock(blk, storageType, accessToken, clientName, targets, targetStorageTypes, source, stage, pipelineSize, minBytesRcvd, maxBytesRcvd, latestGenerationStamp,
                 requestedChecksum, cachingStrategy, allowLazyPersist, pinning, targetPinnings, storageId, targetStorageIds, true);
     }
 
@@ -2444,7 +2448,7 @@ class ShadowDataStreamer extends Daemon {
                 unbufIn = saslStreams.in;
                 out = new DataOutputStream(new BufferedOutputStream(unbufOut,
                         DFSUtilClient.getSmallBufferSize(dfsClient.getConfiguration())));
-                this.out = new AtomicReference<>( out);
+                this.out = out;
                 blockReplyStream = new DataInputStream(unbufIn);
 
                 //
@@ -2841,6 +2845,6 @@ class ShadowDataStreamer extends Daemon {
                 "block==null" : "" + extendedBlock.getLocalBlock();
     }
 
-    public AtomicReference<DataOutputStream> out = null;
+    public DataOutputStream out = null;
 }
 

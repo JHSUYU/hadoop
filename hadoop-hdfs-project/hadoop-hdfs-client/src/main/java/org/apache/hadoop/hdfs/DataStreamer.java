@@ -2342,32 +2342,32 @@ class DataStreamer extends Daemon {
         };
         thread.start();
 
-//        new Sender(out).writeBlock(blockCopy, nodeStorageTypes[0], accessToken,
-//            dfsClient.clientName, nodes, nodeStorageTypes, null, bcs,
-//            nodes.length, block.getNumBytes(), bytesSent, newGS,
-//            checksum4WriteBlock, cachingStrategy.get(), isLazyPersistFile,
-//            (targetPinnings != null && targetPinnings[0]), targetPinnings,
-//            nodeStorageIDs[0], nodeStorageIDs);
-//
-//        // receive ack for connect
-//        BlockOpResponseProto resp = BlockOpResponseProto.parseFrom(
-//            PBHelperClient.vintPrefixed(blockReplyStream));
-//        Status pipelineStatus = resp.getStatus();
-//        firstBadLink = resp.getFirstBadLink();
-//
-//        // Got an restart OOB ack.
-//        // If a node is already restarting, this status is not likely from
-//        // the same node. If it is from a different node, it is not
-//        // from the local datanode. Thus it is safe to treat this as a
-//        // regular node error.
-//        if (PipelineAck.isRestartOOBStatus(pipelineStatus) &&
-//            !errorState.isRestartingNode()) {
-//          checkRestart = true;
-//          throw new IOException("A datanode is restarting.");
-//        }
-//
-//        String logInfo = "ack with firstBadLink as " + firstBadLink;
-//        DataTransferProtoUtil.checkBlockOpStatus(resp, logInfo);
+        new Sender(out).writeBlock(blockCopy, nodeStorageTypes[0], accessToken,
+            dfsClient.clientName, nodes, nodeStorageTypes, null, bcs,
+            nodes.length, block.getNumBytes(), bytesSent, newGS,
+            checksum4WriteBlock, cachingStrategy.get(), isLazyPersistFile,
+            (targetPinnings != null && targetPinnings[0]), targetPinnings,
+            nodeStorageIDs[0], nodeStorageIDs);
+
+        // receive ack for connect
+        BlockOpResponseProto resp = BlockOpResponseProto.parseFrom(
+            PBHelperClient.vintPrefixed(blockReplyStream));
+        Status pipelineStatus = resp.getStatus();
+        firstBadLink = resp.getFirstBadLink();
+
+        // Got an restart OOB ack.
+        // If a node is already restarting, this status is not likely from
+        // the same node. If it is from a different node, it is not
+        // from the local datanode. Thus it is safe to treat this as a
+        // regular node error.
+        if (PipelineAck.isRestartOOBStatus(pipelineStatus) &&
+            !errorState.isRestartingNode()) {
+          checkRestart = true;
+          throw new IOException("A datanode is restarting.");
+        }
+
+        String logInfo = "ack with firstBadLink as " + firstBadLink;
+        DataTransferProtoUtil.checkBlockOpStatus(resp, logInfo);
 
         assert null == blockStream : "Previous blockStream unclosed";
         blockStream = out;
