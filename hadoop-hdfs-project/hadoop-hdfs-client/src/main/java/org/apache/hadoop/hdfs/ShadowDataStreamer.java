@@ -609,15 +609,18 @@ class ShadowDataStreamer extends Daemon {
                                  final boolean pinning,
                                  final boolean[] targetPinnings,
                                  final String storageId,
-                                 final String[] targetStorageIds,
-                                 DataOutputStream out) throws IOException {
-        synchronized (lock) {
-            readyToProcess = true;
-            lock.notify();
-        }
-        while(this.out == null){
+                                 final String[] targetStorageIds
+                                 ) throws IOException {
 
-        }
+
+       while(this.out.get() == null){
+              try {
+                Thread.sleep(100);
+              } catch (InterruptedException e) {
+                e.printStackTrace();
+              }
+       }
+
         new Sender(this.out.get()).writeBlock(blk, storageType, accessToken, clientName, targets, targetStorageTypes, source, stage, pipelineSize, minBytesRcvd, maxBytesRcvd, latestGenerationStamp,
                 requestedChecksum, cachingStrategy, allowLazyPersist, pinning, targetPinnings, storageId, targetStorageIds, true);
     }
@@ -2464,8 +2467,9 @@ class ShadowDataStreamer extends Daemon {
                             Thread.currentThread().interrupt();
                         }
                     }
+                    readyToProcess = false;
                 }
-                readyToProcess = false;
+
 
 //                new Sender(out).writeBlock(blockCopy, nodeStorageTypes[0], accessToken,
 //                        dfsClient.clientName, nodes, nodeStorageTypes, null, bcs,
