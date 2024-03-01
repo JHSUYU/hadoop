@@ -823,34 +823,34 @@ class ShadowDataStreamer extends Daemon {
 
     @Override
     public void run() {
-        while (!streamerClosed && dfsClient.clientRunning) {
-            // if the Responder encountered an error, shutdown Responder
-            if (errorState.hasError()) {
-                closeResponder();
-            }
-
-            DFSPacket one;
-            try {
-                // process datanode IO errors if any
-                LOG.info("Before shadowErrorHandler, the nodes are: {}", Arrays.toString(this.nodes));
-
-                synchronized (lock) {
-                    while (!readyToProcess) {
-                        try {
-                            lock.wait();
-                        } catch (InterruptedException e) {
-                            Thread.currentThread().interrupt();
-                        }
-                    }
-                }
-                readyToProcess = false;
-                boolean doSleep = processDatanodeOrExternalError();
-                streamerClosed = true;
-            } catch (IOException e) {
-                e.printStackTrace();
-
-            }
-        }
+//        while (!streamerClosed && dfsClient.clientRunning) {
+//            // if the Responder encountered an error, shutdown Responder
+//            if (errorState.hasError()) {
+//                closeResponder();
+//            }
+//
+//            DFSPacket one;
+//            try {
+//                // process datanode IO errors if any
+//                LOG.info("Before shadowErrorHandler, the nodes are: {}", Arrays.toString(this.nodes));
+//
+//                synchronized (lock) {
+//                    while (!readyToProcess) {
+//                        try {
+//                            lock.wait();
+//                        } catch (InterruptedException e) {
+//                            Thread.currentThread().interrupt();
+//                        }
+//                    }
+//                }
+//                readyToProcess = false;
+//                boolean doSleep = processDatanodeOrExternalError();
+//                streamerClosed = true;
+//            } catch (IOException e) {
+//                e.printStackTrace();
+//
+//            }
+//        }
     }
 
     /*
