@@ -221,25 +221,24 @@ public class Sender implements DataTransferProtocol {
             DataTransferProtoUtil.toProto(requestedChecksum);
 
     LOG.info("Failure Recovery Sender before 2"+isShadow);
-//    OpWriteBlockProto.Builder proto = OpWriteBlockProto.newBuilder()
-//            .setHeader(header)
-//            .setStorageType(PBHelperClient.convertStorageType(storageType))
-//            .addAllTargets(PBHelperClient.convert(targets, 1))
-//            .addAllTargetStorageTypes(
-//                    PBHelperClient.convertStorageTypes(targetStorageTypes, 1))
-//            .setStage(toProto(stage))
-//            .setPipelineSize(pipelineSize)
-//            .setMinBytesRcvd(minBytesRcvd)
-//            .setMaxBytesRcvd(maxBytesRcvd)
-//            .setLatestGenerationStamp(latestGenerationStamp)
-//            .setRequestedChecksum(checksumProto)
-//            .setCachingStrategy(getCachingStrategy(cachingStrategy))
-//            .setAllowLazyPersist(allowLazyPersist)
-//            .setPinning(pinning)
-//            .addAllTargetPinnings(PBHelperClient.convert(targetPinnings, 1))
-//            .addAllTargetStorageIds(PBHelperClient.convert(targetStorageIds, 1));
+    OpWriteBlockProto.Builder proto = OpWriteBlockProto.newBuilder()
+            .setHeader(header)
+            .setStorageType(PBHelperClient.convertStorageType(storageType))
+            .addAllTargets(PBHelperClient.convert(targets, 1))
+            .addAllTargetStorageTypes(
+                    PBHelperClient.convertStorageTypes(targetStorageTypes, 1))
+            .setStage(toProto(stage))
+            .setPipelineSize(pipelineSize)
+            .setMinBytesRcvd(minBytesRcvd)
+            .setMaxBytesRcvd(maxBytesRcvd)
+            .setLatestGenerationStamp(latestGenerationStamp)
+            .setRequestedChecksum(checksumProto)
+            .setCachingStrategy(getCachingStrategy(cachingStrategy))
+            .setAllowLazyPersist(allowLazyPersist)
+            .setPinning(pinning)
+            .addAllTargetPinnings(PBHelperClient.convert(targetPinnings, 1))
+            .addAllTargetStorageIds(PBHelperClient.convert(targetStorageIds, 1));
 
-    OpWriteBlockProto.Builder proto = OpWriteBlockProto.newBuilder();
     LOG.info("Failure Recovery Sender before 3"+isShadow);
     if (source != null) {
       proto.setSource(PBHelperClient.convertDatanodeInfo(source));

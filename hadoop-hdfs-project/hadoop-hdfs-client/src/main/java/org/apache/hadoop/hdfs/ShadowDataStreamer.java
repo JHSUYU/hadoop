@@ -6,9 +6,9 @@
  * to you under the Apache License, Version 2.0 (the
  * "License"); you may not use this file except in compliance
  * with the License.  You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
+ * <p>
+ * http://www.apache.org/licenses/LICENSE-2.0
+ * <p>
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -110,7 +110,7 @@ import javax.annotation.Nonnull;
 @InterfaceAudience.Private
 class ShadowDataStreamer extends Daemon {
     static final Logger LOG = LoggerFactory.getLogger(DataStreamer.class);
-    public static final int     DFS_SHADOW_DATANODE_DEFAULT_PORT = 44210;
+    public static final int DFS_SHADOW_DATANODE_DEFAULT_PORT = 44210;
 
 
     private class RefetchEncryptionKeyPolicy {
@@ -121,6 +121,7 @@ class ShadowDataStreamer extends Daemon {
         RefetchEncryptionKeyPolicy(DatanodeInfo src) {
             this.src = src;
         }
+
         boolean continueRetryingOrThrow() throws InvalidEncryptionKeyException {
             if (fetchEncryptionKeyTimes >= 2) {
                 // hit the same exception twice connecting to the node, so
@@ -276,7 +277,7 @@ class ShadowDataStreamer extends Daemon {
      * @param bam ByteArrayManager
      */
     private static void releaseBuffer(List<DFSPacket> packets, ByteArrayManager bam) {
-        for(DFSPacket p : packets) {
+        for (DFSPacket p : packets) {
             p.releaseBuffer(bam);
         }
         packets.clear();
@@ -553,7 +554,7 @@ class ShadowDataStreamer extends Daemon {
 //
 //  }
 
-    public void copyFromDataStreamer(DataStreamer dataStreamer){
+    public void copyFromDataStreamer(DataStreamer dataStreamer) {
         LOG.info("Failure Recovery: prepare For Processing");
         this.errorState.setBadNodeIndex(dataStreamer.getErrorState().getBadNodeIndex());
         this.errorState.setInternalError();
@@ -575,7 +576,7 @@ class ShadowDataStreamer extends Daemon {
         System.arraycopy(dataStreamer.getStorageIDs(), 0, this.storageIDs, 0, dataStreamer.getStorageIDs().length);
         this.streamerClosed = dataStreamer.getStreamerClosed();
         this.dfsClient = dataStreamer.getDfsClient();
-        this.accessToken=new Token<>(dataStreamer.accessToken);
+        this.accessToken = new Token<>(dataStreamer.accessToken);
         this.checksum4WriteBlock = dataStreamer.checksum4WriteBlock;
         this.cachingStrategy = dataStreamer.getCachingStrategy();
 
@@ -588,6 +589,34 @@ class ShadowDataStreamer extends Daemon {
             readyToProcess = true;
             lock.notify();
         }
+    }
+
+    public void prepareForSender(ExtendedBlock blk,
+                                 StorageType storageType,
+                                 Token<BlockTokenIdentifier> accessToken,
+                                 String clientName,
+                                 DatanodeInfo[] targets,
+                                 StorageType[] targetStorageTypes,
+                                 DatanodeInfo source,
+                                 BlockConstructionStage stage,
+                                 int pipelineSize,
+                                 long minBytesRcvd,
+                                 long maxBytesRcvd,
+                                 long latestGenerationStamp,
+                                 DataChecksum requestedChecksum,
+                                 final CachingStrategy cachingStrategy,
+                                 final boolean allowLazyPersist,
+                                 final boolean pinning,
+                                 final boolean[] targetPinnings,
+                                 final String storageId,
+                                 final String[] targetStorageIds,
+                                 DataOutputStream out) throws IOException {
+        synchronized (lock) {
+            readyToProcess = true;
+            lock.notify();
+        }
+        new Sender(out).writeBlock(blk, storageType, accessToken, clientName, targets, targetStorageTypes, source, stage, pipelineSize, minBytesRcvd, maxBytesRcvd, latestGenerationStamp,
+                requestedChecksum, cachingStrategy, allowLazyPersist, pinning, targetPinnings, storageId, targetStorageIds, true);
     }
 
 
@@ -682,7 +711,7 @@ class ShadowDataStreamer extends Daemon {
      * @param lastBlock the last block of a file
      * @throws IOException
      */
-    void setPipelineInConstruction(LocatedBlock lastBlock) throws IOException{
+    void setPipelineInConstruction(LocatedBlock lastBlock) throws IOException {
         // setup pipeline to append to the last block XXX retries??
         setPipeline(lastBlock);
         if (nodes.length < 1) {
@@ -718,7 +747,7 @@ class ShadowDataStreamer extends Daemon {
         this.storageTypes = storageTypes;
         this.storageIDs = storageIDs;
 
-        if (shadowRecovery){
+        if (shadowRecovery) {
             this.shadowNodes = nodes;
             this.shadowStorageTypes = storageTypes;
             this.shadowStorageIDs = storageIDs;
@@ -757,9 +786,11 @@ class ShadowDataStreamer extends Daemon {
         return streamerClosed || errorState.hasError() || !dfsClient.clientRunning;
     }
 
-    public boolean checker(){ return Configuration.triggerAgain;}
+    public boolean checker() {
+        return Configuration.triggerAgain;
+    }
 
-    public void revert2Original(){
+    public void revert2Original() {
         this.failed.clear();
         this.failed.addAll(this.shadowFailed);
         this.nodes = new DatanodeInfo[this.shadowNodes.length];
@@ -777,8 +808,8 @@ class ShadowDataStreamer extends Daemon {
         LOG.info("After shadowErrorHandler, the nodes are: {}", Arrays.toString(this.nodes));
     }
 
-    public int getNodesLength(){
-        if (this.nodes == null){
+    public int getNodesLength() {
+        if (this.nodes == null) {
             return 0;
         }
         return this.nodes.length;
@@ -842,6 +873,7 @@ class ShadowDataStreamer extends Daemon {
                         }
                     }
                 }
+                readyToProcess = false;
                 boolean doSleep = processDatanodeOrExternalError();
 
                 LOG.info("ShadowDataStreamer: Finish processDatanodeOrExternalError, doSleep: {}", doSleep);
@@ -855,7 +887,7 @@ class ShadowDataStreamer extends Daemon {
                         }
                         try {
                             dataQueue.wait(timeout);
-                        } catch (InterruptedException  e) {
+                        } catch (InterruptedException e) {
                             LOG.debug("Thread interrupted", e);
                         }
                         doSleep = false;
@@ -913,7 +945,7 @@ class ShadowDataStreamer extends Daemon {
                 if (one.isLastPacketInBlock()) {
                     // wait for all data packets have been successfully acked
                     waitForAllAcks();
-                    if(shouldStop()) {
+                    if (shouldStop()) {
                         continue;
                     }
                     stage = BlockConstructionStage.PIPELINE_CLOSE;
@@ -991,7 +1023,9 @@ class ShadowDataStreamer extends Daemon {
 
                     endBlock();
                 }
-                if (progress != null) { progress.progress(); }
+                if (progress != null) {
+                    progress.progress();
+                }
 
                 // This is used by unit test to trigger race conditions.
                 if (artificialSlowdown != 0 && dfsClient.clientRunning) {
@@ -1033,7 +1067,7 @@ class ShadowDataStreamer extends Daemon {
                 try {
                     // wait for acks to arrive from datanodes
                     dataQueue.wait(sendHeartbeat());
-                } catch (InterruptedException  e) {
+                } catch (InterruptedException e) {
                     LOG.debug("Thread interrupted ", e);
                 }
             }
@@ -1063,7 +1097,7 @@ class ShadowDataStreamer extends Daemon {
     }
 
     private long sendHeartbeat() throws IOException {
-        final long heartbeatInterval = dfsClient.getConf().getSocketTimeout()/2;
+        final long heartbeatInterval = dfsClient.getConf().getSocketTimeout() / 2;
         long timeout = heartbeatInterval - (Time.monotonicNow() - lastPacket);
         if (timeout <= 0) {
             sendPacket(createHeartbeatPacket());
@@ -1231,7 +1265,7 @@ class ShadowDataStreamer extends Daemon {
             try {
                 response.close();
                 response.join();
-            } catch (InterruptedException  e) {
+            } catch (InterruptedException e) {
                 LOG.debug("Thread interrupted", e);
                 Thread.currentThread().interrupt();
             } finally {
@@ -1316,7 +1350,7 @@ class ShadowDataStreamer extends Daemon {
         private DatanodeInfo[] targets = null;
         private boolean isLastPacketInBlock = false;
 
-        ResponseProcessor (DatanodeInfo[] targets) {
+        ResponseProcessor(DatanodeInfo[] targets) {
             this.targets = targets;
         }
 
@@ -1351,8 +1385,8 @@ class ShadowDataStreamer extends Daemon {
                     // processes response status from datanodes.
                     ArrayList<DatanodeInfo> congestedNodesFromAck = new ArrayList<>();
                     ArrayList<DatanodeInfo> slownodesFromAck = new ArrayList<>();
-                    System.out.println("[Failure Recovery] The length of ack is "+ack.getNumOfReplies());
-                    for (int i = ack.getNumOfReplies()-1; i >=0  && dfsClient.clientRunning; i--) {
+                    System.out.println("[Failure Recovery] The length of ack is " + ack.getNumOfReplies());
+                    for (int i = ack.getNumOfReplies() - 1; i >= 0 && dfsClient.clientRunning; i--) {
                         final Status reply = PipelineAck.getStatusFromHeader(ack
                                 .getHeaderFlag(i));
                         if (PipelineAck.getECNFromHeader(ack.getHeaderFlag(i)) ==
@@ -1515,7 +1549,7 @@ class ShadowDataStreamer extends Daemon {
         }
     }
 
-    private boolean shouldHandleExternalError(){
+    private boolean shouldHandleExternalError() {
         return errorState.hasExternalError() && blockStream != null;
     }
 
@@ -1695,9 +1729,9 @@ class ShadowDataStreamer extends Daemon {
                             + BlockWrite.ReplaceDatanodeOnFailure.POLICY_KEY
                             + "' in its configuration.");
         }
-        for(int i = 0; i < shadowNodes.length; i++) {
+        for (int i = 0; i < shadowNodes.length; i++) {
             int j = 0;
-            for(; j < original.length && !this.shadowNodes[i].equals(original[j]); j++);
+            for (; j < original.length && !this.shadowNodes[i].equals(original[j]); j++) ;
             if (j == original.length) {
                 return i;
             }
@@ -1720,9 +1754,9 @@ class ShadowDataStreamer extends Daemon {
                             + BlockWrite.ReplaceDatanodeOnFailure.POLICY_KEY
                             + "' in its configuration.");
         }
-        for(int i = 0; i < nodes.length; i++) {
+        for (int i = 0; i < nodes.length; i++) {
             int j = 0;
-            for(; j < original.length && !nodes[i].equals(original[j]); j++);
+            for (; j < original.length && !nodes[i].equals(original[j]); j++) ;
             if (j == original.length) {
                 return i;
             }
@@ -1926,6 +1960,7 @@ class ShadowDataStreamer extends Daemon {
     private long computeTransferWriteTimeout() {
         return dfsClient.getDatanodeWriteTimeout(2);
     }
+
     private long computeTransferReadTimeout() {
         // transfer timeout multiplier based on the transfer size
         // One per 200 packets = 12.8MB. Minimum is 2.
@@ -1971,9 +2006,9 @@ class ShadowDataStreamer extends Daemon {
         // this must be internal error because we mark external error in striped
         // outputstream only when all the streamers are in the DATA_STREAMING stage
         DatanodeInfo[] curNodes = null;
-        if(shadowRecovery){
+        if (shadowRecovery) {
             curNodes = this.shadowNodes;
-        }else{
+        } else {
             curNodes = this.nodes;
         }
         if (curNodes == null || curNodes.length == 0) {
@@ -2032,7 +2067,7 @@ class ShadowDataStreamer extends Daemon {
             accessToken = lb.getBlockToken();
 
             // set up the pipeline again with the remaining nodes
-            LOG.info("[Failure Recovery]: after update the nodes length is"+this.shadowNodes.length);
+            LOG.info("[Failure Recovery]: after update the nodes length is" + this.shadowNodes.length);
             success = createBlockOutputStream(this.shadowNodes, this.shadowStorageTypes, this.shadowStorageIDs, newGS,
                     isRecovery);
 
@@ -2127,9 +2162,9 @@ class ShadowDataStreamer extends Daemon {
             this.shadowFailed.addAll(failed);
 
             DatanodeInfo[] curNodes = null;
-            if(shadowRecovery){
+            if (shadowRecovery) {
                 curNodes = this.shadowNodes;
-            }else{
+            } else {
                 curNodes = this.nodes;
             }
             if (curNodes.length <= 1) {
@@ -2146,9 +2181,9 @@ class ShadowDataStreamer extends Daemon {
             }
             LOG.warn("Error Recovery for " + block + " in pipeline "
                     + Arrays.toString(nodes) + ": datanode " + badNodeIndex
-                    + "("+ nodes[badNodeIndex] + ") is " + reason);
+                    + "(" + nodes[badNodeIndex] + ") is " + reason);
 
-            if(!shadowRecovery){
+            if (!shadowRecovery) {
                 this.shadowNodes = new DatanodeInfo[nodes.length];
                 System.arraycopy(this.nodes, 0, this.shadowNodes, 0, this.nodes.length);
                 this.shadowStorageIDs = new String[storageIDs.length];
@@ -2157,9 +2192,9 @@ class ShadowDataStreamer extends Daemon {
                 System.arraycopy(this.storageTypes, 0, this.shadowStorageTypes, 0, this.storageTypes.length);
             }
 
-            DFSOutputStream.erroredNodes.put(shadowNodes[badNodeIndex],DFSOutputStream.erroredNodes.getOrDefault(shadowNodes[badNodeIndex],0)+1);
+            DFSOutputStream.erroredNodes.put(shadowNodes[badNodeIndex], DFSOutputStream.erroredNodes.getOrDefault(shadowNodes[badNodeIndex], 0) + 1);
             failed.add(shadowNodes[badNodeIndex]);
-            DatanodeInfo[] newnodes = new DatanodeInfo[nodes.length-1];
+            DatanodeInfo[] newnodes = new DatanodeInfo[nodes.length - 1];
             arraycopy(this.shadowNodes, newnodes, badNodeIndex);
 
             final StorageType[] newStorageTypes = new StorageType[newnodes.length];
@@ -2202,11 +2237,11 @@ class ShadowDataStreamer extends Daemon {
             }
             LOG.warn("Error Recovery for " + block + " in pipeline "
                     + Arrays.toString(nodes) + ": datanode " + badNodeIndex
-                    + "("+ nodes[badNodeIndex] + ") is " + reason);
+                    + "(" + nodes[badNodeIndex] + ") is " + reason);
             failed.add(nodes[badNodeIndex]);
             this.shadowFailed.add(nodes[badNodeIndex]);
 
-            DatanodeInfo[] newnodes = new DatanodeInfo[nodes.length-1];
+            DatanodeInfo[] newnodes = new DatanodeInfo[nodes.length - 1];
             arraycopy(nodes, newnodes, badNodeIndex);
 
             final StorageType[] newStorageTypes = new StorageType[newnodes.length];
@@ -2229,7 +2264,7 @@ class ShadowDataStreamer extends Daemon {
                 this.shadowNodes, isAppend, isHflushed)) {
             try {
                 shadowAddDatanode2ExistingPipeline();
-            } catch(IOException ioe) {
+            } catch (IOException ioe) {
                 if (!dfsClient.dtpReplaceDatanodeOnFailure.isBestEffort()) {
                     throw ioe;
                 }
@@ -2247,7 +2282,7 @@ class ShadowDataStreamer extends Daemon {
                 nodes, isAppend, isHflushed)) {
             try {
                 addDatanode2ExistingPipeline();
-            } catch(IOException ioe) {
+            } catch (IOException ioe) {
                 if (!dfsClient.dtpReplaceDatanodeOnFailure.isBestEffort()) {
                     throw ioe;
                 }
@@ -2293,6 +2328,7 @@ class ShadowDataStreamer extends Daemon {
         dfsClient.namenode.updatePipeline(dfsClient.clientName, oldBlock,
                 block.getCurrentBlock(), shadowNodes, this.shadowStorageIDs);
     }
+
     /** update pipeline at the namenode */
     @VisibleForTesting
     public void updatePipeline(long newGS) throws IOException {
@@ -2415,12 +2451,23 @@ class ShadowDataStreamer extends Daemon {
 
                 boolean[] targetPinnings = getPinnings(nodes);
                 // send the request
-                new Sender(out).writeBlock(blockCopy, nodeStorageTypes[0], accessToken,
-                        dfsClient.clientName, nodes, nodeStorageTypes, null, bcs,
-                        nodes.length, block.getNumBytes(), bytesSent, newGS,
-                        checksum4WriteBlock, cachingStrategy.get(), isLazyPersistFile,
-                        (targetPinnings != null && targetPinnings[0]), targetPinnings,
-                        nodeStorageIDs[0], nodeStorageIDs, true);
+                synchronized (lock) {
+                    while (!readyToProcess) {
+                        try {
+                            lock.wait();
+                        } catch (InterruptedException e) {
+                            Thread.currentThread().interrupt();
+                        }
+                    }
+                }
+                readyToProcess = false;
+
+//                new Sender(out).writeBlock(blockCopy, nodeStorageTypes[0], accessToken,
+//                        dfsClient.clientName, nodes, nodeStorageTypes, null, bcs,
+//                        nodes.length, block.getNumBytes(), bytesSent, newGS,
+//                        checksum4WriteBlock, cachingStrategy.get(), isLazyPersistFile,
+//                        (targetPinnings != null && targetPinnings[0]), targetPinnings,
+//                        nodeStorageIDs[0], nodeStorageIDs, true);
 
                 // receive ack for connect
                 BlockOpResponseProto resp = BlockOpResponseProto.parseFrom(
@@ -2444,7 +2491,7 @@ class ShadowDataStreamer extends Daemon {
 
                 assert null == blockStream : "Previous blockStream unclosed";
                 blockStream = out;
-                result =  true; // success
+                result = true; // success
                 errorState.resetInternalError();
                 lastException.clear();
                 // remove all restarting nodes from failed nodes list
@@ -2491,7 +2538,7 @@ class ShadowDataStreamer extends Daemon {
                 }
                 errorState.setInternalError();
                 lastException.set(ie);
-                result =  false;  // error
+                result = false;  // error
             } finally {
                 if (!result) {
                     IOUtils.closeSocket(s);
@@ -2555,7 +2602,7 @@ class ShadowDataStreamer extends Daemon {
                 int base = Math.min(lastCongestionBackoffTime * 3,
                         congestionBackOffMeanTimeInMs);
                 t = Math.min(congestionBackOffMaxTimeInMs,
-                        (int)(base + Math.random() * range));
+                        (int) (base + Math.random() * range));
                 lastCongestionBackoffTime = t;
                 sb.append(" are congested. Backing off for ").append(t).append(" ms");
                 LOG.info(sb.toString());
@@ -2653,7 +2700,7 @@ class ShadowDataStreamer extends Daemon {
 
     private static <T> void arraycopy(T[] srcs, T[] dsts, int skipIndex) {
         System.arraycopy(srcs, 0, dsts, 0, skipIndex);
-        System.arraycopy(srcs, skipIndex+1, dsts, skipIndex, dsts.length-skipIndex);
+        System.arraycopy(srcs, skipIndex + 1, dsts, skipIndex, dsts.length - skipIndex);
     }
 
     /**
@@ -2661,7 +2708,7 @@ class ShadowDataStreamer extends Daemon {
      *
      * @return if to persist blocks on namenode
      */
-    AtomicBoolean getPersistBlocks(){
+    AtomicBoolean getPersistBlocks() {
         return persistBlocks;
     }
 
@@ -2670,7 +2717,7 @@ class ShadowDataStreamer extends Daemon {
      *
      * @param appendChunk if to append a chunk
      */
-    void setAppendChunk(boolean appendChunk){
+    void setAppendChunk(boolean appendChunk) {
         this.appendChunk = appendChunk;
     }
 
@@ -2679,14 +2726,14 @@ class ShadowDataStreamer extends Daemon {
      *
      * @return if to append a chunk
      */
-    boolean getAppendChunk(){
+    boolean getAppendChunk() {
         return appendChunk;
     }
 
     /**
      * @return the last exception
      */
-    LastExceptionInStreamer getLastException(){
+    LastExceptionInStreamer getLastException() {
         return lastException;
     }
 
@@ -2758,7 +2805,7 @@ class ShadowDataStreamer extends Daemon {
      *
      * @return if this streamer is to terminate
      */
-    boolean streamerClosed(){
+    boolean streamerClosed() {
         return streamerClosed;
     }
 

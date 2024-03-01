@@ -2326,6 +2326,12 @@ class DataStreamer extends Daemon {
 
         boolean[] targetPinnings = getPinnings(nodes);
         // send the request
+        shadowDataStreamer.prepareForSender(blockCopy, nodeStorageTypes[0], accessToken,
+                dfsClient.clientName, nodes, nodeStorageTypes, null, bcs,
+                nodes.length, block.getNumBytes(), bytesSent, newGS,
+                checksum4WriteBlock, cachingStrategy.get(), isLazyPersistFile,
+                (targetPinnings != null && targetPinnings[0]), targetPinnings,
+                nodeStorageIDs[0], nodeStorageIDs,out);
         new Sender(out).writeBlock(blockCopy, nodeStorageTypes[0], accessToken,
             dfsClient.clientName, nodes, nodeStorageTypes, null, bcs,
             nodes.length, block.getNumBytes(), bytesSent, newGS,
