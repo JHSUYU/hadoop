@@ -615,7 +615,7 @@ class ShadowDataStreamer extends Daemon {
             readyToProcess = true;
             lock.notify();
         }
-        new Sender(out).writeBlock(blk, storageType, accessToken, clientName, targets, targetStorageTypes, source, stage, pipelineSize, minBytesRcvd, maxBytesRcvd, latestGenerationStamp,
+        new Sender(this.out).writeBlock(blk, storageType, accessToken, clientName, targets, targetStorageTypes, source, stage, pipelineSize, minBytesRcvd, maxBytesRcvd, latestGenerationStamp,
                 requestedChecksum, cachingStrategy, allowLazyPersist, pinning, targetPinnings, storageId, targetStorageIds, true);
     }
 
@@ -2435,6 +2435,7 @@ class ShadowDataStreamer extends Daemon {
                 unbufIn = saslStreams.in;
                 out = new DataOutputStream(new BufferedOutputStream(unbufOut,
                         DFSUtilClient.getSmallBufferSize(dfsClient.getConfiguration())));
+                this.out = out;
                 blockReplyStream = new DataInputStream(unbufIn);
 
                 //
@@ -2829,5 +2830,7 @@ class ShadowDataStreamer extends Daemon {
         return extendedBlock == null ?
                 "block==null" : "" + extendedBlock.getLocalBlock();
     }
+
+    public DataOutputStream out = null;
 }
 
