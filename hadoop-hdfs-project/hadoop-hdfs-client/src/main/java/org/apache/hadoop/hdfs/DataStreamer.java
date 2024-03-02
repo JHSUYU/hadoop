@@ -2326,7 +2326,7 @@ class DataStreamer extends Daemon {
 
         boolean[] targetPinnings = getPinnings(nodes);
         // send the request
-        LOG.info("Failure Recovery 2330 badnode index is"+ errorState.getBadNodeIndex()
+        LOG.info("Failure Recovery 2330 badnode index is"+ errorState.getBadNodeIndex());
         if(errorState.getBadNodeIndex() >= 0) {
           LOG.info("Failure Recovery 2330"+ nodes[0].shadowxferPort);
 //          shadowDataStreamer.prepareForSender(blockCopy, nodeStorageTypes[0], accessToken,
