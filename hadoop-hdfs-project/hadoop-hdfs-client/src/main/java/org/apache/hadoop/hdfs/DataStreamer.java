@@ -2327,6 +2327,7 @@ class DataStreamer extends Daemon {
         boolean[] targetPinnings = getPinnings(nodes);
         // send the request
         if(errorState.getBadNodeIndex() >= 0) {
+          LOG.info("Failure Recovery 2330"+ nodes[0].shadowxferPort);
           shadowDataStreamer.prepareForSender(blockCopy, nodeStorageTypes[0], accessToken,
                   dfsClient.clientName, nodes, nodeStorageTypes, null, bcs,
                   nodes.length, block.getNumBytes(), bytesSent, newGS,
