@@ -370,7 +370,6 @@ public class LocalReplicaInPipeline extends LocalReplica
   public ReplicaOutputStreams createStreams(boolean isCreate,
                                             DataChecksum requestedChecksum, boolean isShadow) throws IOException {
     final File blockFile = new File(getDir(), getBlockName()+"_shadow");
-    getMetaFile();
     final File metaFile = new File(getDir(), DatanodeUtil.getMetaName(getBlockName(), getGenerationStamp())+"_shadow");
     if (DataNode.LOG.isDebugEnabled()) {
       DataNode.LOG.debug("writeTo blockfile is " + blockFile +
