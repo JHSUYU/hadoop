@@ -22,6 +22,8 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.io.RandomAccessFile;
+import java.nio.file.Files;
+import java.nio.file.StandardCopyOption;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.locks.Condition;
@@ -369,9 +371,14 @@ public class LocalReplicaInPipeline extends LocalReplica
   // ReplicaInPipeline
   public ReplicaOutputStreams createStreams(boolean isCreate,
                                             DataChecksum requestedChecksum, boolean isShadow) throws IOException {
-    final File blockFile = new File(getDir(), getBlockName()+"_shadow");
-    final File metaFile = new File(getDir(),
-            DatanodeUtil.getMetaName(getBlockName(), getGenerationStamp())+"_shadow");
+    final File originalBlockFile = getBlockFile();
+    final File originalMetaFile = getMetaFile();
+
+    File blockFile = new File(getDir(),getBlockName()+"_shadow");
+    File metaFile = new File(getDir(),DatanodeUtil.getMetaName(getBlockName(), getGenerationStamp())+"_shadow");
+
+    Files.copy(originalBlockFile.toPath(), blockFile.toPath(), StandardCopyOption.REPLACE_EXISTING);
+    Files.copy(originalMetaFile.toPath(), metaFile.toPath(), StandardCopyOption.REPLACE_EXISTING);
     if (DataNode.LOG.isDebugEnabled()) {
       DataNode.LOG.debug("writeTo blockfile is " + blockFile +
               " of size " + blockFile.length());
