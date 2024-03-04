@@ -369,14 +369,16 @@ public class LocalReplicaInPipeline extends LocalReplica
   // ReplicaInPipeline
   public ReplicaOutputStreams createStreams(boolean isCreate,
                                             DataChecksum requestedChecksum, boolean isShadow) throws IOException {
-    final File blockFile = new File(getDir(), "shadow_"+getBlockName());
-    final File metaFile = new File(getDir(), "shadow_"+DatanodeUtil.getMetaName(getBlockName(), getGenerationStamp()));
+    final File blockFile = getBlockFile();
+    final File metaFile = getMetaFile();
     if (DataNode.LOG.isDebugEnabled()) {
       DataNode.LOG.debug("writeTo blockfile is " + blockFile +
               " of size " + blockFile.length());
       DataNode.LOG.debug("writeTo metafile is " + metaFile +
               " of size " + metaFile.length());
     }
+    LOG.info("Failure Recovery: createStreams for shadow block " + blockFile + " of size " + blockFile.length());
+    LOG.info("Failure Recovery: createStreams for shadow metafile " + metaFile + " of size " + metaFile.length());
     long blockDiskSize = 0L;
     long crcDiskSize = 0L;
 
