@@ -2327,30 +2327,25 @@ class DataStreamer extends Daemon {
         boolean[] targetPinnings = getPinnings(nodes);
         // send the request
         LOG.info("Failure Recovery 2330 badnode index is"+ errorState.getBadNodeIndex());
+        DataStreamer dataStreamer = this;
         if(recoveryFlag) {
           LOG.info("Failure Recovery 2330"+ nodes[0].shadowxferPort);
-          shadowDataStreamer.prepareForSender(blockCopy, nodeStorageTypes[0], accessToken,
-                  dfsClient.clientName, nodes, nodeStorageTypes, null, bcs,
-                  nodes.length, block.getNumBytes(), bytesSent, newGS,
-                  checksum4WriteBlock, cachingStrategy.get(), isLazyPersistFile,
-                  (targetPinnings != null && targetPinnings[0]), targetPinnings,
-                  nodeStorageIDs[0], nodeStorageIDs, this);
+          Thread thread = new Thread() {
+            public void run() {
+              try {
+                shadowDataStreamer.prepareForSender(blockCopy, nodeStorageTypes[0], accessToken,
+                        dfsClient.clientName, nodes, nodeStorageTypes, null, bcs,
+                        nodes.length, block.getNumBytes(), bytesSent, newGS,
+                        checksum4WriteBlock, cachingStrategy.get(), isLazyPersistFile,
+                        (targetPinnings != null && targetPinnings[0]), targetPinnings,
+                        nodeStorageIDs[0], nodeStorageIDs, dataStreamer);
+              } catch (IOException e) {
+                e.printStackTrace();
+              }
+            }
+          };
+          thread.start();
         }
-//        Thread thread = new Thread() {
-//          public void run() {
-//            try {
-//              shadowDataStreamer.prepareForSender(blockCopy, nodeStorageTypes[0], accessToken,
-//                      dfsClient.clientName, nodes, nodeStorageTypes, null, bcs,
-//                      nodes.length, block.getNumBytes(), bytesSent, newGS,
-//                      checksum4WriteBlock, cachingStrategy.get(), isLazyPersistFile,
-//                      (targetPinnings != null && targetPinnings[0]), targetPinnings,
-//                      nodeStorageIDs[0], nodeStorageIDs);
-//            } catch (IOException e) {
-//              e.printStackTrace();
-//            }
-//          }
-//        };
-//        thread.start();
 
         new Sender(out).writeBlock(blockCopy, nodeStorageTypes[0], accessToken,
             dfsClient.clientName, nodes, nodeStorageTypes, null, bcs,
