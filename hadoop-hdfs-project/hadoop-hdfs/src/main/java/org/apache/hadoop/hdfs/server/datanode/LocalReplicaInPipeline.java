@@ -443,10 +443,10 @@ public class LocalReplicaInPipeline extends LocalReplica
       blockOut = fileIoProvider.getFileOutputStream(
               getVolume(), new RandomAccessFile(blockFile, "rw").getFD());
       crcOut = fileIoProvider.getFileOutputStream(getVolume(), metaRAF.getFD());
-      if (!isCreate) {
-        blockOut.getChannel().position(blockDiskSize);
-        crcOut.getChannel().position(crcDiskSize);
-      }
+//      if (!isCreate) {
+//        blockOut.getChannel().position(blockDiskSize);
+//        crcOut.getChannel().position(crcDiskSize);
+//      }
       return new ReplicaOutputStreams(blockOut, crcOut, checksum,
               getVolume(), fileIoProvider);
     } catch (IOException e) {
