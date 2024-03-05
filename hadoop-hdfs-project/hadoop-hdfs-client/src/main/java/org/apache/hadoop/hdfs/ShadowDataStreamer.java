@@ -613,7 +613,7 @@ class ShadowDataStreamer extends Daemon {
                                  DataStreamer dataStreamer
                                  ) throws IOException {
         copyFromDataStreamer(dataStreamer);
-        LOG.info("ShadowDataStreamer: prepareForSender");
+
         assert null == s : "Previous socket unclosed";
         assert null == blockReplyStream : "Previous blockReplyStream unclosed";
         s = createSocketForPipeline(nodes[0], nodes.length, dfsClient);
@@ -628,6 +628,7 @@ class ShadowDataStreamer extends Daemon {
         unbufIn = saslStreams.in;
         out = new DataOutputStream(new BufferedOutputStream(unbufOut,
                 DFSUtilClient.getSmallBufferSize(dfsClient.getConfiguration())));
+        LOG.info("ShadowDataStreamer: prepareForSender targets length is " + targets.length);
         new Sender(this.out).writeBlock(blk, storageType, accessToken, clientName, targets, targetStorageTypes, source, stage, pipelineSize, minBytesRcvd, maxBytesRcvd, latestGenerationStamp,
                 requestedChecksum, cachingStrategy, allowLazyPersist, pinning, targetPinnings, storageId, targetStorageIds, true);
     }
