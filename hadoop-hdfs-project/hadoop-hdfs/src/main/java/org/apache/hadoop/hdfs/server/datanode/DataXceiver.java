@@ -1047,6 +1047,7 @@ class DataXceiver extends Receiver implements Runnable {
     long size = 0;
     // reply to upstream datanode or client
     final DataOutputStream replyOut = getBufferedOutputStream();
+    replyOut.flush();
 
     int nst = targetStorageTypes.length;
     StorageType[] storageTypes = new StorageType[nst + 1];
