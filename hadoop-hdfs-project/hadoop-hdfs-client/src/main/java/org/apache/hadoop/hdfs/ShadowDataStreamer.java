@@ -513,7 +513,7 @@ class ShadowDataStreamer extends Daemon {
     /** Only for DataTransferProtocol.writeBlock(..) */
     DataChecksum checksum4WriteBlock;
     final Progressable progress;
-    protected final HdfsFileStatus stat;
+    protected HdfsFileStatus stat;
     // appending to existing partial block
     private volatile boolean appendChunk = false;
     // both dataQueue and ackQueue are protected by dataQueue lock
@@ -580,16 +580,14 @@ class ShadowDataStreamer extends Daemon {
         this.accessToken = new Token<>(dataStreamer.accessToken);
         this.checksum4WriteBlock = dataStreamer.checksum4WriteBlock;
         this.cachingStrategy = dataStreamer.getCachingStrategy();
+        this.stat = dataStreamer.stat;
 
         System.arraycopy(dataStreamer.getNodes(), 0, this.nodes, 0, dataStreamer.getNodes().length);
     }
 
     public void prepareForProcessing(DataStreamer dataStreamer) {
         copyFromDataStreamer(dataStreamer);
-        synchronized (lock) {
-            readyToProcess = true;
-            lock.notify();
-        }
+        relive();
     }
 
     public void prepareForSender(ExtendedBlock blk,
@@ -832,34 +830,48 @@ class ShadowDataStreamer extends Daemon {
 
     @Override
     public void run() {
-//        while (!streamerClosed && dfsClient.clientRunning) {
-//            // if the Responder encountered an error, shutdown Responder
-//            if (errorState.hasError()) {
-//                closeResponder();
-//            }
-//
-//            DFSPacket one;
-//            try {
-//                // process datanode IO errors if any
-//                LOG.info("Before shadowErrorHandler, the nodes are: {}", Arrays.toString(this.nodes));
-//
-//                synchronized (lock) {
-//                    while (!readyToProcess) {
-//                        try {
-//                            lock.wait();
-//                        } catch (InterruptedException e) {
-//                            Thread.currentThread().interrupt();
-//                        }
-//                    }
-//                }
-//                readyToProcess = false;
-//                boolean doSleep = processDatanodeOrExternalError();
-//                streamerClosed = true;
-//            } catch (IOException e) {
-//                e.printStackTrace();
-//
-//            }
-//        }
+        while (!streamerClosed && dfsClient.clientRunning) {
+            // if the Responder encountered an error, shutdown Responder
+            if (errorState.hasError()) {
+                closeResponder();
+            }
+
+            DFSPacket one;
+            try {
+                // process datanode IO errors if any
+                LOG.info("Before shadowErrorHandler, the nodes are: {}", Arrays.toString(this.nodes));
+
+                synchronized (lock) {
+                    while (!readyToProcess) {
+                        LOG.info("Failure Recovery is paused.");
+                        try {
+                            lock.wait();
+                        } catch (InterruptedException e) {
+                            Thread.currentThread().interrupt();
+                        }
+                        LOG.info("Failure Recovery is relived.");
+                    }
+                }
+                boolean doSleep = processDatanodeOrExternalError();
+                streamerClosed = true;
+            } catch (IOException e) {
+                e.printStackTrace();
+
+            }
+        }
+    }
+
+    public void pause(){
+        synchronized (lock) {
+            readyToProcess = false;
+        }
+    }
+
+    public void relive(){
+        synchronized (lock) {
+            readyToProcess = true;
+            lock.notify();
+        }
     }
 
     /*
@@ -2116,10 +2128,12 @@ class ShadowDataStreamer extends Daemon {
 
             //handleDatanodeReplacement();
 
+            LOG.info("ShadowDataStreamer: before newGS, accessToken, 2133");
             // get a new generation stamp and an access token
-//            final LocatedBlock lb = updateBlockForPipeline();
-//            newGS = lb.getBlock().getGenerationStamp();
-//            accessToken = lb.getBlockToken();
+            final LocatedBlock lb = updateBlockForPipeline();
+            newGS = lb.getBlock().getGenerationStamp();
+            accessToken = lb.getBlockToken();
+            LOG.info("ShadowDataStreamer: after newGS, accessToken, 2138");
 
             success = createBlockOutputStream(nodes, storageTypes, storageIDs, newGS,
                     isRecovery);
@@ -2479,13 +2493,16 @@ class ShadowDataStreamer extends Daemon {
                     readyToProcess = false;
                 }
 
+                LOG.info("ShadowDataStreamer: 2496");
 
-//                new Sender(out).writeBlock(blockCopy, nodeStorageTypes[0], accessToken,
-//                        dfsClient.clientName, nodes, nodeStorageTypes, null, bcs,
-//                        nodes.length, block.getNumBytes(), bytesSent, newGS,
-//                        checksum4WriteBlock, cachingStrategy.get(), isLazyPersistFile,
-//                        (targetPinnings != null && targetPinnings[0]), targetPinnings,
-//                        nodeStorageIDs[0], nodeStorageIDs, true);
+                new Sender(out).writeBlock(blockCopy, nodeStorageTypes[0], accessToken,
+                        dfsClient.clientName, nodes, nodeStorageTypes, null, bcs,
+                        nodes.length, block.getNumBytes(), bytesSent, newGS,
+                        checksum4WriteBlock, cachingStrategy.get(), isLazyPersistFile,
+                        (targetPinnings != null && targetPinnings[0]), targetPinnings,
+                        nodeStorageIDs[0], nodeStorageIDs, true);
+
+                LOG.info("ShadowDataStreamer: 2505");
 
                 // receive ack for connect
                 BlockOpResponseProto resp = BlockOpResponseProto.parseFrom(
