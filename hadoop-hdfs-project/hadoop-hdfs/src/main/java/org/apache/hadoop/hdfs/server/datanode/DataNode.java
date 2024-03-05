@@ -1677,7 +1677,7 @@ public class DataNode extends ReconfigurableBase
           DataNode.getStreamingAddr(getConf()), backlogLength);
       LOG.info("Failure Recovery DataNode "+ DataNode.getStreamingAddr(getConf()).toString());
       shadowTcpPeerServer = new TcpPeerServer(dnConf.socketWriteTimeout,
-          NetUtils.createSocketAddr("127.0.0.1:1"), backlogLength);
+          NetUtils.createSocketAddr("127.0.0.1:0"), backlogLength);
       LOG.info("TcpPeerServer created at " + DataNode.getStreamingAddr(getConf()).toString());
 
     }

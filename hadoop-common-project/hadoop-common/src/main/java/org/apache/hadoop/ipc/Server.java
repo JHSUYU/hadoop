@@ -698,7 +698,10 @@ public abstract class Server {
         socket.bind(address, backlog);
       } else {
         for (Integer port : range) {
-          if (socket.isBound()) break;
+          if (socket.isBound()) {
+            LOG.info("Bind the port is {}", port);
+            break;
+          }
           try {
             InetSocketAddress temp = new InetSocketAddress(address.getAddress(),
                 port);
