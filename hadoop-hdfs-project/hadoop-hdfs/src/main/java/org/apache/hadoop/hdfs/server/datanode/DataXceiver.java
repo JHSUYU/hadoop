@@ -1252,18 +1252,18 @@ class DataXceiver extends Receiver implements Runnable {
       LOG.info("ShadowWriteBlock 1252");
 
       // send connect-ack to source for clients and not transfer-RBW/Finalized
-//      if (isClient && !isTransfer) {
-//        if (mirrorInStatus != SUCCESS) {
-//          LOG.debug("Datanode {} forwarding connect ack to upstream " +
-//                  "firstbadlink is {}", targets.length, firstBadLink);
-//        }
-//        BlockOpResponseProto.newBuilder()
-//                .setStatus(mirrorInStatus)
-//                .setFirstBadLink(firstBadLink)
-//                .build()
-//                .writeDelimitedTo(replyOut);
-//        replyOut.flush();
-//      }
+      if (isClient && !isTransfer) {
+        if (mirrorInStatus != SUCCESS) {
+          LOG.debug("Datanode {} forwarding connect ack to upstream " +
+                  "firstbadlink is {}", targets.length, firstBadLink);
+        }
+        BlockOpResponseProto.newBuilder()
+                .setStatus(mirrorInStatus)
+                .setFirstBadLink(firstBadLink)
+                .build()
+                .writeDelimitedTo(replyOut);
+        replyOut.flush();
+      }
 
       LOG.info("ShadowWriteBlock 1268");
 
