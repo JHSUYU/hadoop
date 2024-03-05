@@ -1065,15 +1065,20 @@ class DataXceiver extends Receiver implements Runnable {
     } else {
       storageIds = new String[0];
     }
+    LOG.info("ShadowWriteBlock 1068");
     checkAccess(replyOut, isClient, block, blockToken, Op.WRITE_BLOCK,
             BlockTokenIdentifier.AccessMode.WRITE,
             storageTypes, storageIds);
+
+    LOG.info("ShadowWriteBlock 1073");
 
     // check single target for transfer-RBW/Finalized
     if (isTransfer && targets.length > 0) {
       throw new IOException(stage + " does not support multiple targets "
               + Arrays.asList(targets));
     }
+
+    LOG.info("ShadowWriteBlock 1081");
 
     if (LOG.isDebugEnabled()) {
       LOG.debug("opWriteBlock: stage={}, clientname={}\n  " +
@@ -1095,7 +1100,7 @@ class DataXceiver extends Receiver implements Runnable {
     if (block.getNumBytes() == 0) {
       block.setNumBytes(dataXceiverServer.estimateBlockSize);
     }
-    LOG.info("Receiving {} src: {} dest: {}",
+    LOG.info("ShadowWriteBlock Receiving {} src: {} dest: {}",
             block, remoteAddress, localAddress);
 
     DataOutputStream mirrorOut = null;  // stream to next target
@@ -1124,6 +1129,8 @@ class DataXceiver extends Receiver implements Runnable {
       }
       storageUuid = replica.getStorageUuid();
       isOnTransientStorage = replica.isOnTransientStorage();
+
+      LOG.info("ShadowWriteBlock 1133");
 
       //
       // Connect to downstream machine, if appropriate
