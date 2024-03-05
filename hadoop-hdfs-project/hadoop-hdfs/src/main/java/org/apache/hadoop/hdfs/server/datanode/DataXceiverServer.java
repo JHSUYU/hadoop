@@ -275,6 +275,8 @@ class DataXceiverServer implements Runnable {
               + maxXceiverCount);
         }
 
+        LOG.info("Accepted a new connection: {} {}" , curXceiverCount, isShadow);
+
         new Daemon(datanode.threadGroup,
             DataXceiver.create(peer, datanode, this, this.isShadow))
             .start();
