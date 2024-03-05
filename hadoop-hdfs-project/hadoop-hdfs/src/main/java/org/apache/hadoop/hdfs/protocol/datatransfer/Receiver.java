@@ -138,6 +138,49 @@ public abstract class Receiver implements DataTransferProtocol {
     }
   }
 
+  /** Process op by the corresponding method. */
+  protected final void processOp(Op op, boolean isShadow) throws IOException {
+    switch(op) {
+      case READ_BLOCK:
+        opReadBlock();
+        break;
+      case WRITE_BLOCK:
+        if(!isShadow) {
+          opWriteBlock(in);
+        } else {
+
+        }
+        opWriteBlock(in);
+        break;
+      case REPLACE_BLOCK:
+        opReplaceBlock(in);
+        break;
+      case COPY_BLOCK:
+        opCopyBlock(in);
+        break;
+      case BLOCK_CHECKSUM:
+        opBlockChecksum(in);
+        break;
+      case BLOCK_GROUP_CHECKSUM:
+        opStripedBlockChecksum(in);
+        break;
+      case TRANSFER_BLOCK:
+        opTransferBlock(in);
+        break;
+      case REQUEST_SHORT_CIRCUIT_FDS:
+        opRequestShortCircuitFds(in);
+        break;
+      case RELEASE_SHORT_CIRCUIT_FDS:
+        opReleaseShortCircuitFds(in);
+        break;
+      case REQUEST_SHORT_CIRCUIT_SHM:
+        opRequestShortCircuitShm(in);
+        break;
+      default:
+        throw new IOException("Unknown op " + op + " in data stream");
+    }
+  }
+
   static private CachingStrategy getCachingStrategy(CachingStrategyProto strategy) {
     Boolean dropBehind = strategy.hasDropBehind() ?
         strategy.getDropBehind() : null;
@@ -195,6 +238,38 @@ public abstract class Receiver implements DataTransferProtocol {
           proto.getTargetStorageIdsList().toArray(new String[0]));
     } finally {
      if (traceScope != null) traceScope.close();
+    }
+  }
+
+  /** Receive OP_WRITE_BLOCK */
+  private void shadowopWriteBlock(DataInputStream in) throws IOException {
+    final OpWriteBlockProto proto = OpWriteBlockProto.parseFrom(vintPrefixed(in));
+    final DatanodeInfo[] targets = PBHelperClient.convert(proto.getTargetsList());
+    TraceScope traceScope = continueTraceSpan(proto.getHeader(),
+            proto.getClass().getSimpleName());
+    try {
+      writeBlock(PBHelperClient.convert(proto.getHeader().getBaseHeader().getBlock()),
+              PBHelperClient.convertStorageType(proto.getStorageType()),
+              PBHelperClient.convert(proto.getHeader().getBaseHeader().getToken()),
+              proto.getHeader().getClientName(),
+              targets,
+              PBHelperClient.convertStorageTypes(proto.getTargetStorageTypesList(), targets.length),
+              PBHelperClient.convert(proto.getSource()),
+              fromProto(proto.getStage()),
+              proto.getPipelineSize(),
+              proto.getMinBytesRcvd(), proto.getMaxBytesRcvd(),
+              proto.getLatestGenerationStamp(),
+              fromProto(proto.getRequestedChecksum()),
+              (proto.hasCachingStrategy() ?
+                      getCachingStrategy(proto.getCachingStrategy()) :
+                      CachingStrategy.newDefaultStrategy()),
+              (proto.hasAllowLazyPersist() ? proto.getAllowLazyPersist() : false),
+              (proto.hasPinning() ? proto.getPinning(): false),
+              (PBHelperClient.convertBooleanList(proto.getTargetPinningsList())),
+              proto.getStorageId(),
+              proto.getTargetStorageIdsList().toArray(new String[0]));
+    } finally {
+      if (traceScope != null) traceScope.close();
     }
   }
 
