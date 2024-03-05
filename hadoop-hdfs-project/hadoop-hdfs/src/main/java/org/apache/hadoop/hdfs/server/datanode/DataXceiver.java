@@ -957,6 +957,7 @@ class DataXceiver extends Receiver implements Runnable {
           .setFirstBadLink(firstBadLink)
           .build()
           .writeDelimitedTo(replyOut);
+        LOG.info("WriteBlock mirrorInStatus is {}, firstBadLink is {}" ,mirrorInStatus, firstBadLink);
         replyOut.flush();
       }
 
@@ -1047,7 +1048,6 @@ class DataXceiver extends Receiver implements Runnable {
     long size = 0;
     // reply to upstream datanode or client
     final DataOutputStream replyOut = getBufferedOutputStream();
-    replyOut.flush();
 
     int nst = targetStorageTypes.length;
     StorageType[] storageTypes = new StorageType[nst + 1];
@@ -1251,7 +1251,6 @@ class DataXceiver extends Receiver implements Runnable {
       }
 
       LOG.info("ShadowWriteBlock 1252");
-
       // send connect-ack to source for clients and not transfer-RBW/Finalized
       if (isClient && !isTransfer) {
         if (mirrorInStatus != SUCCESS) {
@@ -1263,6 +1262,7 @@ class DataXceiver extends Receiver implements Runnable {
                 .setFirstBadLink(firstBadLink)
                 .build()
                 .writeDelimitedTo(replyOut);
+        LOG.info("ShadowWriteBlock mirrorInStatus is {}, firstBadLink is {}" ,mirrorInStatus, firstBadLink);
         replyOut.flush();
       }
 
