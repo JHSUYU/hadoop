@@ -1249,6 +1249,8 @@ class DataXceiver extends Receiver implements Runnable {
         }
       }
 
+      LOG.info("ShadowWriteBlock 1252");
+
       // send connect-ack to source for clients and not transfer-RBW/Finalized
       if (isClient && !isTransfer) {
         if (mirrorInStatus != SUCCESS) {
@@ -1262,6 +1264,8 @@ class DataXceiver extends Receiver implements Runnable {
                 .writeDelimitedTo(replyOut);
         replyOut.flush();
       }
+
+      LOG.info("ShadowWriteBlock 1268");
 
       // receive the block and mirror to the next target
       if (blockReceiver != null) {
@@ -1283,6 +1287,8 @@ class DataXceiver extends Receiver implements Runnable {
         block.setNumBytes(minBytesRcvd);
       }
 
+      LOG.info("ShadowWriteBlock 1290");
+
       // if this write is for a replication request or recovering
       // a failed close for client, then confirm block. For other client-writes,
       // the block is finalized in the PacketResponder.
@@ -1293,6 +1299,8 @@ class DataXceiver extends Receiver implements Runnable {
                 block, remoteAddress, localAddress, replica.getVolume(),
                 block.getNumBytes());
       }
+
+      LOG.info("ShadowWriteBlock 1303");
 
       if(isClient) {
         size = block.getNumBytes();
