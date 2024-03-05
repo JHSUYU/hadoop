@@ -175,10 +175,12 @@ class DataXceiver extends Receiver implements Runnable {
     this.ioFileBufferSize = DFSUtilClient.getIoFileBufferSize(datanode.getConf());
     this.smallBufferSize = DFSUtilClient.getSmallBufferSize(datanode.getConf());
     remoteAddress = peer.getRemoteAddressString();
+    LOG.info("Remote address is: {}, {}", remoteAddress, isShadow);
     final int colonIdx = remoteAddress.indexOf(':');
     remoteAddressWithoutPort =
             (colonIdx < 0) ? remoteAddress : remoteAddress.substring(0, colonIdx);
     localAddress = peer.getLocalAddressString();
+    LOG.info("Local address is: {}, {}", localAddress, isShadow);
     this.isShadow = isShadow;
 
 
