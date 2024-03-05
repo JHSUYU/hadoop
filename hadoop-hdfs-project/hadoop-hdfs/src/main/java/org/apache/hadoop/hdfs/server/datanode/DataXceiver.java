@@ -1131,7 +1131,7 @@ class DataXceiver extends Receiver implements Runnable {
       if (targets.length > 0) {
         InetSocketAddress mirrorTarget = null;
         // Connect to backup machine
-        mirrorNode = targets[0].getXferAddr(connectToDnViaHostname);
+        mirrorNode = targets[0].getShadowXferAddr();
         LOG.debug("Connecting to datanode {}", mirrorNode);
         mirrorTarget = NetUtils.createSocketAddr(mirrorNode);
         mirrorSock = datanode.newSocket();

@@ -2330,21 +2330,12 @@ class DataStreamer extends Daemon {
         DataStreamer dataStreamer = this;
         if(recoveryFlag) {
           LOG.info("Failure Recovery 2330"+ nodes[0].shadowxferPort);
-          Thread thread = new Thread() {
-            public void run() {
-              try {
-                shadowDataStreamer.prepareForSender(blockCopy, nodeStorageTypes[0], accessToken,
-                        dfsClient.clientName, nodes, nodeStorageTypes, null, bcs,
-                        nodes.length, block.getNumBytes(), bytesSent, newGS,
-                        checksum4WriteBlock, cachingStrategy.get(), isLazyPersistFile,
-                        (targetPinnings != null && targetPinnings[0]), targetPinnings,
-                        nodeStorageIDs[0], nodeStorageIDs, dataStreamer);
-              } catch (IOException e) {
-                e.printStackTrace();
-              }
-            }
-          };
-          thread.start();
+          shadowDataStreamer.prepareForSender(blockCopy, nodeStorageTypes[0], accessToken,
+                  dfsClient.clientName, nodes, nodeStorageTypes, null, bcs,
+                  nodes.length, block.getNumBytes(), bytesSent, newGS,
+                  checksum4WriteBlock, cachingStrategy.get(), isLazyPersistFile,
+                  (targetPinnings != null && targetPinnings[0]), targetPinnings,
+                  nodeStorageIDs[0], nodeStorageIDs, dataStreamer);
         }
 
         new Sender(out).writeBlock(blockCopy, nodeStorageTypes[0], accessToken,
