@@ -1264,11 +1264,7 @@ class DataXceiver extends Receiver implements Runnable {
                 .writeDelimitedTo(replyOut);
         LOG.info("ShadowWriteBlock mirrorInStatus is {}, firstBadLink is {}" ,mirrorInStatus, firstBadLink);
         // catch replyOut.flush() exception and flush again
-        try {
-          replyOut.flush();
-        } catch (IOException e) {
-          LOG.warn("Exception while flush replyOut", e);
-        }
+        replyOut.flush();
       }
 
       LOG.info("ShadowWriteBlock 1268");
