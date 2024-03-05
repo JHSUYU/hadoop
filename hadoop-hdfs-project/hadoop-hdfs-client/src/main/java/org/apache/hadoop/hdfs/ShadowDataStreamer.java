@@ -828,8 +828,7 @@ class ShadowDataStreamer extends Daemon {
         return this.nodes.length;
     }
 
-    @Override
-    public void run() {
+    public void shadowRun() {
         while (!streamerClosed && dfsClient.clientRunning) {
             // if the Responder encountered an error, shutdown Responder
             if (errorState.hasError()) {
@@ -861,25 +860,8 @@ class ShadowDataStreamer extends Daemon {
         }
     }
 
-    public void pause(){
-        synchronized (lock) {
-            readyToProcess = false;
-        }
-    }
-
-    public void relive(){
-        synchronized (lock) {
-            readyToProcess = true;
-            lock.notify();
-        }
-    }
-
-    /*
-     * streamer thread is the only thread that opens streams to datanode,
-     * and closes them. Any error recovery is also done by this thread.
-     */
-
-    public void shadowRun() {
+    @Override
+    public void run() {
         TraceScope scope = null;
         while (!streamerClosed && dfsClient.clientRunning) {
             // if the Responder encountered an error, shutdown Responder
@@ -894,17 +876,16 @@ class ShadowDataStreamer extends Daemon {
 
                 synchronized (lock) {
                     while (!readyToProcess) {
+                        LOG.info("Failure Recovery is paused.");
                         try {
                             lock.wait();
                         } catch (InterruptedException e) {
                             Thread.currentThread().interrupt();
                         }
+                        LOG.info("Failure Recovery is relived.");
                     }
                 }
-                readyToProcess = false;
                 boolean doSleep = processDatanodeOrExternalError();
-
-                LOG.info("ShadowDataStreamer: Finish processDatanodeOrExternalError, doSleep: {}", doSleep);
 
                 synchronized (dataQueue) {
                     // wait for a packet to be sent.
@@ -915,7 +896,7 @@ class ShadowDataStreamer extends Daemon {
                         }
                         try {
                             dataQueue.wait(timeout);
-                        } catch (InterruptedException e) {
+                        } catch (InterruptedException  e) {
                             LOG.debug("Thread interrupted", e);
                         }
                         doSleep = false;
@@ -936,8 +917,6 @@ class ShadowDataStreamer extends Daemon {
                     }
                 }
 
-
-                LOG.info("ShadowDataStreamer: Finish synchorized dataQueue, doSleep: {}", doSleep);
                 // The DataStreamer has to release the dataQueue before sleeping,
                 // otherwise it will cause the ResponseProcessor to accept the ACK delay.
                 try {
@@ -953,7 +932,6 @@ class ShadowDataStreamer extends Daemon {
                     LOG.debug("Allocating new block: {}", this);
                     setPipeline(nextBlockOutputStream());
                     initDataStreaming();
-                    LOG.info("ShadowDataStreamer: Finish initDataStreaming, stage: {}", stage.toString());
                 } else if (stage == BlockConstructionStage.PIPELINE_SETUP_APPEND) {
                     LOG.debug("Append to block {}", block);
                     setupPipelineForAppendOrRecovery();
@@ -961,7 +939,6 @@ class ShadowDataStreamer extends Daemon {
                         continue;
                     }
                     initDataStreaming();
-                    LOG.info("ShadowDataStreamer: Finish initDataStreaming, stage: {}", stage.toString());
                 }
 
                 long lastByteOffsetInBlock = one.getLastByteOffsetBlock();
@@ -973,12 +950,12 @@ class ShadowDataStreamer extends Daemon {
                 if (one.isLastPacketInBlock()) {
                     // wait for all data packets have been successfully acked
                     waitForAllAcks();
-                    if (shouldStop()) {
+                    if(shouldStop()) {
                         continue;
                     }
                     stage = BlockConstructionStage.PIPELINE_CLOSE;
                 }
-                LOG.info("ShadowDataStreamer: Finish one.isLastPacketInBlock, stage: {}", stage.toString());
+
                 // send the packet
                 SpanContext spanContext = null;
                 synchronized (dataQueue) {
@@ -997,14 +974,11 @@ class ShadowDataStreamer extends Daemon {
                     }
                 }
 
-                LOG.info("ShadowDataStreamer: Finish move packet from dataQueue to ackQueue");
-
                 LOG.debug("{} sending {}", this, one);
 
                 // write out data to remote datanode
                 try (TraceScope ignored = dfsClient.getTracer().
                         newScope("DataStreamer#writeTo", spanContext)) {
-                    LOG.info("ShadowDataStreamer: send packet");
                     sendPacket(one);
                 } catch (IOException e) {
                     // HDFS-3398 treat primary DN is down since client is unable to
@@ -1013,11 +987,9 @@ class ShadowDataStreamer extends Daemon {
                     // effect. Pipeline recovery can handle only one node error at a
                     // time. If the primary node fails again during the recovery, it
                     // will be taken out then.
-                    LOG.info("Error Recovery for writing to {} failed. ", nodes[0]);
                     errorState.markFirstNodeIfNotMarked();
                     throw e;
                 }
-                LOG.info("ShadowDataStreamer: send Packet stage: {}", stage.toString());
 
                 // update bytesSent
                 long tmpBytesSent = one.getLastByteOffsetBlock();
@@ -1051,9 +1023,7 @@ class ShadowDataStreamer extends Daemon {
 
                     endBlock();
                 }
-                if (progress != null) {
-                    progress.progress();
-                }
+                if (progress != null) { progress.progress(); }
 
                 // This is used by unit test to trigger race conditions.
                 if (artificialSlowdown != 0 && dfsClient.clientRunning) {
@@ -1084,9 +1054,26 @@ class ShadowDataStreamer extends Daemon {
                 }
             }
         }
-        LOG.info("ShadowDataStreamer is closing: " + this);
         closeInternal();
     }
+
+    public void pause(){
+        synchronized (lock) {
+            readyToProcess = false;
+        }
+    }
+
+    public void relive(){
+        synchronized (lock) {
+            readyToProcess = true;
+            lock.notify();
+        }
+    }
+
+    /*
+     * streamer thread is the only thread that opens streams to datanode,
+     * and closes them. Any error recovery is also done by this thread.
+     */
 
     private void waitForAllAcks() throws IOException {
         // wait until all data packets have been successfully acked
