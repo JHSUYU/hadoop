@@ -1693,8 +1693,8 @@ public class DataNode extends ReconfigurableBase
     this.shadowThreadGroup = new ThreadGroup("shadowDataXceiver");
     xserver = new DataXceiverServer(tcpPeerServer, getConf(), this);
     shadowXserver = new DataXceiverServer(shadowTcpPeerServer, getConf(), this, true);
-    this.dataXceiverServer = new Daemon(threadGroup, shadowXserver);
-    this.shadowDataXceiverServer = new Daemon(threadGroup, xserver);
+    this.dataXceiverServer = new Daemon(threadGroup, xserver);
+    this.shadowDataXceiverServer = new Daemon(threadGroup, shadowXserver);
     this.threadGroup.setDaemon(true); // auto destroy when empty
     this.shadowThreadGroup.setDaemon(true);
 

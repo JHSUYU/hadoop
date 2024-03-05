@@ -158,7 +158,7 @@ class DataXceiver extends Receiver implements Runnable {
         (colonIdx < 0) ? remoteAddress : remoteAddress.substring(0, colonIdx);
     localAddress = peer.getLocalAddressString();
 
-    LOG.debug("Number of active connections is: {}",
+    LOG.info("Number of active connections is: {}",
         datanode.getXceiverCount());
   }
 
