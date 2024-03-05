@@ -959,6 +959,7 @@ class DataXceiver extends Receiver implements Runnable {
           .writeDelimitedTo(replyOut);
         LOG.info("WriteBlock mirrorInStatus is {}, firstBadLink is {}" ,mirrorInStatus, firstBadLink);
         replyOut.flush();
+        LOG.info("DataStreamer: flush replyOut successfully");
       }
 
       // receive the block and mirror to the next target
