@@ -1263,7 +1263,12 @@ class DataXceiver extends Receiver implements Runnable {
                 .build()
                 .writeDelimitedTo(replyOut);
         LOG.info("ShadowWriteBlock mirrorInStatus is {}, firstBadLink is {}" ,mirrorInStatus, firstBadLink);
-        replyOut.flush();
+        // catch replyOut.flush() exception and flush again
+        try {
+          replyOut.flush();
+        } catch (IOException e) {
+          LOG.warn("Exception while flush replyOut", e);
+        }
       }
 
       LOG.info("ShadowWriteBlock 1268");
