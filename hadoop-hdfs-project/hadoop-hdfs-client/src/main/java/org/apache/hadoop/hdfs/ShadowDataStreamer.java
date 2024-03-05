@@ -886,6 +886,7 @@ class ShadowDataStreamer extends Daemon {
                     }
                 }
                 boolean doSleep = processDatanodeOrExternalError();
+                streamerClosed = true;
 
 //                synchronized (dataQueue) {
 //                    // wait for a packet to be sent.
