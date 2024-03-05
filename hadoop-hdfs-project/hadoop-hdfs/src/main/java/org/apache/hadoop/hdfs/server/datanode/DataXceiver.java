@@ -1037,7 +1037,7 @@ class DataXceiver extends Receiver implements Runnable {
                          final String storageId,
                          final String[] targetStorageIds) throws IOException {
     previousOpClientName = clientname;
-    updateCurrentThreadName("Receiving block " + block);
+    updateCurrentThreadName("Shadow Receiving block " + block);
     final boolean isDatanode = clientname.length() == 0;
     final boolean isClient = !isDatanode;
     final boolean isTransfer = stage == BlockConstructionStage.TRANSFER_RBW
