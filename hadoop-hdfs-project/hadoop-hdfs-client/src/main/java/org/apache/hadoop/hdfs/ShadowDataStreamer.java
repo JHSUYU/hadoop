@@ -763,11 +763,6 @@ class ShadowDataStreamer extends Daemon {
         this.storageTypes = storageTypes;
         this.storageIDs = storageIDs;
 
-        if (shadowRecovery) {
-            this.shadowNodes = nodes;
-            this.shadowStorageTypes = storageTypes;
-            this.shadowStorageIDs = storageIDs;
-        }
     }
 
     /**
@@ -2126,8 +2121,8 @@ class ShadowDataStreamer extends Daemon {
 //            accessToken = lb.getBlockToken();
             LOG.info("ShadowDataStreamer: after newGS, accessToken, 2138");
 
-            success = createBlockOutputStream(nodes, storageTypes, storageIDs, newGS,
-                    isRecovery);
+//            success = createBlockOutputStream(nodes, storageTypes, storageIDs, newGS,
+//                    isRecovery);
 
             failPacket4Testing();
 
@@ -2260,7 +2255,6 @@ class ShadowDataStreamer extends Daemon {
                     + Arrays.toString(nodes) + ": datanode " + badNodeIndex
                     + "(" + nodes[badNodeIndex] + ") is " + reason);
             failed.add(nodes[badNodeIndex]);
-            this.shadowFailed.add(nodes[badNodeIndex]);
 
             DatanodeInfo[] newnodes = new DatanodeInfo[nodes.length - 1];
             arraycopy(nodes, newnodes, badNodeIndex);
