@@ -29,6 +29,7 @@ import java.io.OutputStream;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.Socket;
+import java.net.SocketAddress;
 import java.nio.channels.ClosedChannelException;
 import java.util.*;
 import java.util.concurrent.TimeUnit;
@@ -245,7 +246,9 @@ class DataStreamer extends Daemon {
     final InetSocketAddress isa = NetUtils.createSocketAddr(dnAddr);
     final Socket sock = client.socketFactory.createSocket();
     final int timeout = client.getDatanodeReadTimeout(length);
-    NetUtils.connect(sock, isa, client.getRandomLocalInterfaceAddr(),
+    SocketAddress addr= client.getRandomLocalInterfaceAddr();
+    LOG.info("Using local interface {}", addr);
+    NetUtils.connect(sock, isa, addr,
         conf.getSocketTimeout());
     sock.setTcpNoDelay(conf.getDataTransferTcpNoDelay());
     sock.setSoTimeout(timeout);
