@@ -2134,10 +2134,10 @@ class ShadowDataStreamer extends Daemon {
             errorState.checkRestartingNodeDeadline(nodes);
         } // while
 
-        if (success) {
-            LOG.info("ShadowDataStreamer: create pipeline success");
-            updatePipeline(newGS);
-        }
+//        if (success) {
+//            LOG.info("ShadowDataStreamer: create pipeline success");
+//            updatePipeline(newGS);
+//        }
     }
 
     /**
