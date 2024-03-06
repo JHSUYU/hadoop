@@ -42,12 +42,7 @@ import org.apache.hadoop.fs.StorageType;
 import org.apache.hadoop.hdfs.client.HdfsClientConfigKeys;
 import org.apache.hadoop.hdfs.client.HdfsClientConfigKeys.BlockWrite;
 import org.apache.hadoop.hdfs.client.impl.DfsClientConf;
-import org.apache.hadoop.hdfs.protocol.DatanodeInfo;
-import org.apache.hadoop.hdfs.protocol.ExtendedBlock;
-import org.apache.hadoop.hdfs.protocol.HdfsConstants;
-import org.apache.hadoop.hdfs.protocol.HdfsFileStatus;
-import org.apache.hadoop.hdfs.protocol.LocatedBlock;
-import org.apache.hadoop.hdfs.protocol.QuotaExceededException;
+import org.apache.hadoop.hdfs.protocol.*;
 import org.apache.hadoop.hdfs.protocol.datatransfer.BlockConstructionStage;
 import org.apache.hadoop.hdfs.protocol.datatransfer.DataTransferProtoUtil;
 import org.apache.hadoop.hdfs.protocol.datatransfer.DataTransferProtocol;
@@ -557,7 +552,7 @@ class ShadowDataStreamer extends Daemon {
 //
 //  }
 
-    public void copyFromDataStreamer(DataStreamer dataStreamer) {
+    public void copyFromDataStreamer(DataStreamer dataStreamer){
         LOG.info("Failure Recovery: prepare For Processing");
         this.errorState = new ErrorState(0);
         this.errorState.setBadNodeIndex(dataStreamer.getErrorState().getBadNodeIndex());
@@ -580,6 +575,7 @@ class ShadowDataStreamer extends Daemon {
         System.arraycopy(dataStreamer.getStorageIDs(), 0, this.storageIDs, 0, dataStreamer.getStorageIDs().length);
         this.streamerClosed = dataStreamer.getStreamerClosed();
         this.dfsClient = dataStreamer.getDfsClient();
+        this.dfsClient.socketFactory = NetUtils.getSocketFactory(this.dfsClient.getConfiguration(), ClientProtocol.class);
         this.accessToken = new Token<>(dataStreamer.accessToken);
         this.checksum4WriteBlock = dataStreamer.checksum4WriteBlock;
         this.cachingStrategy = dataStreamer.getCachingStrategy();

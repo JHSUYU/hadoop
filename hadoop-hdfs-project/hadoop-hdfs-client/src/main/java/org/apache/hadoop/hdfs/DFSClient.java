@@ -229,7 +229,7 @@ public class DFSClient implements java.io.Closeable, RemotePeerFactory,
   private volatile FsServerDefaults serverDefaults;
   private volatile long serverDefaultsLastUpdate;
   final String clientName;
-  final SocketFactory socketFactory;
+  SocketFactory socketFactory;
   final ReplaceDatanodeOnFailure dtpReplaceDatanodeOnFailure;
   final short dtpReplaceDatanodeOnFailureReplication;
   private final FileSystem.Statistics stats;
