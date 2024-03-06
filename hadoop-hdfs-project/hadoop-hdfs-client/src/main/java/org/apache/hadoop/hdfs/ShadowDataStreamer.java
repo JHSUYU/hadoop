@@ -246,7 +246,7 @@ class ShadowDataStreamer extends Daemon {
         final Socket sock = client.socketFactory.createSocket();
         final int timeout = client.getDatanodeReadTimeout(length);
         SocketAddress addr= client.getRandomLocalInterfaceAddr();
-        LOG.info("Shadow Using local interface {}", addr);
+        LOG.info("Shadow Using local interface {}", addr.toString());
         NetUtils.connect(sock, isa, addr,
                 conf.getSocketTimeout());
         sock.setTcpNoDelay(conf.getDataTransferTcpNoDelay());
@@ -1691,36 +1691,36 @@ class ShadowDataStreamer extends Daemon {
         LOG.info("SDS: 1601");
         setupPipelineForAppendOrRecovery();
 
-//        if (!streamerClosed && dfsClient.clientRunning) {
-//            if (stage == BlockConstructionStage.PIPELINE_CLOSE) {
-//
-//                // If we had an error while closing the pipeline, we go through a fast-path
-//                // where the BlockReceiver does not run. Instead, the DataNode just finalizes
-//                // the block immediately during the 'connect ack' process. So, we want to pull
-//                // the end-of-block packet from the dataQueue, since we don't actually have
-//                // a true pipeline to send it over.
-//                //
-//                // We also need to set lastAckedSeqno to the end-of-block Packet's seqno, so that
-//                // a client waiting on close() will be aware that the flush finished.
-//                synchronized (dataQueue) {
-//                    DFSPacket endOfBlockPacket = dataQueue.remove();  // remove the end of block packet
-//                    // Close any trace span associated with this Packet
-//                    Span span = endOfBlockPacket.getSpan();
-//                    if (span != null) {
-//                        span.finish();
-//                        endOfBlockPacket.setSpan(null);
-//                    }
-//                    assert endOfBlockPacket.isLastPacketInBlock();
-//                    assert lastAckedSeqno == endOfBlockPacket.getSeqno() - 1;
-//                    lastAckedSeqno = endOfBlockPacket.getSeqno();
-//                    pipelineRecoveryCount = 0;
-//                    dataQueue.notifyAll();
-//                }
-//                endBlock();
-//            } else {
-//                initDataStreaming();
-//            }
-//        }
+        if (!streamerClosed && dfsClient.clientRunning) {
+            if (stage == BlockConstructionStage.PIPELINE_CLOSE) {
+
+                // If we had an error while closing the pipeline, we go through a fast-path
+                // where the BlockReceiver does not run. Instead, the DataNode just finalizes
+                // the block immediately during the 'connect ack' process. So, we want to pull
+                // the end-of-block packet from the dataQueue, since we don't actually have
+                // a true pipeline to send it over.
+                //
+                // We also need to set lastAckedSeqno to the end-of-block Packet's seqno, so that
+                // a client waiting on close() will be aware that the flush finished.
+                synchronized (dataQueue) {
+                    DFSPacket endOfBlockPacket = dataQueue.remove();  // remove the end of block packet
+                    // Close any trace span associated with this Packet
+                    Span span = endOfBlockPacket.getSpan();
+                    if (span != null) {
+                        span.finish();
+                        endOfBlockPacket.setSpan(null);
+                    }
+                    assert endOfBlockPacket.isLastPacketInBlock();
+                    assert lastAckedSeqno == endOfBlockPacket.getSeqno() - 1;
+                    lastAckedSeqno = endOfBlockPacket.getSeqno();
+                    pipelineRecoveryCount = 0;
+                    dataQueue.notifyAll();
+                }
+                endBlock();
+            } else {
+                initDataStreaming();
+            }
+        }
 
         return false;
     }
@@ -2471,34 +2471,34 @@ class ShadowDataStreamer extends Daemon {
 
                 LOG.info("ShadowDataStreamer: 2496");
 
-//                new Sender(out).writeBlock(blockCopy, nodeStorageTypes[0], accessToken,
-//                        dfsClient.clientName, nodes, nodeStorageTypes, null, bcs,
-//                        nodes.length, block.getNumBytes(), bytesSent, newGS,
-//                        checksum4WriteBlock, cachingStrategy.get(), isLazyPersistFile,
-//                        (targetPinnings != null && targetPinnings[0]), targetPinnings,
-//                        nodeStorageIDs[0], nodeStorageIDs, true);
-//
-//                LOG.info("ShadowDataStreamer: 2505");
-//
-//                // receive ack for connect
-//                BlockOpResponseProto resp = BlockOpResponseProto.parseFrom(
-//                        PBHelperClient.vintPrefixed(blockReplyStream));
-//                Status pipelineStatus = resp.getStatus();
-//                firstBadLink = resp.getFirstBadLink();
-//
-//                // Got an restart OOB ack.
-//                // If a node is already restarting, this status is not likely from
-//                // the same node. If it is from a different node, it is not
-//                // from the local datanode. Thus it is safe to treat this as a
-//                // regular node error.
-//                if (PipelineAck.isRestartOOBStatus(pipelineStatus) &&
-//                        !errorState.isRestartingNode()) {
-//                    checkRestart = true;
-//                    throw new IOException("A datanode is restarting.");
-//                }
-//
-//                String logInfo = "ack with firstBadLink as " + firstBadLink;
-//                DataTransferProtoUtil.checkBlockOpStatus(resp, logInfo);
+                new Sender(out).writeBlock(blockCopy, nodeStorageTypes[0], accessToken,
+                        dfsClient.clientName, nodes, nodeStorageTypes, null, bcs,
+                        nodes.length, block.getNumBytes(), bytesSent, newGS,
+                        checksum4WriteBlock, cachingStrategy.get(), isLazyPersistFile,
+                        (targetPinnings != null && targetPinnings[0]), targetPinnings,
+                        nodeStorageIDs[0], nodeStorageIDs, true);
+
+                LOG.info("ShadowDataStreamer: 2505");
+
+                // receive ack for connect
+                BlockOpResponseProto resp = BlockOpResponseProto.parseFrom(
+                        PBHelperClient.vintPrefixed(blockReplyStream));
+                Status pipelineStatus = resp.getStatus();
+                firstBadLink = resp.getFirstBadLink();
+
+                // Got an restart OOB ack.
+                // If a node is already restarting, this status is not likely from
+                // the same node. If it is from a different node, it is not
+                // from the local datanode. Thus it is safe to treat this as a
+                // regular node error.
+                if (PipelineAck.isRestartOOBStatus(pipelineStatus) &&
+                        !errorState.isRestartingNode()) {
+                    checkRestart = true;
+                    throw new IOException("A datanode is restarting.");
+                }
+
+                String logInfo = "ack with firstBadLink as " + firstBadLink;
+                DataTransferProtoUtil.checkBlockOpStatus(resp, logInfo);
 
                 assert null == blockStream : "Previous blockStream unclosed";
                 blockStream = out;
