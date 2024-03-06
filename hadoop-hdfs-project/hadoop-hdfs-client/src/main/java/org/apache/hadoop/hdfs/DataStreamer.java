@@ -2099,7 +2099,7 @@ class DataStreamer extends Daemon {
   boolean handleBadDatanode() {
     final int badNodeIndex = errorState.getBadNodeIndex();
     if (badNodeIndex >= 0) {
-      LOG.info("Failure Recovery: prepare For Processing 0");
+      LOG.info("DataStreamer Failure Recovery: prepare For Processing 0");
       try {
         Thread.sleep(2000);
       } catch (InterruptedException e) {

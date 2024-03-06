@@ -483,7 +483,7 @@ class ShadowDataStreamer extends Daemon {
     private volatile StorageType[] shadowStorageTypes = null;
     private volatile String[] storageIDs = null;
     private volatile String[] shadowStorageIDs = null;
-    private final ErrorState errorState;
+    private ErrorState errorState;
 
     private volatile BlockConstructionStage stage;  // block construction stage
     protected long bytesSent = 0; // number of bytes that've been sent
@@ -559,6 +559,7 @@ class ShadowDataStreamer extends Daemon {
 
     public void copyFromDataStreamer(DataStreamer dataStreamer) {
         LOG.info("Failure Recovery: prepare For Processing");
+        this.errorState = new ErrorState(0);
         this.errorState.setBadNodeIndex(dataStreamer.getErrorState().getBadNodeIndex());
         this.errorState.setInternalError();
         LOG.info("ShadowDataStreamer: ErrorState: " + errorState.getBadNodeIndex());
@@ -703,6 +704,13 @@ class ShadowDataStreamer extends Daemon {
         this(stat, block, dfsClient, src, progress, checksum, cachingStrategy,
                 byteArrayManage, false, favoredNodes, flags);
         stage = BlockConstructionStage.PIPELINE_SETUP_CREATE;
+    }
+
+    /**
+     * construction with tracing info
+     */
+    ShadowDataStreamer() {
+
     }
 
     /**
