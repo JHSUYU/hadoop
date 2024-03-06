@@ -706,12 +706,6 @@ class ShadowDataStreamer extends Daemon {
         stage = BlockConstructionStage.PIPELINE_SETUP_CREATE;
     }
 
-    /**
-     * construction with tracing info
-     */
-    ShadowDataStreamer() {
-
-    }
 
     /**
      * Construct a data streamer for appending to the last partial block
