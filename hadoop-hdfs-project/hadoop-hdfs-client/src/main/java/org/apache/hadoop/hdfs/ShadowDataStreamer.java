@@ -2121,8 +2121,8 @@ class ShadowDataStreamer extends Daemon {
 //            accessToken = lb.getBlockToken();
             LOG.info("ShadowDataStreamer: after newGS, accessToken, 2138");
 
-//            success = createBlockOutputStream(nodes, storageTypes, storageIDs, newGS,
-//                    isRecovery);
+            success = createBlockOutputStream(nodes, storageTypes, storageIDs, newGS,
+                    isRecovery);
 
             failPacket4Testing();
 
@@ -2507,6 +2507,7 @@ class ShadowDataStreamer extends Daemon {
                 // remove all restarting nodes from failed nodes list
                 failed.removeAll(restartingNodes);
                 restartingNodes.clear();
+                LOG.info("ShadowDataStreamer: 2510, result is {}", result);
             } catch (IOException ie) {
                 LOG.info("ShadowDataStreamer: Exception in createBlockOutputStream " + this, ie);
                 if (!errorState.isRestartingNode()) {

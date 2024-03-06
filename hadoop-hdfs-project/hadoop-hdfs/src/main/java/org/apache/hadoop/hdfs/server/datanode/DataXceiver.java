@@ -308,6 +308,7 @@ class DataXceiver extends Receiver implements Runnable {
           op = readOp();
           LOG.info("Failure Recovery isShadow is aftereadOp" +this.isShadow);
         } catch (InterruptedIOException ignored) {
+          LOG.info("Failure Recovery DataXceiver interrupted");
           // Time out while we wait for client rpc
           break;
         } catch (EOFException | ClosedChannelException e) {
