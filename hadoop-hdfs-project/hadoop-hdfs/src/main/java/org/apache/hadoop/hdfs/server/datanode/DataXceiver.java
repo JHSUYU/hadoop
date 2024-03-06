@@ -298,6 +298,7 @@ class DataXceiver extends Receiver implements Runnable {
         updateCurrentThreadName("Waiting for operation #" + (opsProcessed + 1));
 
         try {
+          LOG.info("dnConf.socketKeepaliveTimeout is " + dnConf.socketKeepaliveTimeout + " dnConf.socketTimeout is " + dnConf.socketTimeout + " opsProcessed is " + opsProcessed + " isShadow is " + this.isShadow);
           if (opsProcessed != 0) {
             assert dnConf.socketKeepaliveTimeout > 0;
             peer.setReadTimeout(dnConf.socketKeepaliveTimeout);
@@ -314,6 +315,8 @@ class DataXceiver extends Receiver implements Runnable {
         } catch (EOFException | ClosedChannelException e) {
           // Since we optimistically expect the next op, it's quite normal to
           // get EOF here.
+          LOG.info("The exception is " + e.toString());
+          LOG.info("Failure Recovery DataXceiver ClosedChannelException");
           LOG.debug("Cached {} closing after {} ops.  " +
               "This message is usually benign.", peer, opsProcessed);
           break;
