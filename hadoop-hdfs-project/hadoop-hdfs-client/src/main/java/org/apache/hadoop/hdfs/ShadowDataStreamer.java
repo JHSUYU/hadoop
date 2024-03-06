@@ -2121,9 +2121,9 @@ class ShadowDataStreamer extends Daemon {
 
             LOG.info("ShadowDataStreamer: before newGS, accessToken, 2133");
             // get a new generation stamp and an access token
-            final LocatedBlock lb = updateBlockForPipeline();
-            newGS = lb.getBlock().getGenerationStamp();
-            accessToken = lb.getBlockToken();
+//            final LocatedBlock lb = updateBlockForPipeline();
+//            newGS = lb.getBlock().getGenerationStamp();
+//            accessToken = lb.getBlockToken();
             LOG.info("ShadowDataStreamer: after newGS, accessToken, 2138");
 
             success = createBlockOutputStream(nodes, storageTypes, storageIDs, newGS,
