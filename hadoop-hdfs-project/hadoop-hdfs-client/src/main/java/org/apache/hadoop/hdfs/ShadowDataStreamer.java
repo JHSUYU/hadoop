@@ -258,6 +258,7 @@ class ShadowDataStreamer extends Daemon {
             sock.setSendBufferSize(conf.getSocketSendBufferSize());
         }
         LOG.info("Send buf size {}", sock.getSendBufferSize());
+        LOG.info("DataStreamer local address is {}",client.getRandomLocalInterfaceAddr().toString());
         return sock;
     }
 
