@@ -246,7 +246,6 @@ class ShadowDataStreamer extends Daemon {
         final Socket sock = client.socketFactory.createSocket();
         final int timeout = client.getDatanodeReadTimeout(length);
         SocketAddress addr= client.getRandomLocalInterfaceAddr();
-        LOG.info("Shadow Using local interface {}", addr.toString());
         NetUtils.connect(sock, isa, addr,
                 conf.getSocketTimeout());
         sock.setTcpNoDelay(conf.getDataTransferTcpNoDelay());
