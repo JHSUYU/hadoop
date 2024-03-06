@@ -254,7 +254,8 @@ class DataStreamer extends Daemon {
       sock.setSendBufferSize(conf.getSocketSendBufferSize());
     }
     LOG.info("Send buf size {}", sock.getSendBufferSize());
-    //LOG.info("DataStreamer local address is {}",client.getRandomLocalInterfaceAddr().toString());
+    LOG.info("DataStreamer local address is {}",sock.getLocalAddress().getHostAddress()+":"+sock.getLocalPort());
+    LOG.info("DataStreamer remote address is {}",sock.getInetAddress().getHostAddress()+":"+sock.getPort());
     return sock;
   }
 
