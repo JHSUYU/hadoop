@@ -1691,8 +1691,8 @@ public class DataNode extends ReconfigurableBase
     LOG.info("Opened shadow Streaming server at {}", shadowStreamingAddr);
     this.threadGroup = new ThreadGroup("dataXceiverServer");
     this.shadowThreadGroup = new ThreadGroup("shadowDataXceiver");
-    xserver = new DataXceiverServer(shadowTcpPeerServer, getConf(), this);
-    shadowXserver = new DataXceiverServer(tcpPeerServer, getConf(), this, true);
+    xserver = new DataXceiverServer(tcpPeerServer, getConf(), this);
+    shadowXserver = new DataXceiverServer(shadowTcpPeerServer, getConf(), this, true);
     this.dataXceiverServer = new Daemon(threadGroup, xserver);
     this.shadowDataXceiverServer = new Daemon(threadGroup, shadowXserver);
     this.threadGroup.setDaemon(true); // auto destroy when empty

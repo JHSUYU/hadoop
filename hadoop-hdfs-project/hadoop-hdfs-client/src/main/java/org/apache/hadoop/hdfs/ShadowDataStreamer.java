@@ -243,8 +243,8 @@ class ShadowDataStreamer extends Daemon {
     static Socket createSocketForPipeline(final DatanodeInfo first,
                                           final int length, final DFSClient client) throws IOException {
         final DfsClientConf conf = client.getConf();
-        //String dnAddr = first.getShadowXferAddr(conf.isConnectToDnViaHostname());
-        String dnAddr = first.getXferAddr(conf.isConnectToDnViaHostname());
+        String dnAddr = first.getShadowXferAddr(conf.isConnectToDnViaHostname());
+        //String dnAddr = first.getXferAddr(conf.isConnectToDnViaHostname());
         LOG.info("ShadowDataStreamer Connecting to datanode {}", dnAddr);
         final InetSocketAddress isa = NetUtils.createSocketAddr(dnAddr);
         final Socket sock = client.socketFactory.createSocket();
@@ -2471,16 +2471,6 @@ class ShadowDataStreamer extends Daemon {
 
                 boolean[] targetPinnings = getPinnings(nodes);
                 // send the request
-                synchronized (lock) {
-                    while (!readyToProcess) {
-                        try {
-                            lock.wait();
-                        } catch (InterruptedException e) {
-                            Thread.currentThread().interrupt();
-                        }
-                    }
-                    readyToProcess = false;
-                }
 
                 LOG.info("ShadowDataStreamer: 2496");
 
