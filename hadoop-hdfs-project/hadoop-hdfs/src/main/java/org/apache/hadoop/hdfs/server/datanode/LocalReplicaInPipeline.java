@@ -371,22 +371,14 @@ public class LocalReplicaInPipeline extends LocalReplica
   // ReplicaInPipeline
   public ReplicaOutputStreams createStreams(boolean isCreate,
                                             DataChecksum requestedChecksum, boolean isShadow) throws IOException {
-    final File originalBlockFile = getBlockFile();
-    final File originalMetaFile = getMetaFile();
-
-    File blockFile = new File(getDir(),getBlockName()+"_shadow");
-    File metaFile = new File(getDir(),DatanodeUtil.getMetaName(getBlockName(), getGenerationStamp())+"_shadow");
-
-    Files.copy(originalBlockFile.toPath(), blockFile.toPath(), StandardCopyOption.REPLACE_EXISTING);
-    Files.copy(originalMetaFile.toPath(), metaFile.toPath(), StandardCopyOption.REPLACE_EXISTING);
+    final File blockFile = getBlockFile();
+    final File metaFile = getMetaFile();
     if (DataNode.LOG.isDebugEnabled()) {
       DataNode.LOG.debug("writeTo blockfile is " + blockFile +
               " of size " + blockFile.length());
       DataNode.LOG.debug("writeTo metafile is " + metaFile +
               " of size " + metaFile.length());
     }
-    LOG.info("Failure Recovery: createStreams for shadow block " + blockFile + " of size " + blockFile.length());
-    LOG.info("Failure Recovery: createStreams for shadow metafile " + metaFile + " of size " + metaFile.length());
     long blockDiskSize = 0L;
     long crcDiskSize = 0L;
 
@@ -443,10 +435,10 @@ public class LocalReplicaInPipeline extends LocalReplica
       blockOut = fileIoProvider.getFileOutputStream(
               getVolume(), new RandomAccessFile(blockFile, "rw").getFD());
       crcOut = fileIoProvider.getFileOutputStream(getVolume(), metaRAF.getFD());
-//      if (!isCreate) {
-//        blockOut.getChannel().position(blockDiskSize);
-//        crcOut.getChannel().position(crcDiskSize);
-//      }
+      if (!isCreate) {
+        blockOut.getChannel().position(blockDiskSize);
+        crcOut.getChannel().position(crcDiskSize);
+      }
       return new ReplicaOutputStreams(blockOut, crcOut, checksum,
               getVolume(), fileIoProvider);
     } catch (IOException e) {
