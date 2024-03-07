@@ -629,6 +629,7 @@ class ShadowDataStreamer extends Daemon {
         unbufIn = saslStreams.in;
         out = new DataOutputStream(new BufferedOutputStream(unbufOut,
                 DFSUtilClient.getSmallBufferSize(dfsClient.getConfiguration())));
+        blockReplyStream = new DataInputStream(unbufIn);
         LOG.info("ShadowDataStreamer: prepareForSender targets length is " + targets.length);
         new Sender(this.out).writeBlock(blk, storageType, accessToken, clientName, targets, targetStorageTypes, source, stage, pipelineSize, minBytesRcvd, maxBytesRcvd, latestGenerationStamp,
                 requestedChecksum, cachingStrategy, allowLazyPersist, pinning, targetPinnings, storageId, targetStorageIds, true);
@@ -639,6 +640,8 @@ class ShadowDataStreamer extends Daemon {
         BlockOpResponseProto resp = BlockOpResponseProto.parseFrom(
                 PBHelperClient.vintPrefixed(blockReplyStream));
         Status pipelineStatus = resp.getStatus();
+        String firstBadLink  = resp.getFirstBadLink();
+        LOG.info("Failure Recovery 2409, pipelineStatus_ is {}, firstBadLink_ is {}", pipelineStatus, firstBadLink);
     }
 
 
