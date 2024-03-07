@@ -289,7 +289,6 @@ class DataXceiverServer implements Runnable {
   @Override
   public void run() {
     Peer peer = null;
-    Peer shadowPeer = null;
     while (datanode.shouldRun && !datanode.shutdownForUpgrade) {
       try {
         peer = peerServer.accept();
@@ -304,24 +303,15 @@ class DataXceiverServer implements Runnable {
 
         LOG.info("Accepted a new connection: {} {}" , curXceiverCount, isShadow);
 
-        new Daemon(datanode.shadowThreadGroup,
-                DataXceiver.create(peer, datanode, this, false))
-                .start();
-
-        shadowPeer = shadowPeerServer.accept();
-        new Daemon(datanode.shadowThreadGroup,
-                DataXceiver.create(shadowPeer, datanode, this, true))
-                .start();
-
-//        if(this.isShadow){
-//          new Daemon(datanode.shadowThreadGroup,
-//                  DataXceiver.create(peer, datanode, this, this.isShadow))
-//                  .start();
-//        }else{
-//          new Daemon(datanode.threadGroup,
-//                  DataXceiver.create(peer, datanode, this, this.isShadow))
-//                  .start();
-//        }
+        if(this.isShadow){
+          new Daemon(datanode.shadowThreadGroup,
+                  DataXceiver.create(peer, datanode, this, this.isShadow))
+                  .start();
+        }else{
+          new Daemon(datanode.threadGroup,
+                  DataXceiver.create(peer, datanode, this, this.isShadow))
+                  .start();
+        }
 
       } catch (SocketTimeoutException ignored) {
         // wake up to see if should continue to run
