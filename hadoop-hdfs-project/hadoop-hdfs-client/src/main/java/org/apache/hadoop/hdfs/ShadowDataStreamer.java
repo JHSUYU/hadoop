@@ -632,7 +632,7 @@ class ShadowDataStreamer extends Daemon {
                 DFSUtilClient.getSmallBufferSize(dfsClient.getConfiguration())));
         blockReplyStream = new DataInputStream(unbufIn);
         LOG.info("ShadowDataStreamer: prepareForSender targets length is " + targets.length);
-        new Sender(this.out).writeBlock(blk, storageType, accessToken, clientName, targets, targetStorageTypes, source, stage, pipelineSize, minBytesRcvd, maxBytesRcvd, latestGenerationStamp,
+        new Sender(this.out).writeBlock(blk, storageType, accessToken, clientName, targets, targetStorageTypes, source, stage, pipelineSize, minBytesRcvd, maxBytesRcvd, 0,
                 requestedChecksum, cachingStrategy, allowLazyPersist, pinning, targetPinnings, storageId, targetStorageIds, true);
 
         LOG.info("prepareForSender: 2505");

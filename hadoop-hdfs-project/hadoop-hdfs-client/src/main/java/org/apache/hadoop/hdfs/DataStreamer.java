@@ -2131,15 +2131,15 @@ class DataStreamer extends Daemon {
     final int badNodeIndex = errorState.getBadNodeIndex();
     if (badNodeIndex >= 0) {
       LOG.info("DataStreamer Failure Recovery: prepare For Processing 0");
-      if(count ==0){
-        try {
-          Thread.sleep(2000);
-        } catch (InterruptedException e) {
-          e.printStackTrace();
-        }
-        shadowDataStreamer.prepareForProcessing(this);
-        count++;
-      }
+//      if(count ==0){
+//        try {
+//          Thread.sleep(2000);
+//        } catch (InterruptedException e) {
+//          e.printStackTrace();
+//        }
+//        shadowDataStreamer.prepareForProcessing(this);
+//        count++;
+//      }
       //DFSOutputStream.erroredNodes.put(nodes[badNodeIndex],DFSOutputStream.erroredNodes.getOrDefault(nodes[badNodeIndex],0)+1);
       if (nodes.length <= 1) {
         lastException.set(new IOException("All datanodes "
@@ -2388,16 +2388,16 @@ class DataStreamer extends Daemon {
         Status pipelineStatus = resp.getStatus();
         firstBadLink = resp.getFirstBadLink();
 
-//        if(recoveryFlag) {
-//          LOG.info("Before shadowDataStreamer.prepareForSender");
-//          shadowDataStreamer.prepareForSender(blockCopy, nodeStorageTypes[0], accessToken,
-//                  dfsClient.clientName, nodes, nodeStorageTypes, null, bcs,
-//                  nodes.length, block.getNumBytes(), bytesSent, newGS,
-//                  checksum4WriteBlock, cachingStrategy.get(), isLazyPersistFile,
-//                  (targetPinnings != null && targetPinnings[0]), targetPinnings,
-//                  nodeStorageIDs[0], nodeStorageIDs, dataStreamer);
-//          LOG.info("After shadowDataStreamer.prepareForSender");
-//        }
+        if(recoveryFlag) {
+          LOG.info("Before shadowDataStreamer.prepareForSender");
+          shadowDataStreamer.prepareForSender(blockCopy, nodeStorageTypes[0], accessToken,
+                  dfsClient.clientName, nodes, nodeStorageTypes, null, bcs,
+                  nodes.length, block.getNumBytes(), bytesSent, newGS,
+                  checksum4WriteBlock, cachingStrategy.get(), isLazyPersistFile,
+                  (targetPinnings != null && targetPinnings[0]), targetPinnings,
+                  nodeStorageIDs[0], nodeStorageIDs, dataStreamer);
+          LOG.info("After shadowDataStreamer.prepareForSender");
+        }
 
 //        if(recoveryFlag) {
 //          try {
