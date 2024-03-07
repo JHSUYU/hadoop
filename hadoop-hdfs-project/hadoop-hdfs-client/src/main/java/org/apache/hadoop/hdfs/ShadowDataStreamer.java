@@ -632,6 +632,13 @@ class ShadowDataStreamer extends Daemon {
         LOG.info("ShadowDataStreamer: prepareForSender targets length is " + targets.length);
         new Sender(this.out).writeBlock(blk, storageType, accessToken, clientName, targets, targetStorageTypes, source, stage, pipelineSize, minBytesRcvd, maxBytesRcvd, latestGenerationStamp,
                 requestedChecksum, cachingStrategy, allowLazyPersist, pinning, targetPinnings, storageId, targetStorageIds, true);
+
+        LOG.info("prepareForSender: 2505");
+
+        // receive ack for connect
+        BlockOpResponseProto resp = BlockOpResponseProto.parseFrom(
+                PBHelperClient.vintPrefixed(blockReplyStream));
+        Status pipelineStatus = resp.getStatus();
     }
 
 
@@ -882,6 +889,7 @@ class ShadowDataStreamer extends Daemon {
                         }
                         LOG.info("Failure Recovery is relived.");
                     }
+                    readyToProcess = false;
                 }
                 try{
                     boolean doSleep = processDatanodeOrExternalError();
