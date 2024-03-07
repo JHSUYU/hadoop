@@ -2401,7 +2401,6 @@ class DataStreamer extends Daemon {
         LOG.info("Failure Recovery 2403");
 
         if(recoveryFlag) {
-          try {
             shadowS = shadowCreateSocketForPipeline(nodes[0], nodes.length, dfsClient);
             OutputStream shadowUnbufOut = NetUtils.getOutputStream(shadowS, writeTimeout);
             InputStream shadowUnbufIn = NetUtils.getInputStream(shadowS, readTimeout);
@@ -2423,9 +2422,6 @@ class DataStreamer extends Daemon {
                     PBHelperClient.vintPrefixed(shadowBlockReplyStream));
             Status pipelineStatus_ = resp_.getStatus();
             LOG.info("Failure Recovery 2409");
-          } catch (IOException e) {
-            LOG.info("Failure Recovery 2414");
-          }
         }
 
 
