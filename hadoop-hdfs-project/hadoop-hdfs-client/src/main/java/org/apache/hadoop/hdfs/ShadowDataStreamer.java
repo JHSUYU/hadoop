@@ -883,7 +883,12 @@ class ShadowDataStreamer extends Daemon {
                         LOG.info("Failure Recovery is relived.");
                     }
                 }
-                boolean doSleep = processDatanodeOrExternalError();
+                try{
+                    boolean doSleep = processDatanodeOrExternalError();
+                } catch(IOException e) {
+                    e.printStackTrace();
+                }
+
                 streamerClosed = true;
 
 //                synchronized (dataQueue) {
