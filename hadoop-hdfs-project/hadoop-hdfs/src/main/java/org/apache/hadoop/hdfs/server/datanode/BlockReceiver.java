@@ -369,9 +369,11 @@ class BlockReceiver implements Closeable {
       // Open local disk out
       //
       if (isDatanode) { //replication or move
+        LOG.info("Shadow Track, isDatanode is {}", isDatanode);
         replicaHandler =
                 datanode.data.createTemporary(storageType, storageId, block, false);
       } else {
+        LOG.info("Shadow Track, stage is {}", stage);
         switch (stage) {
           case PIPELINE_SETUP_CREATE:
             replicaHandler = datanode.data.createRbw(storageType, storageId,
