@@ -2502,6 +2502,9 @@ class ShadowDataStreamer extends Daemon {
                 firstBadLink = resp.getFirstBadLink();
 
                 LOG.info("Failure Recovery 2409, pipelineStatus_ is {}, firstBadLink_ is {}", pipelineStatus, firstBadLink);
+                if(firstBadLink.equals("")){
+                    return true;
+                }
 
                 // Got an restart OOB ack.
                 // If a node is already restarting, this status is not likely from
