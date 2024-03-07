@@ -742,7 +742,7 @@ class DataXceiver extends Receiver implements Runnable {
       final String storageId,
       final String[] targetStorageIds) throws IOException {
     if(isShadow){
-      shadowWriteBlock(block, storageType, blockToken, clientname, targets, targetStorageTypes, srcDataNode, stage, pipelineSize, minBytesRcvd, maxBytesRcvd, latestGenerationStamp, requestedChecksum, cachingStrategy, allowLazyPersist, pinning, targetPinnings, storageId, targetStorageIds);
+      //shadowWriteBlock(block, storageType, blockToken, clientname, targets, targetStorageTypes, srcDataNode, stage, pipelineSize, minBytesRcvd, maxBytesRcvd, latestGenerationStamp, requestedChecksum, cachingStrategy, allowLazyPersist, pinning, targetPinnings, storageId, targetStorageIds);
       return;
     }
     previousOpClientName = clientname;
