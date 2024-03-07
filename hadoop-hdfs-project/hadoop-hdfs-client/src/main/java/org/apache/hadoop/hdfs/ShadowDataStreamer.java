@@ -1071,6 +1071,7 @@ class ShadowDataStreamer extends Daemon {
             }
         }
         closeInternal();
+        LOG.info("Reach End");
     }
 
     public void pause(){
