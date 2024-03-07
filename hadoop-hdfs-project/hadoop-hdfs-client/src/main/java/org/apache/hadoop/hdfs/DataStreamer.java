@@ -2398,17 +2398,17 @@ class DataStreamer extends Daemon {
           shadowOut = new DataOutputStream(new BufferedOutputStream(shadowUnbufOut,
                   DFSUtilClient.getSmallBufferSize(dfsClient.getConfiguration())));
           shadowBlockReplyStream = new DataInputStream(shadowUnbufIn);
-          new Sender(shadowOut).writeBlock(blockCopy, nodeStorageTypes[0], accessToken,
-                  dfsClient.clientName, nodes, nodeStorageTypes, null, bcs,
-                  nodes.length, block.getNumBytes(), bytesSent, newGS,
-                  checksum4WriteBlock, cachingStrategy.get(), isLazyPersistFile,
-                  (targetPinnings != null && targetPinnings[0]), targetPinnings,
-                  nodeStorageIDs[0], nodeStorageIDs);
-          // receive ack for connect
-          BlockOpResponseProto resp_ = BlockOpResponseProto.parseFrom(
-                  PBHelperClient.vintPrefixed(shadowBlockReplyStream));
-          Status pipelineStatus_ = resp_.getStatus();
-          LOG.info("Failure Recovery 2409");
+//          new Sender(shadowOut).writeBlock(blockCopy, nodeStorageTypes[0], accessToken,
+//                  dfsClient.clientName, nodes, nodeStorageTypes, null, bcs,
+//                  nodes.length, block.getNumBytes(), bytesSent, newGS,
+//                  checksum4WriteBlock, cachingStrategy.get(), isLazyPersistFile,
+//                  (targetPinnings != null && targetPinnings[0]), targetPinnings,
+//                  nodeStorageIDs[0], nodeStorageIDs);
+//          // receive ack for connect
+//          BlockOpResponseProto resp_ = BlockOpResponseProto.parseFrom(
+//                  PBHelperClient.vintPrefixed(shadowBlockReplyStream));
+//          Status pipelineStatus_ = resp_.getStatus();
+//          LOG.info("Failure Recovery 2409");
         }
 
 

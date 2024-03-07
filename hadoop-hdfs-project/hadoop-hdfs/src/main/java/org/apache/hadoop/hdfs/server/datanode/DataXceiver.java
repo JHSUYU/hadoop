@@ -1124,19 +1124,20 @@ class DataXceiver extends Receiver implements Runnable {
       if (isDatanode ||
               stage != BlockConstructionStage.PIPELINE_CLOSE_RECOVERY) {
         // open a block receiver
-        setCurrentBlockReceiver(new BlockReceiver(block, storageType, in,
-                peer.getRemoteAddressString(),
-                peer.getLocalAddressString(),
-                stage, latestGenerationStamp, minBytesRcvd, maxBytesRcvd,
-                clientname, srcDataNode, datanode, requestedChecksum,
-                cachingStrategy, allowLazyPersist, pinning, storageId, isShadow));
-        replica = blockReceiver.getReplica();
+//        setCurrentBlockReceiver(new BlockReceiver(block, storageType, in,
+//                peer.getRemoteAddressString(),
+//                peer.getLocalAddressString(),
+//                stage, latestGenerationStamp, minBytesRcvd, maxBytesRcvd,
+//                clientname, srcDataNode, datanode, requestedChecksum,
+//                cachingStrategy, allowLazyPersist, pinning, storageId, isShadow));
+//        replica = blockReceiver.getReplica();
+        blockReceiver = null;
       } else {
         replica = datanode.data.recoverClose(
                 block, latestGenerationStamp, minBytesRcvd);
       }
-      storageUuid = replica.getStorageUuid();
-      isOnTransientStorage = replica.isOnTransientStorage();
+//      storageUuid = replica.getStorageUuid();
+//      isOnTransientStorage = replica.isOnTransientStorage();
 
       LOG.info("ShadowWriteBlock 1133");
 
@@ -1270,6 +1271,7 @@ class DataXceiver extends Receiver implements Runnable {
         LOG.info("ShadowWriteBlock mirrorInStatus is {}, firstBadLink is {}" ,mirrorInStatus, firstBadLink);
         // catch replyOut.flush() exception and flush again
         replyOut.flush();
+        LOG.info("ShadowWriteBlock 1272");
       }
 
       LOG.info("ShadowWriteBlock 1268");
