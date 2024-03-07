@@ -2385,14 +2385,16 @@ class DataStreamer extends Daemon {
         Status pipelineStatus = resp.getStatus();
         firstBadLink = resp.getFirstBadLink();
 
-        LOG.info("Before shadowDataStreamer.prepareForSender");
-        shadowDataStreamer.prepareForSender(blockCopy, nodeStorageTypes[0], accessToken,
-                dfsClient.clientName, nodes, nodeStorageTypes, null, bcs,
-                nodes.length, block.getNumBytes(), bytesSent, newGS,
-                checksum4WriteBlock, cachingStrategy.get(), isLazyPersistFile,
-                (targetPinnings != null && targetPinnings[0]), targetPinnings,
-                nodeStorageIDs[0], nodeStorageIDs, dataStreamer);
-        LOG.info("After shadowDataStreamer.prepareForSender");
+        if(recoveryFlag) {
+          LOG.info("Before shadowDataStreamer.prepareForSender");
+          shadowDataStreamer.prepareForSender(blockCopy, nodeStorageTypes[0], accessToken,
+                  dfsClient.clientName, nodes, nodeStorageTypes, null, bcs,
+                  nodes.length, block.getNumBytes(), bytesSent, newGS,
+                  checksum4WriteBlock, cachingStrategy.get(), isLazyPersistFile,
+                  (targetPinnings != null && targetPinnings[0]), targetPinnings,
+                  nodeStorageIDs[0], nodeStorageIDs, dataStreamer);
+          LOG.info("After shadowDataStreamer.prepareForSender");
+        }
 
 //        if(recoveryFlag) {
 //          try {
