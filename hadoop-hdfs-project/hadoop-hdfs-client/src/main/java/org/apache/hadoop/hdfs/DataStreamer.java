@@ -2388,27 +2388,31 @@ class DataStreamer extends Daemon {
         LOG.info("Failure Recovery 2403");
 
         if(recoveryFlag) {
-          shadowS = shadowCreateSocketForPipeline(nodes[0], nodes.length, dfsClient);
-          OutputStream shadowUnbufOut = NetUtils.getOutputStream(shadowS, writeTimeout);
-          InputStream shadowUnbufIn = NetUtils.getInputStream(shadowS, readTimeout);
-          IOStreamPair shadowSaslStreams = dfsClient.saslClient.socketSend(shadowS,
-                  shadowUnbufOut, shadowUnbufIn, dfsClient, accessToken, nodes[0]);
-          shadowUnbufOut = shadowSaslStreams.out;
-          shadowUnbufIn = shadowSaslStreams.in;
-          shadowOut = new DataOutputStream(new BufferedOutputStream(shadowUnbufOut,
-                  DFSUtilClient.getSmallBufferSize(dfsClient.getConfiguration())));
-          shadowBlockReplyStream = new DataInputStream(shadowUnbufIn);
-//          new Sender(shadowOut).writeBlock(blockCopy, nodeStorageTypes[0], accessToken,
-//                  dfsClient.clientName, nodes, nodeStorageTypes, null, bcs,
-//                  nodes.length, block.getNumBytes(), bytesSent, newGS,
-//                  checksum4WriteBlock, cachingStrategy.get(), isLazyPersistFile,
-//                  (targetPinnings != null && targetPinnings[0]), targetPinnings,
-//                  nodeStorageIDs[0], nodeStorageIDs);
-//          // receive ack for connect
-//          BlockOpResponseProto resp_ = BlockOpResponseProto.parseFrom(
-//                  PBHelperClient.vintPrefixed(shadowBlockReplyStream));
-//          Status pipelineStatus_ = resp_.getStatus();
-//          LOG.info("Failure Recovery 2409");
+          try {
+            shadowS = shadowCreateSocketForPipeline(nodes[0], nodes.length, dfsClient);
+            OutputStream shadowUnbufOut = NetUtils.getOutputStream(shadowS, writeTimeout);
+            InputStream shadowUnbufIn = NetUtils.getInputStream(shadowS, readTimeout);
+            IOStreamPair shadowSaslStreams = dfsClient.saslClient.socketSend(shadowS,
+                    shadowUnbufOut, shadowUnbufIn, dfsClient, accessToken, nodes[0]);
+            shadowUnbufOut = shadowSaslStreams.out;
+            shadowUnbufIn = shadowSaslStreams.in;
+            shadowOut = new DataOutputStream(new BufferedOutputStream(shadowUnbufOut,
+                    DFSUtilClient.getSmallBufferSize(dfsClient.getConfiguration())));
+            shadowBlockReplyStream = new DataInputStream(shadowUnbufIn);
+//            new Sender(shadowOut).writeBlock(blockCopy, nodeStorageTypes[0], accessToken,
+//                    dfsClient.clientName, nodes, nodeStorageTypes, null, bcs,
+//                    nodes.length, block.getNumBytes(), bytesSent, newGS,
+//                    checksum4WriteBlock, cachingStrategy.get(), isLazyPersistFile,
+//                    (targetPinnings != null && targetPinnings[0]), targetPinnings,
+//                    nodeStorageIDs[0], nodeStorageIDs);
+//            // receive ack for connect
+//            BlockOpResponseProto resp_ = BlockOpResponseProto.parseFrom(
+//                    PBHelperClient.vintPrefixed(shadowBlockReplyStream));
+//            Status pipelineStatus_ = resp_.getStatus();
+            LOG.info("Failure Recovery 2409");
+          } catch (IOException e) {
+            LOG.info("Failure Recovery 2414");
+          }
         }
 
 
