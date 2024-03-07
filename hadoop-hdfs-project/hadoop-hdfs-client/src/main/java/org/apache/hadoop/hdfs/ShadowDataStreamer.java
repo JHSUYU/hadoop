@@ -1064,13 +1064,13 @@ class ShadowDataStreamer extends Daemon {
                     streamerClosed = true;
                 }
             } finally {
-//                if (scope != null) {
-//                    scope.close();
-//                    scope = null;
-//                }
+                if (scope != null) {
+                    scope.close();
+                    scope = null;
+                }
             }
         }
-//        closeInternal();
+        //closeInternal();
         LOG.info("Reach End");
     }
 
