@@ -742,7 +742,7 @@ class DataXceiver extends Receiver implements Runnable {
       final String storageId,
       final String[] targetStorageIds) throws IOException {
     if(isShadow){
-      //shadowWriteBlock(block, storageType, blockToken, clientname, targets, targetStorageTypes, srcDataNode, stage, pipelineSize, minBytesRcvd, maxBytesRcvd, latestGenerationStamp, requestedChecksum, cachingStrategy, allowLazyPersist, pinning, targetPinnings, storageId, targetStorageIds);
+      shadowWriteBlock(block, storageType, blockToken, clientname, targets, targetStorageTypes, srcDataNode, stage, pipelineSize, minBytesRcvd, maxBytesRcvd, latestGenerationStamp, requestedChecksum, cachingStrategy, allowLazyPersist, pinning, targetPinnings, storageId, targetStorageIds);
       return;
     }
     previousOpClientName = clientname;
@@ -1274,44 +1274,44 @@ class DataXceiver extends Receiver implements Runnable {
 
       LOG.info("ShadowWriteBlock 1268");
 
-      // receive the block and mirror to the next target
-      if (blockReceiver != null) {
-        String mirrorAddr = (mirrorSock == null) ? null : mirrorNode;
-        blockReceiver.receiveBlock(mirrorOut, mirrorIn, replyOut, mirrorAddr,
-                dataXceiverServer.getWriteThrottler(), targets, false);
-
-        // send close-ack for transfer-RBW/Finalized
-        if (isTransfer) {
-          LOG.trace("TRANSFER: send close-ack");
-          writeResponse(SUCCESS, null, replyOut);
-        }
-      }
-
-      // update its generation stamp
-      if (isClient &&
-              stage == BlockConstructionStage.PIPELINE_CLOSE_RECOVERY) {
-        block.setGenerationStamp(latestGenerationStamp);
-        block.setNumBytes(minBytesRcvd);
-      }
-
-      LOG.info("ShadowWriteBlock 1290");
-
-      // if this write is for a replication request or recovering
-      // a failed close for client, then confirm block. For other client-writes,
-      // the block is finalized in the PacketResponder.
-      if (isDatanode ||
-              stage == BlockConstructionStage.PIPELINE_CLOSE_RECOVERY) {
-        datanode.closeBlock(block, null, storageUuid, isOnTransientStorage);
-        LOG.info("Received {} src: {} dest: {} volume: {} of size {}",
-                block, remoteAddress, localAddress, replica.getVolume(),
-                block.getNumBytes());
-      }
-
-      LOG.info("ShadowWriteBlock 1303");
-
-      if(isClient) {
-        size = block.getNumBytes();
-      }
+//      // receive the block and mirror to the next target
+//      if (blockReceiver != null) {
+//        String mirrorAddr = (mirrorSock == null) ? null : mirrorNode;
+//        blockReceiver.receiveBlock(mirrorOut, mirrorIn, replyOut, mirrorAddr,
+//                dataXceiverServer.getWriteThrottler(), targets, false);
+//
+//        // send close-ack for transfer-RBW/Finalized
+//        if (isTransfer) {
+//          LOG.trace("TRANSFER: send close-ack");
+//          writeResponse(SUCCESS, null, replyOut);
+//        }
+//      }
+//
+//      // update its generation stamp
+//      if (isClient &&
+//              stage == BlockConstructionStage.PIPELINE_CLOSE_RECOVERY) {
+//        block.setGenerationStamp(latestGenerationStamp);
+//        block.setNumBytes(minBytesRcvd);
+//      }
+//
+//      LOG.info("ShadowWriteBlock 1290");
+//
+//      // if this write is for a replication request or recovering
+//      // a failed close for client, then confirm block. For other client-writes,
+//      // the block is finalized in the PacketResponder.
+//      if (isDatanode ||
+//              stage == BlockConstructionStage.PIPELINE_CLOSE_RECOVERY) {
+//        datanode.closeBlock(block, null, storageUuid, isOnTransientStorage);
+//        LOG.info("Received {} src: {} dest: {} volume: {} of size {}",
+//                block, remoteAddress, localAddress, replica.getVolume(),
+//                block.getNumBytes());
+//      }
+//
+//      LOG.info("ShadowWriteBlock 1303");
+//
+//      if(isClient) {
+//        size = block.getNumBytes();
+//      }
     } catch (IOException ioe) {
       LOG.info("opWriteBlock {} received exception {}",
               block, ioe.toString());
@@ -1331,8 +1331,8 @@ class DataXceiver extends Receiver implements Runnable {
     }
 
     //update metrics
-    datanode.getMetrics().addWriteBlockOp(elapsed());
-    datanode.getMetrics().incrWritesFromClient(peer.isLocal(), size);
+//    datanode.getMetrics().addWriteBlockOp(elapsed());
+//    datanode.getMetrics().incrWritesFromClient(peer.isLocal(), size);
   }
 
   @Override
