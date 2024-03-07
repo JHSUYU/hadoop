@@ -1124,20 +1124,20 @@ class DataXceiver extends Receiver implements Runnable {
       if (isDatanode ||
               stage != BlockConstructionStage.PIPELINE_CLOSE_RECOVERY) {
         // open a block receiver
-//        setCurrentBlockReceiver(new BlockReceiver(block, storageType, in,
-//                peer.getRemoteAddressString(),
-//                peer.getLocalAddressString(),
-//                stage, latestGenerationStamp, minBytesRcvd, maxBytesRcvd,
-//                clientname, srcDataNode, datanode, requestedChecksum,
-//                cachingStrategy, allowLazyPersist, pinning, storageId, isShadow));
-//        replica = blockReceiver.getReplica();
+        setCurrentBlockReceiver(new BlockReceiver(block, storageType, in,
+                peer.getRemoteAddressString(),
+                peer.getLocalAddressString(),
+                stage, latestGenerationStamp, minBytesRcvd, maxBytesRcvd,
+                clientname, srcDataNode, datanode, requestedChecksum,
+                cachingStrategy, allowLazyPersist, pinning, storageId, isShadow));
+        replica = blockReceiver.getReplica();
         blockReceiver = null;
       } else {
         replica = datanode.data.recoverClose(
                 block, latestGenerationStamp, minBytesRcvd);
       }
-//      storageUuid = replica.getStorageUuid();
-//      isOnTransientStorage = replica.isOnTransientStorage();
+      storageUuid = replica.getStorageUuid();
+      isOnTransientStorage = replica.isOnTransientStorage();
 
       LOG.info("ShadowWriteBlock 1133");
 
@@ -1276,44 +1276,44 @@ class DataXceiver extends Receiver implements Runnable {
 
       LOG.info("ShadowWriteBlock 1268");
 
-//      // receive the block and mirror to the next target
-//      if (blockReceiver != null) {
-//        String mirrorAddr = (mirrorSock == null) ? null : mirrorNode;
-//        blockReceiver.receiveBlock(mirrorOut, mirrorIn, replyOut, mirrorAddr,
-//                dataXceiverServer.getWriteThrottler(), targets, false);
-//
-//        // send close-ack for transfer-RBW/Finalized
-//        if (isTransfer) {
-//          LOG.trace("TRANSFER: send close-ack");
-//          writeResponse(SUCCESS, null, replyOut);
-//        }
-//      }
-//
-//      // update its generation stamp
-//      if (isClient &&
-//              stage == BlockConstructionStage.PIPELINE_CLOSE_RECOVERY) {
-//        block.setGenerationStamp(latestGenerationStamp);
-//        block.setNumBytes(minBytesRcvd);
-//      }
-//
-//      LOG.info("ShadowWriteBlock 1290");
-//
-//      // if this write is for a replication request or recovering
-//      // a failed close for client, then confirm block. For other client-writes,
-//      // the block is finalized in the PacketResponder.
-//      if (isDatanode ||
-//              stage == BlockConstructionStage.PIPELINE_CLOSE_RECOVERY) {
-//        datanode.closeBlock(block, null, storageUuid, isOnTransientStorage);
-//        LOG.info("Received {} src: {} dest: {} volume: {} of size {}",
-//                block, remoteAddress, localAddress, replica.getVolume(),
-//                block.getNumBytes());
-//      }
-//
-//      LOG.info("ShadowWriteBlock 1303");
-//
-//      if(isClient) {
-//        size = block.getNumBytes();
-//      }
+      // receive the block and mirror to the next target
+      if (blockReceiver != null) {
+        String mirrorAddr = (mirrorSock == null) ? null : mirrorNode;
+        blockReceiver.receiveBlock(mirrorOut, mirrorIn, replyOut, mirrorAddr,
+                dataXceiverServer.getWriteThrottler(), targets, false);
+
+        // send close-ack for transfer-RBW/Finalized
+        if (isTransfer) {
+          LOG.trace("TRANSFER: send close-ack");
+          writeResponse(SUCCESS, null, replyOut);
+        }
+      }
+
+      // update its generation stamp
+      if (isClient &&
+              stage == BlockConstructionStage.PIPELINE_CLOSE_RECOVERY) {
+        block.setGenerationStamp(latestGenerationStamp);
+        block.setNumBytes(minBytesRcvd);
+      }
+
+      LOG.info("ShadowWriteBlock 1290");
+
+      // if this write is for a replication request or recovering
+      // a failed close for client, then confirm block. For other client-writes,
+      // the block is finalized in the PacketResponder.
+      if (isDatanode ||
+              stage == BlockConstructionStage.PIPELINE_CLOSE_RECOVERY) {
+        datanode.closeBlock(block, null, storageUuid, isOnTransientStorage);
+        LOG.info("Received {} src: {} dest: {} volume: {} of size {}",
+                block, remoteAddress, localAddress, replica.getVolume(),
+                block.getNumBytes());
+      }
+
+      LOG.info("ShadowWriteBlock 1303");
+
+      if(isClient) {
+        size = block.getNumBytes();
+      }
     } catch (IOException ioe) {
       LOG.info("opWriteBlock {} received exception {}",
               block, ioe.toString());
