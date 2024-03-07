@@ -484,7 +484,7 @@ class ShadowDataStreamer extends Daemon {
 
     private volatile BlockConstructionStage stage;  // block construction stage
     protected long bytesSent = 0; // number of bytes that've been sent
-    private final boolean isLazyPersistFile;
+    private boolean isLazyPersistFile;
     private long lastPacket;
 
     /** Nodes have been used in the pipeline before and have failed. */
@@ -582,6 +582,7 @@ class ShadowDataStreamer extends Daemon {
         this.checksum4WriteBlock = dataStreamer.checksum4WriteBlock;
         this.cachingStrategy = dataStreamer.getCachingStrategy();
         this.stat = dataStreamer.stat;
+        this.isLazyPersistFile = dataStreamer.getIsLazyPersistFile();
 
         System.arraycopy(dataStreamer.getNodes(), 0, this.nodes, 0, dataStreamer.getNodes().length);
     }
@@ -2485,6 +2486,11 @@ class ShadowDataStreamer extends Daemon {
                 // send the request
 
                 LOG.info("targetPinnings is: {}", targetPinnings);
+
+                //Print All the parameters in writeBlock using LOG info
+                LOG.info("ShadowDataStreamer,  blockCopy is: {}, nodeStorageTypes[0] is {}, accessToken is {}, dfsClient.clietnName is {}, nodes is {}, nodeStorageTypes is{}, null is {}, bcs is {}, nodes.length is {}, block.getNumBytes() is {}, bytesSent is {}, newGS is {}, checksum4WriteBlock is {}, cachingStrategy.get() is {}, isLazyPersistFile is {}, (targetPinnings != null && targetPinnings[0]) is {}, targetPinnings is {}, nodeStorageIDs[0] is {}, nodeStorageIDs is {}, true is {}",
+                        blockCopy,nodeStorageTypes[0], accessToken, dfsClient.clientName, nodes, nodeStorageTypes, null, bcs, nodes.length, block.getNumBytes(), bytesSent, newGS, checksum4WriteBlock, cachingStrategy.get(), isLazyPersistFile, (targetPinnings != null && targetPinnings[0]), targetPinnings, nodeStorageIDs[0], nodeStorageIDs, true);
+
 
                 new Sender(out).writeBlock(blockCopy, nodeStorageTypes[0], accessToken,
                         dfsClient.clientName, nodes, nodeStorageTypes, null, bcs,

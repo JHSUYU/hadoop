@@ -2371,6 +2371,9 @@ class DataStreamer extends Daemon {
         LOG.info("Failure Recovery 2330 badnode index is"+ errorState.getBadNodeIndex());
         DataStreamer dataStreamer = this;
 
+        LOG.info("DataStreamer,  blockCopy is: {}, nodeStorageTypes[0] is {}, accessToken is {}, dfsClient.clietnName is {}, nodes is {}, nodeStorageTypes is{}, null is {}, bcs is {}, nodes.length is {}, block.getNumBytes() is {}, bytesSent is {}, newGS is {}, checksum4WriteBlock is {}, cachingStrategy.get() is {}, isLazyPersistFile is {}, (targetPinnings != null && targetPinnings[0]) is {}, targetPinnings is {}, nodeStorageIDs[0] is {}, nodeStorageIDs is {}, true is {}",
+                blockCopy,nodeStorageTypes[0], accessToken, dfsClient.clientName, nodes, nodeStorageTypes, null, bcs, nodes.length, block.getNumBytes(), bytesSent, newGS, checksum4WriteBlock, cachingStrategy.get(), isLazyPersistFile, (targetPinnings != null && targetPinnings[0]), targetPinnings, nodeStorageIDs[0], nodeStorageIDs, true);
+
         new Sender(out).writeBlock(blockCopy, nodeStorageTypes[0], accessToken,
             dfsClient.clientName, nodes, nodeStorageTypes, null, bcs,
             nodes.length, block.getNumBytes(), bytesSent, newGS,
@@ -2385,16 +2388,16 @@ class DataStreamer extends Daemon {
         Status pipelineStatus = resp.getStatus();
         firstBadLink = resp.getFirstBadLink();
 
-        if(recoveryFlag) {
-          LOG.info("Before shadowDataStreamer.prepareForSender");
-          shadowDataStreamer.prepareForSender(blockCopy, nodeStorageTypes[0], accessToken,
-                  dfsClient.clientName, nodes, nodeStorageTypes, null, bcs,
-                  nodes.length, block.getNumBytes(), bytesSent, newGS,
-                  checksum4WriteBlock, cachingStrategy.get(), isLazyPersistFile,
-                  (targetPinnings != null && targetPinnings[0]), targetPinnings,
-                  nodeStorageIDs[0], nodeStorageIDs, dataStreamer);
-          LOG.info("After shadowDataStreamer.prepareForSender");
-        }
+//        if(recoveryFlag) {
+//          LOG.info("Before shadowDataStreamer.prepareForSender");
+//          shadowDataStreamer.prepareForSender(blockCopy, nodeStorageTypes[0], accessToken,
+//                  dfsClient.clientName, nodes, nodeStorageTypes, null, bcs,
+//                  nodes.length, block.getNumBytes(), bytesSent, newGS,
+//                  checksum4WriteBlock, cachingStrategy.get(), isLazyPersistFile,
+//                  (targetPinnings != null && targetPinnings[0]), targetPinnings,
+//                  nodeStorageIDs[0], nodeStorageIDs, dataStreamer);
+//          LOG.info("After shadowDataStreamer.prepareForSender");
+//        }
 
 //        if(recoveryFlag) {
 //          try {
@@ -2826,5 +2829,9 @@ class DataStreamer extends Daemon {
 
   public AtomicReference<CachingStrategy> getCachingStrategy() {
     return cachingStrategy;
+  }
+
+  public boolean getIsLazyPersistFile(){
+    return isLazyPersistFile;
   }
 }
