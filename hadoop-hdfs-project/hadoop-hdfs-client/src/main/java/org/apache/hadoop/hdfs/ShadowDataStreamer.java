@@ -2484,7 +2484,7 @@ class ShadowDataStreamer extends Daemon {
                 boolean[] targetPinnings = getPinnings(nodes);
                 // send the request
 
-                LOG.info("ShadowDataStreamer: 2496");
+                LOG.info("targetPinnings is: {}", targetPinnings);
 
                 new Sender(out).writeBlock(blockCopy, nodeStorageTypes[0], accessToken,
                         dfsClient.clientName, nodes, nodeStorageTypes, null, bcs,
