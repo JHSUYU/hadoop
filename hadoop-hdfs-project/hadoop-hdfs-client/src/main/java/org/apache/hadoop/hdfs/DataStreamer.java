@@ -262,6 +262,30 @@ class DataStreamer extends Daemon {
     return sock;
   }
 
+  static Socket shadowCreateSocketForPipeline(final DatanodeInfo first,
+                                        final int length, final DFSClient client) throws IOException {
+    final DfsClientConf conf = client.getConf();
+    final String dnAddr = first.getShadowXferAddr();
+    LOG.info("Connecting to datanode {}", dnAddr);
+    final InetSocketAddress isa = NetUtils.createSocketAddr(dnAddr);
+    final Socket sock = client.socketFactory.createSocket();
+    final int timeout = client.getDatanodeReadTimeout(length);
+    SocketAddress addr= client.getRandomLocalInterfaceAddr();
+    LOG.info("Using local interface {}", addr);
+    NetUtils.connect(sock, isa, addr,
+            conf.getSocketTimeout());
+    sock.setTcpNoDelay(conf.getDataTransferTcpNoDelay());
+    sock.setSoTimeout(timeout);
+    sock.setKeepAlive(true);
+    if (conf.getSocketSendBufferSize() > 0) {
+      sock.setSendBufferSize(conf.getSocketSendBufferSize());
+    }
+    LOG.info("Send buf size {}", sock.getSendBufferSize());
+    LOG.info("DataStreamer local address is {}",sock.getLocalAddress().getHostAddress()+":"+sock.getLocalPort());
+    LOG.info("DataStreamer remote address is {}",sock.getInetAddress().getHostAddress()+":"+sock.getPort());
+    return sock;
+  }
+
   /**
    * if this file is lazy persist
    *
@@ -474,6 +498,7 @@ class DataStreamer extends Daemon {
   protected Token<BlockTokenIdentifier> accessToken;
   private DataOutputStream blockStream;
   private DataInputStream blockReplyStream;
+  private DataInputStream shadowBlockReplyStream;
   private ResponseProcessor response = null;
   private final Object nodesLock = new Object();
   private volatile DatanodeInfo[] nodes = null; // list of targets for current block
@@ -511,6 +536,7 @@ class DataStreamer extends Daemon {
   private long bytesCurBlock = 0; // bytes written in current block
   private final LastExceptionInStreamer lastException = new LastExceptionInStreamer();
   private Socket s;
+  public Socket shadowS;
 
   protected final DFSClient dfsClient;
   protected final String src;
@@ -2105,15 +2131,15 @@ class DataStreamer extends Daemon {
     final int badNodeIndex = errorState.getBadNodeIndex();
     if (badNodeIndex >= 0) {
       LOG.info("DataStreamer Failure Recovery: prepare For Processing 0");
-      if(count ==0){
-        try {
-          Thread.sleep(2000);
-        } catch (InterruptedException e) {
-          e.printStackTrace();
-        }
-        shadowDataStreamer.prepareForProcessing(this);
-        count++;
-      }
+//      if(count ==0){
+//        try {
+//          Thread.sleep(2000);
+//        } catch (InterruptedException e) {
+//          e.printStackTrace();
+//        }
+//        shadowDataStreamer.prepareForProcessing(this);
+//        count++;
+//      }
       //DFSOutputStream.erroredNodes.put(nodes[badNodeIndex],DFSOutputStream.erroredNodes.getOrDefault(nodes[badNodeIndex],0)+1);
       if (nodes.length <= 1) {
         lastException.set(new IOException("All datanodes "
@@ -2310,22 +2336,33 @@ class DataStreamer extends Daemon {
     while (true) {
       boolean result = false;
       DataOutputStream out = null;
+      DataOutputStream shadowOut = null;
       try {
         assert null == s : "Previous socket unclosed";
         assert null == blockReplyStream : "Previous blockReplyStream unclosed";
         s = createSocketForPipeline(nodes[0], nodes.length, dfsClient);
+        shadowS = shadowCreateSocketForPipeline(nodes[0], nodes.length, dfsClient);
         long writeTimeout = dfsClient.getDatanodeWriteTimeout(nodes.length);
         long readTimeout = dfsClient.getDatanodeReadTimeout(nodes.length);
 
         OutputStream unbufOut = NetUtils.getOutputStream(s, writeTimeout);
+        OutputStream shadowUnbufOut = NetUtils.getOutputStream(shadowS, writeTimeout);
         InputStream unbufIn = NetUtils.getInputStream(s, readTimeout);
+        InputStream shadowUnbufIn = NetUtils.getInputStream(shadowS, readTimeout);
         IOStreamPair saslStreams = dfsClient.saslClient.socketSend(s,
             unbufOut, unbufIn, dfsClient, accessToken, nodes[0]);
+        IOStreamPair shadowSaslStreams = dfsClient.saslClient.socketSend(shadowS,
+            shadowUnbufOut, shadowUnbufIn, dfsClient, accessToken, nodes[0]);
+        shadowUnbufOut = shadowSaslStreams.out;
+        shadowUnbufIn = shadowSaslStreams.in;
         unbufOut = saslStreams.out;
         unbufIn = saslStreams.in;
+        shadowOut = new DataOutputStream(new BufferedOutputStream(shadowUnbufOut,
+            DFSUtilClient.getSmallBufferSize(dfsClient.getConfiguration())));
         out = new DataOutputStream(new BufferedOutputStream(unbufOut,
             DFSUtilClient.getSmallBufferSize(dfsClient.getConfiguration())));
         blockReplyStream = new DataInputStream(unbufIn);
+        shadowBlockReplyStream = new DataInputStream(shadowUnbufIn);
 
         //
         // Xmit header info to datanode
@@ -2343,15 +2380,6 @@ class DataStreamer extends Daemon {
         // send the request
         LOG.info("Failure Recovery 2330 badnode index is"+ errorState.getBadNodeIndex());
         DataStreamer dataStreamer = this;
-        if(recoveryFlag) {
-          LOG.info("Failure Recovery 2330"+ nodes[0].shadowxferPort);
-//          shadowDataStreamer.prepareForSender(blockCopy, nodeStorageTypes[0], accessToken,
-//                  dfsClient.clientName, nodes, nodeStorageTypes, null, bcs,
-//                  nodes.length, block.getNumBytes(), bytesSent, newGS,
-//                  checksum4WriteBlock, cachingStrategy.get(), isLazyPersistFile,
-//                  (targetPinnings != null && targetPinnings[0]), targetPinnings,
-//                  nodeStorageIDs[0], nodeStorageIDs, dataStreamer);
-        }
 
         new Sender(out).writeBlock(blockCopy, nodeStorageTypes[0], accessToken,
             dfsClient.clientName, nodes, nodeStorageTypes, null, bcs,
@@ -2359,12 +2387,26 @@ class DataStreamer extends Daemon {
             checksum4WriteBlock, cachingStrategy.get(), isLazyPersistFile,
             (targetPinnings != null && targetPinnings[0]), targetPinnings,
             nodeStorageIDs[0], nodeStorageIDs);
+        new Sender(shadowOut).writeBlock(blockCopy, nodeStorageTypes[0], accessToken,
+                dfsClient.clientName, nodes, nodeStorageTypes, null, bcs,
+                nodes.length, block.getNumBytes(), bytesSent, newGS,
+                checksum4WriteBlock, cachingStrategy.get(), isLazyPersistFile,
+                (targetPinnings != null && targetPinnings[0]), targetPinnings,
+                nodeStorageIDs[0], nodeStorageIDs);
 
         // receive ack for connect
         BlockOpResponseProto resp = BlockOpResponseProto.parseFrom(
             PBHelperClient.vintPrefixed(blockReplyStream));
         Status pipelineStatus = resp.getStatus();
         firstBadLink = resp.getFirstBadLink();
+
+        LOG.info("Failure Recovery 2403");
+
+        // receive ack for connect
+        BlockOpResponseProto resp_ = BlockOpResponseProto.parseFrom(
+                PBHelperClient.vintPrefixed(blockReplyStream));
+        Status pipelineStatus_ = resp.getStatus();
+        LOG.info("Failure Recovery 2409");
 
         // Got an restart OOB ack.
         // If a node is already restarting, this status is not likely from

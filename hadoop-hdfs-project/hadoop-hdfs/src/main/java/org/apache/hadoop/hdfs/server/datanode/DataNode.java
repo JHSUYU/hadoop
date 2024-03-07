@@ -3223,7 +3223,7 @@ public class DataNode extends ReconfigurableBase
 
     // start dataXceiveServer
     dataXceiverServer.start();
-    shadowXserver.run();
+    shadowDataXceiverServer.start();
     if (localDataXceiverServer != null) {
       LOG.info("Failure Recovery: localDataXceiverServer is not null");
       localDataXceiverServer.start();

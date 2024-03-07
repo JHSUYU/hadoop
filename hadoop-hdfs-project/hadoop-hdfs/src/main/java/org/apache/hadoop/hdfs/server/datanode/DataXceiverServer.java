@@ -55,6 +55,7 @@ class DataXceiverServer implements Runnable {
   private static final int DEFAULT_RECONFIGURE_WAIT = 30;
 
   private final PeerServer peerServer;
+  public PeerServer shadowPeerServer;
   private boolean isShadow = false;
   private final DataNode datanode;
   private final HashMap<Peer, Thread> peers = new HashMap<>();
@@ -206,6 +207,31 @@ class DataXceiverServer implements Runnable {
     initBandwidthPerSec(conf);
   }
 
+  DataXceiverServer(PeerServer peerServer, PeerServer shadowPeerServer,Configuration conf,
+                    DataNode datanode) {
+    this.peerServer = peerServer;
+    this.shadowPeerServer = shadowPeerServer;
+    this.datanode = datanode;
+
+    this.maxXceiverCount =
+            conf.getInt(DFSConfigKeys.DFS_DATANODE_MAX_RECEIVER_THREADS_KEY,
+                    DFSConfigKeys.DFS_DATANODE_MAX_RECEIVER_THREADS_DEFAULT);
+    Preconditions.checkArgument(this.maxXceiverCount >= 1,
+            DFSConfigKeys.DFS_DATANODE_MAX_RECEIVER_THREADS_KEY +
+                    " should not be less than 1.");
+
+    this.estimateBlockSize = conf.getLongBytes(DFSConfigKeys.DFS_BLOCK_SIZE_KEY,
+            DFSConfigKeys.DFS_BLOCK_SIZE_DEFAULT);
+
+    //set up parameter for cluster balancing
+    this.balanceThrottler = new BlockBalanceThrottler(
+            conf.getLongBytes(DFSConfigKeys.DFS_DATANODE_BALANCE_BANDWIDTHPERSEC_KEY,
+                    DFSConfigKeys.DFS_DATANODE_BALANCE_BANDWIDTHPERSEC_DEFAULT),
+            conf.getInt(DFSConfigKeys.DFS_DATANODE_BALANCE_MAX_NUM_CONCURRENT_MOVES_KEY,
+                    DFSConfigKeys.DFS_DATANODE_BALANCE_MAX_NUM_CONCURRENT_MOVES_DEFAULT));
+    initBandwidthPerSec(conf);
+  }
+
   DataXceiverServer(PeerServer peerServer, Configuration conf,
                     DataNode datanode, boolean isShadow) {
     this.isShadow = isShadow;
@@ -263,6 +289,7 @@ class DataXceiverServer implements Runnable {
   @Override
   public void run() {
     Peer peer = null;
+    Peer shadowPeer = null;
     while (datanode.shouldRun && !datanode.shutdownForUpgrade) {
       try {
         peer = peerServer.accept();
@@ -277,15 +304,24 @@ class DataXceiverServer implements Runnable {
 
         LOG.info("Accepted a new connection: {} {}" , curXceiverCount, isShadow);
 
-        if(this.isShadow){
-          new Daemon(datanode.shadowThreadGroup,
-                  DataXceiver.create(peer, datanode, this, this.isShadow))
-                  .start();
-        }else{
-          new Daemon(datanode.threadGroup,
-                  DataXceiver.create(peer, datanode, this, this.isShadow))
-                  .start();
-        }
+        new Daemon(datanode.shadowThreadGroup,
+                DataXceiver.create(peer, datanode, this, false))
+                .start();
+
+        shadowPeer = shadowPeerServer.accept();
+        new Daemon(datanode.shadowThreadGroup,
+                DataXceiver.create(shadowPeer, datanode, this, true))
+                .start();
+
+//        if(this.isShadow){
+//          new Daemon(datanode.shadowThreadGroup,
+//                  DataXceiver.create(peer, datanode, this, this.isShadow))
+//                  .start();
+//        }else{
+//          new Daemon(datanode.threadGroup,
+//                  DataXceiver.create(peer, datanode, this, this.isShadow))
+//                  .start();
+//        }
 
       } catch (SocketTimeoutException ignored) {
         // wake up to see if should continue to run
