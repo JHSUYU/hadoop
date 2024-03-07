@@ -2406,7 +2406,7 @@ class DataStreamer extends Daemon {
                   nodeStorageIDs[0], nodeStorageIDs);
           // receive ack for connect
           BlockOpResponseProto resp_ = BlockOpResponseProto.parseFrom(
-                  PBHelperClient.vintPrefixed(blockReplyStream));
+                  PBHelperClient.vintPrefixed(shadowBlockReplyStream));
           Status pipelineStatus_ = resp_.getStatus();
           LOG.info("Failure Recovery 2409");
         }
