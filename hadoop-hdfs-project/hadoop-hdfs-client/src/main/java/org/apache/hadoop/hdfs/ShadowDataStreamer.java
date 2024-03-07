@@ -901,7 +901,6 @@ class ShadowDataStreamer extends Daemon {
                     e.printStackTrace();
                 }
 
-                streamerClosed = true;
 
 //                synchronized (dataQueue) {
 //                    // wait for a packet to be sent.
@@ -1070,7 +1069,13 @@ class ShadowDataStreamer extends Daemon {
                 }
             }
         }
-        //closeInternal();
+        closeResponder();       // close and join
+        closeStream();
+        streamerClosed = true;
+        //release();
+        synchronized (dataQueue) {
+            dataQueue.notifyAll();
+        }
         LOG.info("Reach End");
     }
 
