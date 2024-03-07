@@ -811,7 +811,7 @@ public class DFSOutputStream extends FSOutputSummer
 
   protected synchronized void start() {
     getStreamer().start();
-    //shadowStreamer.start();
+    shadowStreamer.start();
   }
 
   /**
