@@ -2336,7 +2336,7 @@ class DataStreamer extends Daemon {
     while (true) {
       boolean result = false;
       DataOutputStream out = null;
-      DataOutputStream shadowOut = null;
+      final DataOutputStream[] shadowOut = {null};
       try {
         assert null == s : "Previous socket unclosed";
         assert null == blockReplyStream : "Previous blockReplyStream unclosed";
@@ -2401,30 +2401,39 @@ class DataStreamer extends Daemon {
         LOG.info("Failure Recovery 2403");
 
         if(recoveryFlag) {
-            shadowS = shadowCreateSocketForPipeline(nodes[0], nodes.length, dfsClient);
-            OutputStream shadowUnbufOut = NetUtils.getOutputStream(shadowS, writeTimeout);
-            InputStream shadowUnbufIn = NetUtils.getInputStream(shadowS, readTimeout);
-            IOStreamPair shadowSaslStreams = dfsClient.saslClient.socketSend(shadowS,
-                    shadowUnbufOut, shadowUnbufIn, dfsClient, accessToken, nodes[0]);
-            shadowUnbufOut = shadowSaslStreams.out;
-            shadowUnbufIn = shadowSaslStreams.in;
-            shadowOut = new DataOutputStream(new BufferedOutputStream(shadowUnbufOut,
-                    DFSUtilClient.getSmallBufferSize(dfsClient.getConfiguration())));
-            shadowBlockReplyStream = new DataInputStream(shadowUnbufIn);
-            new Sender(shadowOut).writeBlock(blockCopy, nodeStorageTypes[0], accessToken,
-                    dfsClient.clientName, nodes, nodeStorageTypes, null, bcs,
-                    nodes.length, block.getNumBytes(), bytesSent, newGS,
-                    checksum4WriteBlock, cachingStrategy.get(), isLazyPersistFile,
-                    (targetPinnings != null && targetPinnings[0]), targetPinnings,
-                    nodeStorageIDs[0], nodeStorageIDs);
-            // receive ack for connect
-            BlockOpResponseProto resp_ = BlockOpResponseProto.parseFrom(
-                    PBHelperClient.vintPrefixed(shadowBlockReplyStream));
-            Status pipelineStatus_ = resp_.getStatus();
-            String firstBadLink_ = resp_.getFirstBadLink();
-            LOG.info("Failure Recovery 2409, pipelineStatus_ is {}, firstBadLink_ is {}", pipelineStatus_, firstBadLink_);
-        }
-
+          Thread t= new Thread(new Runnable() {
+            @Override
+            public void run() {
+              try {
+                shadowS = shadowCreateSocketForPipeline(nodes[0], nodes.length, dfsClient);
+                OutputStream shadowUnbufOut = NetUtils.getOutputStream(shadowS, writeTimeout);
+                InputStream shadowUnbufIn = NetUtils.getInputStream(shadowS, readTimeout);
+                IOStreamPair shadowSaslStreams = dfsClient.saslClient.socketSend(shadowS,
+                        shadowUnbufOut, shadowUnbufIn, dfsClient, accessToken, nodes[0]);
+                shadowUnbufOut = shadowSaslStreams.out;
+                shadowUnbufIn = shadowSaslStreams.in;
+                shadowOut[0] = new DataOutputStream(new BufferedOutputStream(shadowUnbufOut,
+                        DFSUtilClient.getSmallBufferSize(dfsClient.getConfiguration())));
+                shadowBlockReplyStream = new DataInputStream(shadowUnbufIn);
+                new Sender(shadowOut[0]).writeBlock(blockCopy, nodeStorageTypes[0], accessToken,
+                        dfsClient.clientName, nodes, nodeStorageTypes, null, bcs,
+                        nodes.length, block.getNumBytes(), bytesSent, newGS,
+                        checksum4WriteBlock, cachingStrategy.get(), isLazyPersistFile,
+                        (targetPinnings != null && targetPinnings[0]), targetPinnings,
+                        nodeStorageIDs[0], nodeStorageIDs);
+                // receive ack for connect
+                BlockOpResponseProto resp_ = BlockOpResponseProto.parseFrom(
+                        PBHelperClient.vintPrefixed(shadowBlockReplyStream));
+                Status pipelineStatus_ = resp_.getStatus();
+                String firstBadLink_ = resp_.getFirstBadLink();
+                LOG.info("Failure Recovery 2409, pipelineStatus_ is {}, firstBadLink_ is {}", pipelineStatus_, firstBadLink_);
+              } catch (IOException e) {
+                e.printStackTrace();
+              }
+            }
+          });
+          t.start();
+          }
 
         // Got an restart OOB ack.
         // If a node is already restarting, this status is not likely from
