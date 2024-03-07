@@ -2421,7 +2421,8 @@ class DataStreamer extends Daemon {
             BlockOpResponseProto resp_ = BlockOpResponseProto.parseFrom(
                     PBHelperClient.vintPrefixed(shadowBlockReplyStream));
             Status pipelineStatus_ = resp_.getStatus();
-            LOG.info("Failure Recovery 2409");
+            String firstBadLink_ = resp_.getFirstBadLink();
+            LOG.info("Failure Recovery 2409, pipelineStatus_ is {}, firstBadLink_ is {}", pipelineStatus_, firstBadLink_);
         }
 
 
