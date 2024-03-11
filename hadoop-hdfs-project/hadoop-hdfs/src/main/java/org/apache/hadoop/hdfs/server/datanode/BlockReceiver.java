@@ -304,7 +304,7 @@ class BlockReceiver implements Closeable {
     }
   }
 
-  BlockReceiver(final ExtendedBlock block, final StorageType storageType,
+   BlockReceiver(final ExtendedBlock block, final StorageType storageType,
                 final DataInputStream in,
                 final String inAddr, final String myAddr,
                 final BlockConstructionStage stage,
@@ -775,6 +775,7 @@ class BlockReceiver implements Closeable {
         DataNodeFaultInjector.get().logDelaySendingPacketDownstream(
             mirrorAddr,
             duration);
+        LOG.info("Time to send packet to mirror: {}ms", duration);
         trackSendPacketToLastNodeInPipeline(duration);
         if (duration > datanodeSlowLogThresholdMs) {
           datanode.metrics.incrPacketsSlowWriteToMirror();
@@ -926,6 +927,7 @@ class BlockReceiver implements Closeable {
                   replicaInfo.getBlockId(), seqno);
             }
           }
+          LOG.info("Failure Recovery get Time Write to duration: " + duration + "ms. Max write to disk: " + maxWriteToDiskMs + "ms.");
 
           if (duration > maxWriteToDiskMs) {
             maxWriteToDiskMs = duration;

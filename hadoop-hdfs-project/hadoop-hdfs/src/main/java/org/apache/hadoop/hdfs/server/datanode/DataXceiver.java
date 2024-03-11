@@ -776,9 +776,12 @@ class DataXceiver extends Receiver implements Runnable {
     } else {
       storageIds = new String[0];
     }
+    long now = monotonicNow();
     checkAccess(replyOut, isClient, block, blockToken, Op.WRITE_BLOCK,
         BlockTokenIdentifier.AccessMode.WRITE,
         storageTypes, storageIds);
+    long after = monotonicNow();
+    LOG.info("Failure Recovery get time check Access: " + (after - now));
 
     // check single target for transfer-RBW/Finalized
     if (isTransfer && targets.length > 0) {
@@ -822,12 +825,15 @@ class DataXceiver extends Receiver implements Runnable {
       if (isDatanode || 
           stage != BlockConstructionStage.PIPELINE_CLOSE_RECOVERY) {
         // open a block receiver
+        now = monotonicNow();
         setCurrentBlockReceiver(getBlockReceiver(block, storageType, in,
             peer.getRemoteAddressString(),
             peer.getLocalAddressString(),
             stage, latestGenerationStamp, minBytesRcvd, maxBytesRcvd,
             clientname, srcDataNode, datanode, requestedChecksum,
             cachingStrategy, allowLazyPersist, pinning, storageId));
+        after = monotonicNow();
+        LOG.info("Failure Recovery get time check BlockReceiver: " + (after - now));
         replica = blockReceiver.getReplica();
       } else {
         replica = datanode.data.recoverClose(
@@ -839,6 +845,7 @@ class DataXceiver extends Receiver implements Runnable {
       //
       // Connect to downstream machine, if appropriate
       //
+      now = monotonicNow();
       if (targets.length > 0) {
         InetSocketAddress mirrorTarget = null;
         // Connect to backup machine
@@ -896,6 +903,8 @@ class DataXceiver extends Receiver implements Runnable {
                 latestGenerationStamp, requestedChecksum, cachingStrategy,
                 allowLazyPersist, targetPinnings[0], targetPinnings,
                 targetStorageId, targetStorageIds);
+            after = monotonicNow();
+            LOG.info("Failure Recovery get time 907: " + (after - now));
           } else {
             new Sender(mirrorOut).writeBlock(originalBlock, targetStorageTypes[0],
                 blockToken, clientname, targets, targetStorageTypes,
@@ -903,12 +912,15 @@ class DataXceiver extends Receiver implements Runnable {
                 latestGenerationStamp, requestedChecksum, cachingStrategy,
                 allowLazyPersist, false, targetPinnings,
                 targetStorageId, targetStorageIds);
+            after = monotonicNow();
+            LOG.info("Failure Recovery get time 907: " + (after - now));
           }
 
           mirrorOut.flush();
 
           DataNodeFaultInjector.get().writeBlockAfterFlush();
 
+          now = monotonicNow();
           // read connect ack (only for clients, not for replication req)
           if (isClient) {
             BlockOpResponseProto connectAck =
@@ -921,6 +933,9 @@ class DataXceiver extends Receiver implements Runnable {
                   targets.length, firstBadLink);
             }
           }
+          after = monotonicNow();
+
+          LOG.info("Failure Recovery get time isClient: " + (after - now));
 
         } catch (IOException e) {
           if (isClient) {
