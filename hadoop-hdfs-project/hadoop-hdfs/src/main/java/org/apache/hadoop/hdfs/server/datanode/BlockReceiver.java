@@ -221,15 +221,21 @@ class BlockReceiver implements Closeable {
         LOG.info("Original Track, stage is {}", stage);
         switch (stage) {
         case PIPELINE_SETUP_CREATE:
+          long now = Time.monotonicNow();
           replicaHandler = datanode.data.createRbw(storageType, storageId,
               block, allowLazyPersist);
           datanode.notifyNamenodeReceivingBlock(
               block, replicaHandler.getReplica().getStorageUuid());
+          long timeTaken = Time.monotonicNow() - now;
+          LOG.info("createRbw took {} ms", timeTaken);
           break;
         case PIPELINE_SETUP_STREAMING_RECOVERY:
+          now = Time.monotonicNow();
           replicaHandler = datanode.data.recoverRbw(
               block, newGs, minBytesRcvd, maxBytesRcvd);
           block.setGenerationStamp(newGs);
+          timeTaken = Time.monotonicNow() - now;
+          LOG.info("recoverRbw took {} ms", timeTaken);
           break;
         case PIPELINE_SETUP_APPEND:
           replicaHandler = datanode.data.append(block, newGs, minBytesRcvd);
