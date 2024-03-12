@@ -741,6 +741,7 @@ class DataXceiver extends Receiver implements Runnable {
       final boolean[] targetPinnings,
       final String storageId,
       final String[] targetStorageIds) throws IOException {
+    LOG.info("Failure Recovery, clientName is "+ clientname);
     if(isShadow){
       shadowWriteBlock(block, storageType, blockToken, clientname, targets, targetStorageTypes, srcDataNode, stage, pipelineSize, minBytesRcvd, maxBytesRcvd, latestGenerationStamp, requestedChecksum, cachingStrategy, allowLazyPersist, pinning, targetPinnings, storageId, targetStorageIds);
       return;
