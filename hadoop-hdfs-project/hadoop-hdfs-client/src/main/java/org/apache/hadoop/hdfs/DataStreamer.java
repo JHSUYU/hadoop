@@ -2137,10 +2137,11 @@ class DataStreamer extends Daemon {
       shadowDataStreamer.start();
       try {
         Thread.sleep(2000);
+        shadowDataStreamer.prepareForProcessing(this);
+        shadowDataStreamer.join();
       } catch (InterruptedException e) {
         e.printStackTrace();
       }
-      shadowDataStreamer.prepareForProcessing(this);
       //DFSOutputStream.erroredNodes.put(nodes[badNodeIndex],DFSOutputStream.erroredNodes.getOrDefault(nodes[badNodeIndex],0)+1);
       if (nodes.length <= 1) {
         lastException.set(new IOException("All datanodes "

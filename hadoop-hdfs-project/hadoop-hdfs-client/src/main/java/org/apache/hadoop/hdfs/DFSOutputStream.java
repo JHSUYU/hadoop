@@ -277,9 +277,7 @@ public class DFSOutputStream extends FSOutputSummer
         bytesPerChecksum);
 
     if (createStreamer) {
-      shadowStreamer = new ShadowDataStreamer(stat, null, dfsClient, src, progress,
-              checksum, cachingStrategy, byteArrayManager, favoredNodes,
-              addBlockFlags);
+      shadowStreamer = null;
       streamer = new DataStreamer(stat, null, dfsClient, src, progress,
               checksum, cachingStrategy, byteArrayManager, favoredNodes,
               addBlockFlags, shadowStreamer);
@@ -811,7 +809,7 @@ public class DFSOutputStream extends FSOutputSummer
 
   protected synchronized void start() {
     getStreamer().start();
-    shadowStreamer.start();
+    // shadowStreamer.start();
   }
 
   /**
