@@ -1037,6 +1037,7 @@ class BlockReceiver implements Closeable {
     packetReceiver.receiveNextPacket(in);
     LOG.info("SDS: recvNextPacketSucc");
     PacketHeader header = packetReceiver.getHeader();
+    LOG.info("SDS: recv header succesfully");
     long seqno = header.getSeqno();
     LOG.debug("Receiving one packet for block {} seqno:{} header:{} ", block,
             seqno, header);
