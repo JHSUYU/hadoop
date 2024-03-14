@@ -1442,6 +1442,7 @@ class ShadowDataStreamer extends Daemon {
                         }
                         // node error
                         if (reply != SUCCESS) {
+                            LOG.info("SDS, error again");
                             errorState.setBadNodeIndex(i); // mark bad datanode
                             throw new IOException("Bad response " + reply +
                                     " for " + block + " from datanode " + targets[i]);
