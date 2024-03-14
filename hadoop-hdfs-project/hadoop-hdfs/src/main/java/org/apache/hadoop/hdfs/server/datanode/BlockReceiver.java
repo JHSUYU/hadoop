@@ -1033,8 +1033,9 @@ class BlockReceiver implements Closeable {
 
   private int shadowReceivePacket() throws IOException {
     // read the next packet
+    LOG.info("SDS: recvNextPacket");
     packetReceiver.receiveNextPacket(in);
-
+    LOG.info("SDS: recvNextPacketSucc");
     PacketHeader header = packetReceiver.getHeader();
     long seqno = header.getSeqno();
     LOG.debug("Receiving one packet for block {} seqno:{} header:{} ", block,
