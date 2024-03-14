@@ -2131,20 +2131,28 @@ class DataStreamer extends Daemon {
     final int badNodeIndex = errorState.getBadNodeIndex();
     if (badNodeIndex >= 0) {
       LOG.info("DataStreamer Failure Recovery: prepare For Processing 0");
-      if(shadowDataStreamer != null){
-        try{
-          shadowDataStreamer.join();
-        } catch(InterruptedException e){
-          e.printStackTrace();
-        }
-      }
+//      if(shadowDataStreamer != null){
+//        try{
+//          shadowDataStreamer.join();
+//        } catch(InterruptedException e){
+//          e.printStackTrace();
+//        }
+//      }
       shadowDataStreamer = new ShadowDataStreamer(stat, null, dfsClient, src, progress,
               checksum4WriteBlock, cachingStrategy, byteArrayManager, favoredNodes,
               addBlockFlags);
       shadowDataStreamer.start();
       try {
-        Thread.sleep(2000);
+        Thread.sleep(1000);
         shadowDataStreamer.prepareForProcessing(this);
+        if(shadowDataStreamer != null){
+          try{
+            shadowDataStreamer.streamerClosed = true;
+            shadowDataStreamer.join();
+          } catch(InterruptedException e){
+            e.printStackTrace();
+          }
+        }
       } catch (InterruptedException e) {
         e.printStackTrace();
       }

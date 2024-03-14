@@ -467,7 +467,7 @@ class ShadowDataStreamer extends Daemon {
         }
     }
 
-    private volatile boolean streamerClosed = false;
+    public boolean streamerClosed = false;
     protected BlockToWrite block; // its length is number of bytes acked
     protected Token<BlockTokenIdentifier> accessToken;
     private DataOutputStream blockStream;
