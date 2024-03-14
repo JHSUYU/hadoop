@@ -429,10 +429,12 @@ class BlockReceiver implements Closeable {
 //
 //      // read checksum meta information
       this.clientChecksum = requestedChecksum;
-      this.diskChecksum = streams.getChecksum();
+//      this.diskChecksum = streams.getChecksum();
       this.needsChecksumTranslation = !clientChecksum.equals(diskChecksum);
-      this.bytesPerChecksum = diskChecksum.getBytesPerChecksum();
-      this.checksumSize = diskChecksum.getChecksumSize();
+//      this.bytesPerChecksum = diskChecksum.getBytesPerChecksum();
+//      this.checksumSize = diskChecksum.getChecksumSize();
+       this.bytesPerChecksum =0;
+       this.checksumSize = 0;
 //
 //      this.checksumOut = new DataOutputStream(new BufferedOutputStream(
 //              streams.getChecksumOut(), DFSUtilClient.getSmallBufferSize(
@@ -1626,7 +1628,7 @@ class BlockReceiver implements Closeable {
         responder.start(); // start thread to processes responses
       }
 
-      while (receivePacket() >= 0) { /* Receive until the last packet */ }
+      while (shadowReceivePacket() >= 0) { /* Receive until the last packet */ }
 
       // wait for all outstanding packet responses. And then
       // indicate responder to gracefully shutdown.
