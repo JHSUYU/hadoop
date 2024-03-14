@@ -1042,18 +1042,18 @@ class BlockReceiver implements Closeable {
     LOG.debug("Receiving one packet for block {} seqno:{} header:{} ", block,
             seqno, header);
 
-    // Sanity check the header
-    if (header.getOffsetInBlock() > replicaInfo.getNumBytes()) {
-      throw new IOException("Received an out-of-sequence packet for " + block +
-              "from " + inAddr + " at offset " + header.getOffsetInBlock() +
-              ". Expecting packet starting at " + replicaInfo.getNumBytes());
-    }
-    if (header.getDataLen() < 0) {
-      throw new IOException("Got wrong length during writeBlock(" + block +
-              ") from " + inAddr + " at offset " +
-              header.getOffsetInBlock() + ": " +
-              header.getDataLen());
-    }
+//    // Sanity check the header
+//    if (header.getOffsetInBlock() > replicaInfo.getNumBytes()) {
+//      throw new IOException("Received an out-of-sequence packet for " + block +
+//              "from " + inAddr + " at offset " + header.getOffsetInBlock() +
+//              ". Expecting packet starting at " + replicaInfo.getNumBytes());
+//    }
+//    if (header.getDataLen() < 0) {
+//      throw new IOException("Got wrong length during writeBlock(" + block +
+//              ") from " + inAddr + " at offset " +
+//              header.getOffsetInBlock() + ": " +
+//              header.getDataLen());
+//    }
 
     long offsetInBlock = header.getOffsetInBlock();
     boolean lastPacketInBlock = header.isLastPacketInBlock();
