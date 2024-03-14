@@ -330,6 +330,8 @@ public class TestClientProtocolForPipelineRecovery {
     conf.set(HdfsClientConfigKeys.DFS_CLIENT_SOCKET_TIMEOUT_KEY, "3000");
     MiniDFSCluster cluster = null;
 
+    long startTime = System.currentTimeMillis();
+
     try {
       int numDataNodes = 8;
       cluster = new MiniDFSCluster.Builder(conf).numDataNodes(numDataNodes).build();
@@ -362,6 +364,9 @@ public class TestClientProtocolForPipelineRecovery {
         cluster.shutdown();
       }
     }
+    long endTime = System.currentTimeMillis();
+    long executionTime = endTime - startTime;
+    LOG.info("Execution Time: " + executionTime + " ms");
   }
 
   @Test
