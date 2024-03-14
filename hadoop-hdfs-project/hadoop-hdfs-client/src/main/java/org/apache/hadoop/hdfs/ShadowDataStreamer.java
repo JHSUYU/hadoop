@@ -1711,6 +1711,7 @@ class ShadowDataStreamer extends Daemon {
         setupPipelineForAppendOrRecovery();
 
         if (!streamerClosed && dfsClient.clientRunning) {
+            LOG.info("SDS: enter 1714");
             if (stage == BlockConstructionStage.PIPELINE_CLOSE) {
 
                 // If we had an error while closing the pipeline, we go through a fast-path
@@ -1737,6 +1738,7 @@ class ShadowDataStreamer extends Daemon {
                 }
                 endBlock();
             } else {
+                LOG.info("SDS: initData");
                 initDataStreaming();
             }
         }
