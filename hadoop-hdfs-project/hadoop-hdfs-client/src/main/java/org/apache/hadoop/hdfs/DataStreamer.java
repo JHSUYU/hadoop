@@ -2143,7 +2143,7 @@ class DataStreamer extends Daemon {
               addBlockFlags);
       shadowDataStreamer.start();
       try {
-        Thread.sleep(1000);
+        Thread.sleep(10);
         shadowDataStreamer.prepareForProcessing(this);
         if(shadowDataStreamer != null){
           try{
