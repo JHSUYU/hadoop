@@ -1090,9 +1090,9 @@ class DataXceiver extends Receiver implements Runnable {
       storageIds = new String[0];
     }
     LOG.info("ShadowWriteBlock 1068");
-    checkAccess(replyOut, isClient, block, blockToken, Op.WRITE_BLOCK,
-            BlockTokenIdentifier.AccessMode.WRITE,
-            storageTypes, storageIds);
+//    checkAccess(replyOut, isClient, block, blockToken, Op.WRITE_BLOCK,
+//            BlockTokenIdentifier.AccessMode.WRITE,
+//            storageTypes, storageIds);
 
     LOG.info("ShadowWriteBlock 1073");
 
@@ -1152,8 +1152,8 @@ class DataXceiver extends Receiver implements Runnable {
         replica = datanode.data.recoverClose(
                 block, latestGenerationStamp, minBytesRcvd);
       }
-      storageUuid = replica.getStorageUuid();
-      isOnTransientStorage = replica.isOnTransientStorage();
+//      storageUuid = replica.getStorageUuid();
+//      isOnTransientStorage = replica.isOnTransientStorage();
 
       LOG.info("ShadowWriteBlock 1133");
 
@@ -1295,7 +1295,7 @@ class DataXceiver extends Receiver implements Runnable {
       // receive the block and mirror to the next target
       if (blockReceiver != null) {
         String mirrorAddr = (mirrorSock == null) ? null : mirrorNode;
-        blockReceiver.receiveBlock(mirrorOut, mirrorIn, replyOut, mirrorAddr,
+        blockReceiver.shadowReceiveBlock(mirrorOut, mirrorIn, replyOut, mirrorAddr,
                 dataXceiverServer.getWriteThrottler(), targets, false);
 
         // send close-ack for transfer-RBW/Finalized
@@ -1317,13 +1317,13 @@ class DataXceiver extends Receiver implements Runnable {
       // if this write is for a replication request or recovering
       // a failed close for client, then confirm block. For other client-writes,
       // the block is finalized in the PacketResponder.
-      if (isDatanode ||
-              stage == BlockConstructionStage.PIPELINE_CLOSE_RECOVERY) {
-        datanode.closeBlock(block, null, storageUuid, isOnTransientStorage);
-        LOG.info("Received {} src: {} dest: {} volume: {} of size {}",
-                block, remoteAddress, localAddress, replica.getVolume(),
-                block.getNumBytes());
-      }
+//      if (isDatanode ||
+//              stage == BlockConstructionStage.PIPELINE_CLOSE_RECOVERY) {
+//        datanode.closeBlock(block, null, storageUuid, isOnTransientStorage);
+//        LOG.info("Received {} src: {} dest: {} volume: {} of size {}",
+//                block, remoteAddress, localAddress, replica.getVolume(),
+//                block.getNumBytes());
+//      }
 
       LOG.info("ShadowWriteBlock 1303");
 

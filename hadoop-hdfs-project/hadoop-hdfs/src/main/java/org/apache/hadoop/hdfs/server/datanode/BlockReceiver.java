@@ -322,147 +322,128 @@ class BlockReceiver implements Closeable {
                 final boolean pinning,
                 final String storageId,
                 boolean isShadow) throws IOException {
-    try{
-      this.block = block;
-      this.in = in;
-      this.inAddr = inAddr;
-      this.myAddr = myAddr;
-      this.srcDataNode = srcDataNode;
-      this.datanode = datanode;
+     try {
+       this.block = block;
+       this.in = in;
+       this.inAddr = inAddr;
+       this.myAddr = myAddr;
+       this.srcDataNode = srcDataNode;
+       this.datanode = datanode;
 
-      this.clientname = clientname;
-      this.isDatanode = clientname.length() == 0;
-      this.isClient = !this.isDatanode;
-      this.restartBudget = datanode.getDnConf().restartReplicaExpiry;
-      this.datanodeSlowLogThresholdMs =
-              datanode.getDnConf().getSlowIoWarningThresholdMs();
-      // For replaceBlock() calls response should be sent to avoid socketTimeout
-      // at clients. So sending with the interval of 0.5 * socketTimeout
-      final long readTimeout = datanode.getDnConf().socketTimeout;
-      this.responseInterval = (long) (readTimeout * 0.5);
-      //for datanode, we have
-      //1: clientName.length() == 0, and
-      //2: stage == null or PIPELINE_SETUP_CREATE
-      this.stage = stage;
-      this.isTransfer = stage == BlockConstructionStage.TRANSFER_RBW
-              || stage == BlockConstructionStage.TRANSFER_FINALIZED;
+       this.clientname = clientname;
+       this.isDatanode = clientname.length() == 0;
+       this.isClient = !this.isDatanode;
+       this.restartBudget = datanode.getDnConf().restartReplicaExpiry;
+       this.datanodeSlowLogThresholdMs =
+               datanode.getDnConf().getSlowIoWarningThresholdMs();
+       // For replaceBlock() calls response should be sent to avoid socketTimeout
+       // at clients. So sending with the interval of 0.5 * socketTimeout
+       final long readTimeout = datanode.getDnConf().socketTimeout;
+       this.responseInterval = (long) (readTimeout * 0.5);
+       //for datanode, we have
+       //1: clientName.length() == 0, and
+       //2: stage == null or PIPELINE_SETUP_CREATE
+       this.stage = stage;
+       this.isTransfer = stage == BlockConstructionStage.TRANSFER_RBW
+               || stage == BlockConstructionStage.TRANSFER_FINALIZED;
 
-      this.pinning = pinning;
-      this.lastSentTime.set(Time.monotonicNow());
-      // Downstream will timeout in readTimeout on receiving the next packet.
-      // If there is no data traffic, a heartbeat packet is sent at
-      // the interval of 0.5*readTimeout. Here, we set 0.9*readTimeout to be
-      // the threshold for detecting congestion.
-      this.maxSendIdleTime = (long) (readTimeout * 0.9);
-      if (LOG.isDebugEnabled()) {
-        LOG.debug(getClass().getSimpleName() + ": " + block
-                + "\n storageType=" + storageType + ", inAddr=" + inAddr
-                + ", myAddr=" + myAddr + "\n stage=" + stage + ", newGs=" + newGs
-                + ", minBytesRcvd=" + minBytesRcvd
-                + ", maxBytesRcvd=" + maxBytesRcvd + "\n clientname=" + clientname
-                + ", srcDataNode=" + srcDataNode
-                + ", datanode=" + datanode.getDisplayName()
-                + "\n requestedChecksum=" + requestedChecksum
-                + "\n cachingStrategy=" + cachingStrategy
-                + "\n allowLazyPersist=" + allowLazyPersist + ", pinning=" + pinning
-                + ", isClient=" + isClient + ", isDatanode=" + isDatanode
-                + ", responseInterval=" + responseInterval
-                + ", storageID=" + (storageId != null ? storageId : "null")
-        );
-      }
+       this.pinning = pinning;
+       this.lastSentTime.set(Time.monotonicNow());
+       // Downstream will timeout in readTimeout on receiving the next packet.
+       // If there is no data traffic, a heartbeat packet is sent at
+       // the interval of 0.5*readTimeout. Here, we set 0.9*readTimeout to be
+       // the threshold for detecting congestion.
+       this.maxSendIdleTime = (long) (readTimeout * 0.9);
+       if (LOG.isDebugEnabled()) {
+         LOG.debug(getClass().getSimpleName() + ": " + block
+                 + "\n storageType=" + storageType + ", inAddr=" + inAddr
+                 + ", myAddr=" + myAddr + "\n stage=" + stage + ", newGs=" + newGs
+                 + ", minBytesRcvd=" + minBytesRcvd
+                 + ", maxBytesRcvd=" + maxBytesRcvd + "\n clientname=" + clientname
+                 + ", srcDataNode=" + srcDataNode
+                 + ", datanode=" + datanode.getDisplayName()
+                 + "\n requestedChecksum=" + requestedChecksum
+                 + "\n cachingStrategy=" + cachingStrategy
+                 + "\n allowLazyPersist=" + allowLazyPersist + ", pinning=" + pinning
+                 + ", isClient=" + isClient + ", isDatanode=" + isDatanode
+                 + ", responseInterval=" + responseInterval
+                 + ", storageID=" + (storageId != null ? storageId : "null")
+         );
+       }
 
-      //
-      // Open local disk out
-      //
-      if (isDatanode) { //replication or move
-        LOG.info("Shadow Track, isDatanode is {}", isDatanode);
-        replicaHandler =
-                datanode.data.createTemporary(storageType, storageId, block, false);
-      } else {
-        LOG.info("Shadow Track, stage is {}", stage);
-        switch (stage) {
-          case PIPELINE_SETUP_CREATE:
-            replicaHandler = datanode.data.createRbw(storageType, storageId,
-                    block, allowLazyPersist);
-            datanode.notifyNamenodeReceivingBlock(
-                    block, replicaHandler.getReplica().getStorageUuid());
-            break;
-          case PIPELINE_SETUP_STREAMING_RECOVERY:
-            replicaHandler = datanode.data.recoverRbw(
-                    block, newGs, minBytesRcvd, maxBytesRcvd);
-            block.setGenerationStamp(newGs);
-            break;
-          case PIPELINE_SETUP_APPEND:
-            replicaHandler = datanode.data.append(block, newGs, minBytesRcvd);
-            block.setGenerationStamp(newGs);
-            datanode.notifyNamenodeReceivingBlock(
-                    block, replicaHandler.getReplica().getStorageUuid());
-            break;
-          case PIPELINE_SETUP_APPEND_RECOVERY:
-            replicaHandler = datanode.data.recoverAppend(block, newGs, minBytesRcvd);
-            block.setGenerationStamp(newGs);
-            datanode.notifyNamenodeReceivingBlock(
-                    block, replicaHandler.getReplica().getStorageUuid());
-            break;
-          case TRANSFER_RBW:
-          case TRANSFER_FINALIZED:
-            // this is a transfer destination
-            replicaHandler = datanode.data.createTemporary(storageType, storageId,
-                    block, isTransfer);
-            break;
-          default: throw new IOException("Unsupported stage " + stage +
-                  " while receiving block " + block + " from " + inAddr);
-        }
-      }
-      replicaInfo = replicaHandler.getReplica();
-      this.dropCacheBehindWrites = (cachingStrategy.getDropBehind() == null) ?
-              datanode.getDnConf().dropCacheBehindWrites :
-              cachingStrategy.getDropBehind();
-      this.syncBehindWrites = datanode.getDnConf().syncBehindWrites;
-      this.syncBehindWritesInBackground = datanode.getDnConf().
-              syncBehindWritesInBackground;
+//      //
+//      // Open local disk out
+//      //
+//      if (isDatanode) { //replication or move
+//        LOG.info("Shadow Track, isDatanode is {}", isDatanode);
+//        replicaHandler =
+//                datanode.data.createTemporary(storageType, storageId, block, false);
+//      } else {
+//        LOG.info("Shadow Track, stage is {}", stage);
+//        switch (stage) {
+//          case PIPELINE_SETUP_CREATE:
+//            replicaHandler = datanode.data.createRbw(storageType, storageId,
+//                    block, allowLazyPersist);
+//            datanode.notifyNamenodeReceivingBlock(
+//                    block, replicaHandler.getReplica().getStorageUuid());
+//            break;
+//          case PIPELINE_SETUP_STREAMING_RECOVERY:
+//            replicaHandler = datanode.data.recoverRbw(
+//                    block, newGs, minBytesRcvd, maxBytesRcvd);
+//            block.setGenerationStamp(newGs);
+//            break;
+//          case PIPELINE_SETUP_APPEND:
+//            replicaHandler = datanode.data.append(block, newGs, minBytesRcvd);
+//            block.setGenerationStamp(newGs);
+//            datanode.notifyNamenodeReceivingBlock(
+//                    block, replicaHandler.getReplica().getStorageUuid());
+//            break;
+//          case PIPELINE_SETUP_APPEND_RECOVERY:
+//            replicaHandler = datanode.data.recoverAppend(block, newGs, minBytesRcvd);
+//            block.setGenerationStamp(newGs);
+//            datanode.notifyNamenodeReceivingBlock(
+//                    block, replicaHandler.getReplica().getStorageUuid());
+//            break;
+//          case TRANSFER_RBW:
+//          case TRANSFER_FINALIZED:
+//            // this is a transfer destination
+//            replicaHandler = datanode.data.createTemporary(storageType, storageId,
+//                    block, isTransfer);
+//            break;
+//          default: throw new IOException("Unsupported stage " + stage +
+//                  " while receiving block " + block + " from " + inAddr);
+//        }
+//      }
+//      replicaInfo = replicaHandler.getReplica();
+//      this.dropCacheBehindWrites = (cachingStrategy.getDropBehind() == null) ?
+//              datanode.getDnConf().dropCacheBehindWrites :
+//              cachingStrategy.getDropBehind();
+//      this.syncBehindWrites = datanode.getDnConf().syncBehindWrites;
+//      this.syncBehindWritesInBackground = datanode.getDnConf().
+//              syncBehindWritesInBackground;
+//
+//      final boolean isCreate = isDatanode || isTransfer
+//              || stage == BlockConstructionStage.PIPELINE_SETUP_CREATE;
+//      streams = ((LocalReplicaInPipeline)replicaInfo).createStreams(isCreate, requestedChecksum, isShadow);
+//      assert streams != null : "null streams!";
+//
+//      // read checksum meta information
+//      this.clientChecksum = requestedChecksum;
+//      this.diskChecksum = streams.getChecksum();
+//      this.needsChecksumTranslation = !clientChecksum.equals(diskChecksum);
+//      this.bytesPerChecksum = diskChecksum.getBytesPerChecksum();
+//      this.checksumSize = diskChecksum.getChecksumSize();
+//
+//      this.checksumOut = new DataOutputStream(new BufferedOutputStream(
+//              streams.getChecksumOut(), DFSUtilClient.getSmallBufferSize(
+//              datanode.getConf())));
+//      // write data chunk header if creating a new replica
+//      if (isCreate) {
+//        BlockMetadataHeader.writeHeader(checksumOut, diskChecksum);
+//      }
+     } finally {
 
-      final boolean isCreate = isDatanode || isTransfer
-              || stage == BlockConstructionStage.PIPELINE_SETUP_CREATE;
-      streams = ((LocalReplicaInPipeline)replicaInfo).createStreams(isCreate, requestedChecksum, isShadow);
-      assert streams != null : "null streams!";
-
-      // read checksum meta information
-      this.clientChecksum = requestedChecksum;
-      this.diskChecksum = streams.getChecksum();
-      this.needsChecksumTranslation = !clientChecksum.equals(diskChecksum);
-      this.bytesPerChecksum = diskChecksum.getBytesPerChecksum();
-      this.checksumSize = diskChecksum.getChecksumSize();
-
-      this.checksumOut = new DataOutputStream(new BufferedOutputStream(
-              streams.getChecksumOut(), DFSUtilClient.getSmallBufferSize(
-              datanode.getConf())));
-      // write data chunk header if creating a new replica
-      if (isCreate) {
-        BlockMetadataHeader.writeHeader(checksumOut, diskChecksum);
-      }
-    } catch (ReplicaAlreadyExistsException | ReplicaNotFoundException
-            | DiskOutOfSpaceException e) {
-      throw e;
-    } catch(IOException ioe) {
-      if (replicaInfo != null) {
-        replicaInfo.releaseAllBytesReserved();
-      }
-      IOUtils.closeStream(this);
-      cleanupBlock();
-
-      // check if there is a disk error
-      IOException cause = DatanodeUtil.getCauseIfDiskError(ioe);
-      DataNode.LOG
-              .warn("IOException in BlockReceiver constructor :" + ioe.getMessage()
-                      + (cause == null ? "" : ". Cause is "), cause);
-      if (cause != null) {
-        ioe = cause;
-        // Volume error check moved to FileIoProvider
-      }
-
-      throw ioe;
-    }
+     }
   }
 
   /** Return the datanode object. */
@@ -1083,22 +1064,26 @@ class BlockReceiver implements Closeable {
       this.dirSyncOnFinalize = true;
     }
 
-    // update received bytes
+//    // update received bytes
     final long firstByteInBlock = offsetInBlock;
     offsetInBlock += len;
-    if (replicaInfo.getNumBytes() < offsetInBlock) {
-      replicaInfo.setNumBytes(offsetInBlock);
-    }
+//    if (replicaInfo.getNumBytes() < offsetInBlock) {
+//      replicaInfo.setNumBytes(offsetInBlock);
+//    }
 
     // put in queue for pending acks, unless sync was requested
     if (responder != null && !syncBlock && !shouldVerifyChecksum()) {
       ((PacketResponder) responder.getRunnable()).enqueue(seqno,
               lastPacketInBlock, offsetInBlock, Status.SUCCESS);
     }
-
+    LOG.info("Failure Recovery seqno is "+ seqno);
     // Drop heartbeat for testing.
     if (seqno < 0 && len == 0 &&
             DataNodeFaultInjector.get().dropHeartbeatPacket()) {
+      return 0;
+    }
+
+    if(seqno >=0 ){
       return 0;
     }
 
@@ -1600,6 +1585,139 @@ class BlockReceiver implements Closeable {
           if (responder.isAlive()) {
             String msg = "Join on responder thread " + responder
                 + " timed out";
+            LOG.warn(msg + "\n" + StringUtils.getStackTrace(responder));
+            throw new IOException(msg);
+          }
+        } catch (InterruptedException e) {
+          responder.interrupt();
+          // do not throw if shutting down for restart.
+          if (!datanode.isRestarting()) {
+            throw new InterruptedIOException("Interrupted receiveBlock");
+          }
+        }
+        responder = null;
+      }
+    }
+  }
+
+  void shadowReceiveBlock(
+          DataOutputStream mirrOut, // output to next datanode
+          DataInputStream mirrIn,   // input from next datanode
+          DataOutputStream replyOut,  // output to previous datanode
+          String mirrAddr, DataTransferThrottler throttlerArg,
+          DatanodeInfo[] downstreams,
+          boolean isReplaceBlock) throws IOException {
+
+    syncOnClose = datanode.getDnConf().syncOnClose;
+    dirSyncOnFinalize = syncOnClose;
+    boolean responderClosed = false;
+    mirrorOut = mirrOut;
+    mirrorAddr = mirrAddr;
+    initPerfMonitoring(downstreams);
+    throttler = throttlerArg;
+
+    this.replyOut = replyOut;
+    this.isReplaceBlock = isReplaceBlock;
+
+    try {
+      if (isClient && !isTransfer) {
+        responder = new Daemon(datanode.threadGroup,
+                new PacketResponder(replyOut, mirrIn, downstreams));
+        responder.start(); // start thread to processes responses
+      }
+
+      while (receivePacket() >= 0) { /* Receive until the last packet */ }
+
+      // wait for all outstanding packet responses. And then
+      // indicate responder to gracefully shutdown.
+      // Mark that responder has been closed for future processing
+      if (responder != null) {
+        ((PacketResponder)responder.getRunnable()).close();
+        responderClosed = true;
+      }
+
+      // If this write is for a replication or transfer-RBW/Finalized,
+      // then finalize block or convert temporary to RBW.
+      // For client-writes, the block is finalized in the PacketResponder.
+      if (isDatanode || isTransfer) {
+        // Hold a volume reference to finalize block.
+        try (ReplicaHandler handler = claimReplicaHandler()) {
+          // close the block/crc files
+          close();
+          block.setNumBytes(replicaInfo.getNumBytes());
+
+          if (stage == BlockConstructionStage.TRANSFER_RBW) {
+            // for TRANSFER_RBW, convert temporary to RBW
+            datanode.data.convertTemporaryToRbw(block);
+          } else {
+            // for isDatnode or TRANSFER_FINALIZED
+            // Finalize the block.
+            datanode.data.finalizeBlock(block, dirSyncOnFinalize);
+          }
+        }
+        datanode.metrics.incrBlocksWritten();
+      }
+
+    } catch (IOException ioe) {
+      replicaInfo.releaseAllBytesReserved();
+      if (datanode.isRestarting()) {
+        // Do not throw if shutting down for restart. Otherwise, it will cause
+        // premature termination of responder.
+        LOG.info("Shutting down for restart (" + block + ").");
+      } else {
+        LOG.info("Exception for " + block, ioe);
+        throw ioe;
+      }
+    } finally {
+      // Clear the previous interrupt state of this thread.
+      Thread.interrupted();
+
+      // If a shutdown for restart was initiated, upstream needs to be notified.
+      // There is no need to do anything special if the responder was closed
+      // normally.
+      if (!responderClosed) { // Data transfer was not complete.
+        if (responder != null) {
+          // In case this datanode is shutting down for quick restart,
+          // send a special ack upstream.
+          if (datanode.isRestarting() && isClient && !isTransfer) {
+            try (Writer out = new OutputStreamWriter(
+                    replicaInfo.createRestartMetaStream(), "UTF-8")) {
+              // write out the current time.
+              out.write(Long.toString(Time.now() + restartBudget));
+              out.flush();
+            } catch (IOException ioe) {
+              // The worst case is not recovering this RBW replica.
+              // Client will fall back to regular pipeline recovery.
+            } finally {
+              IOUtils.closeStream(streams.getDataOut());
+            }
+            try {
+              // Even if the connection is closed after the ack packet is
+              // flushed, the client can react to the connection closure
+              // first. Insert a delay to lower the chance of client
+              // missing the OOB ack.
+              Thread.sleep(1000);
+            } catch (InterruptedException ie) {
+              // It is already going down. Ignore this.
+            }
+          }
+          responder.interrupt();
+        }
+        IOUtils.closeStream(this);
+        cleanupBlock();
+      }
+      if (responder != null) {
+        try {
+          responder.interrupt();
+          // join() on the responder should timeout a bit earlier than the
+          // configured deadline. Otherwise, the join() on this thread will
+          // likely timeout as well.
+          long joinTimeout = datanode.getDnConf().getXceiverStopTimeout();
+          joinTimeout = joinTimeout > 1  ? joinTimeout*8/10 : joinTimeout;
+          responder.join(joinTimeout);
+          if (responder.isAlive()) {
+            String msg = "Join on responder thread " + responder
+                    + " timed out";
             LOG.warn(msg + "\n" + StringUtils.getStackTrace(responder));
             throw new IOException(msg);
           }
