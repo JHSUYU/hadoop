@@ -415,24 +415,24 @@ class BlockReceiver implements Closeable {
 //        }
 //      }
 //      replicaInfo = replicaHandler.getReplica();
-//      this.dropCacheBehindWrites = (cachingStrategy.getDropBehind() == null) ?
-//              datanode.getDnConf().dropCacheBehindWrites :
-//              cachingStrategy.getDropBehind();
-//      this.syncBehindWrites = datanode.getDnConf().syncBehindWrites;
-//      this.syncBehindWritesInBackground = datanode.getDnConf().
-//              syncBehindWritesInBackground;
+      this.dropCacheBehindWrites = (cachingStrategy.getDropBehind() == null) ?
+              datanode.getDnConf().dropCacheBehindWrites :
+              cachingStrategy.getDropBehind();
+      this.syncBehindWrites = datanode.getDnConf().syncBehindWrites;
+      this.syncBehindWritesInBackground = datanode.getDnConf().
+              syncBehindWritesInBackground;
 //
-//      final boolean isCreate = isDatanode || isTransfer
-//              || stage == BlockConstructionStage.PIPELINE_SETUP_CREATE;
+      final boolean isCreate = isDatanode || isTransfer
+              || stage == BlockConstructionStage.PIPELINE_SETUP_CREATE;
 //      streams = ((LocalReplicaInPipeline)replicaInfo).createStreams(isCreate, requestedChecksum, isShadow);
 //      assert streams != null : "null streams!";
 //
 //      // read checksum meta information
-//      this.clientChecksum = requestedChecksum;
-//      this.diskChecksum = streams.getChecksum();
-//      this.needsChecksumTranslation = !clientChecksum.equals(diskChecksum);
-//      this.bytesPerChecksum = diskChecksum.getBytesPerChecksum();
-//      this.checksumSize = diskChecksum.getChecksumSize();
+      this.clientChecksum = requestedChecksum;
+      this.diskChecksum = streams.getChecksum();
+      this.needsChecksumTranslation = !clientChecksum.equals(diskChecksum);
+      this.bytesPerChecksum = diskChecksum.getBytesPerChecksum();
+      this.checksumSize = diskChecksum.getChecksumSize();
 //
 //      this.checksumOut = new DataOutputStream(new BufferedOutputStream(
 //              streams.getChecksumOut(), DFSUtilClient.getSmallBufferSize(
