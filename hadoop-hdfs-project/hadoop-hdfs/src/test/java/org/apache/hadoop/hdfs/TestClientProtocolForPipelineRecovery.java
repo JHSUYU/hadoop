@@ -380,8 +380,8 @@ public class TestClientProtocolForPipelineRecovery {
     // would be sent every 1.5 seconds if there is no data traffic.
     Configuration conf = new HdfsConfiguration();
     conf.set(HdfsClientConfigKeys.DFS_CLIENT_SOCKET_TIMEOUT_KEY, "3000");
-    MiniDFSCluster cluster = null;
 
+    MiniDFSCluster cluster = null;
     try {
       int numDataNodes = 6;
       cluster = new MiniDFSCluster.Builder(conf).numDataNodes(numDataNodes).build();
@@ -396,18 +396,21 @@ public class TestClientProtocolForPipelineRecovery {
       // 内存使用率测量
       Runtime runtime = Runtime.getRuntime();
       long startMemory = runtime.totalMemory() - runtime.freeMemory();
-      FileSystem fs = cluster.getFileSystem();
 
+      FileSystem fs = cluster.getFileSystem();
       FSDataOutputStream out = fs.create(new Path("noheartbeat.dat"), (short)3);
-      out.write(0x31);
+
+      // 生成 1MB 的随机数据
+      byte[] data = new byte[128*1024 * 1024];
+      new Random().nextBytes(data);
+      out.write(data);
       out.hflush();
 
       DFSOutputStream dfsOut = (DFSOutputStream)out.getWrappedStream();
-
       // original pipeline
       DatanodeInfo[] orgNodes = dfsOut.getPipeline();
-      final String lastDn = orgNodes[1].getXferAddr(false);
 
+      final String lastDn = orgNodes[1].getXferAddr(false);
       DataNodeFaultInjector.set(new DataNodeFaultInjector() {
         @Override
         public void markBadNode(String dnAddr) throws IOException {
