@@ -401,7 +401,7 @@ public class TestClientProtocolForPipelineRecovery {
       FSDataOutputStream out = fs.create(new Path("noheartbeat.dat"), (short)2);
 
       // 生成 1MB 的随机数据
-      byte[] data = new byte[128*1024 * 1024];
+      byte[] data = new byte[1024 * 1024];
       new Random().nextBytes(data);
       out.write(data);
       out.hflush();
