@@ -309,7 +309,7 @@ public class TestClientProtocolForPipelineRecovery {
     }
     long endTime = System.currentTimeMillis();
     long executionTime = endTime - startTime;
-    System.out.println("Execution Time: " + executionTime + " ms");
+    LOG.info("Execution Time: " + executionTime + " ms");
   }
 
   @Test
