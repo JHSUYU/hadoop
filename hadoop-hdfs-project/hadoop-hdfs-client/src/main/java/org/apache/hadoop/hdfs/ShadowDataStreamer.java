@@ -788,6 +788,7 @@ class ShadowDataStreamer extends Daemon {
                     Arrays.toString(storageTypes),
                     Arrays.toString(storageIDs));
         }
+        LOG.info("Failure Recovery initDataStreaming");
         response = null;
         response = new ResponseProcessor(nodes);
         response.start();
@@ -1418,7 +1419,7 @@ class ShadowDataStreamer extends Daemon {
                     // processes response status from datanodes.
                     ArrayList<DatanodeInfo> congestedNodesFromAck = new ArrayList<>();
                     ArrayList<DatanodeInfo> slownodesFromAck = new ArrayList<>();
-                    System.out.println("[Failure Recovery] The length of ack is " + ack.getNumOfReplies());
+                    LOG.info("ShadowDataStreamer, the length of ack is " + ack.getNumOfReplies());
                     for (int i = ack.getNumOfReplies() - 1; i >= 0 && dfsClient.clientRunning; i--) {
                         final Status reply = PipelineAck.getStatusFromHeader(ack
                                 .getHeaderFlag(i));
