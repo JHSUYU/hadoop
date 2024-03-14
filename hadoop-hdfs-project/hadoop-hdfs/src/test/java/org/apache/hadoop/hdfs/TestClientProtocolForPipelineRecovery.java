@@ -414,6 +414,10 @@ public class TestClientProtocolForPipelineRecovery {
       DatanodeInfo[] newNodes = dfsOut.getPipeline();
       out.close();
 
+      long endTime = System.currentTimeMillis();
+      long executionTime = endTime - startTime;
+      LOG.info("Execution Time: " + executionTime + " ms");
+
       //verify rule1: The bad datanode should not be removed.
       Assert.assertTrue(Arrays.asList(newNodes).contains(orgNodes[1]));
       Assert.assertArrayEquals(orgNodes, newNodes);
@@ -423,9 +427,6 @@ public class TestClientProtocolForPipelineRecovery {
         cluster.shutdown();
       }
     }
-    long endTime = System.currentTimeMillis();
-    long executionTime = endTime - startTime;
-    LOG.info("Execution Time: " + executionTime + " ms");
   }
 
   @Test
