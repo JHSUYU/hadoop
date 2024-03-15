@@ -1367,7 +1367,7 @@ class BlockReceiver implements Closeable {
 //      throttler.throttle(len);
 //    }
 
-    return lastPacketInBlock?-1:len;
+    return -1;
   }
 
   /**
