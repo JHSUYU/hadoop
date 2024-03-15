@@ -2140,7 +2140,7 @@ class DataStreamer extends Daemon {
 //      }
       if(count >=1){
         LOG.info("Recovery fail");
-        return;
+        return true;
       }
       count+=1;
       shadowDataStreamer = new ShadowDataStreamer(stat, null, dfsClient, src, progress,
