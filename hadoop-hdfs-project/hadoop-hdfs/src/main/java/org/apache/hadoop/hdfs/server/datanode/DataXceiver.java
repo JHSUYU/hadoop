@@ -1217,14 +1217,14 @@ class DataXceiver extends Receiver implements Runnable {
                     srcDataNode, stage, pipelineSize, minBytesRcvd, maxBytesRcvd,
                     latestGenerationStamp, requestedChecksum, cachingStrategy,
                     allowLazyPersist, targetPinnings[0], targetPinnings,
-                    targetStorageId, targetStorageIds);
+                    targetStorageId, targetStorageIds, isShadow);
           } else {
             new Sender(mirrorOut).writeBlock(originalBlock, targetStorageTypes[0],
                     blockToken, clientname, targets, targetStorageTypes,
                     srcDataNode, stage, pipelineSize, minBytesRcvd, maxBytesRcvd,
                     latestGenerationStamp, requestedChecksum, cachingStrategy,
                     allowLazyPersist, false, targetPinnings,
-                    targetStorageId, targetStorageIds);
+                    targetStorageId, targetStorageIds, isShadow);
           }
 
           mirrorOut.flush();

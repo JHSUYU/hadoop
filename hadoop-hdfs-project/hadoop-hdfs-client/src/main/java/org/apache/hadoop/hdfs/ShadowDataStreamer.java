@@ -2125,6 +2125,7 @@ class ShadowDataStreamer extends Daemon {
         long newGS = 0L;
         LOG.info("ShadowDataStreamer: setupPipelineInternal");
         while (!success && !streamerClosed && dfsClient.clientRunning) {
+            LOG.info("SDS: 2128");
             if (!handleRestartingDatanode()) {
                 return;
             }
