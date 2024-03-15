@@ -2319,6 +2319,7 @@ class ShadowDataStreamer extends Daemon {
         if (dfsClient.dtpReplaceDatanodeOnFailure.satisfy(stat.getReplication(),
                 nodes, isAppend, isHflushed)) {
             try {
+                LOG.info("SDS: replacement");
                 addDatanode2ExistingPipeline();
             } catch (IOException ioe) {
                 if (!dfsClient.dtpReplaceDatanodeOnFailure.isBestEffort()) {
