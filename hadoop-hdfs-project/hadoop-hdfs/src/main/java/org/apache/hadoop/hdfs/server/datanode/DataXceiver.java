@@ -1177,6 +1177,7 @@ class DataXceiver extends Receiver implements Runnable {
           int writeTimeout = dnConf.socketWriteTimeout +
                   (HdfsConstants.WRITE_TIMEOUT_EXTENSION * targets.length);
           NetUtils.connect(mirrorSock, mirrorTarget, timeoutValue);
+          LOG.info("Shadow Connect Success 1");
           mirrorSock.setTcpNoDelay(dnConf.getDataTransferServerTcpNoDelay());
           mirrorSock.setSoTimeout(timeoutValue);
           mirrorSock.setKeepAlive(true);
@@ -1226,6 +1227,7 @@ class DataXceiver extends Receiver implements Runnable {
                     allowLazyPersist, false, targetPinnings,
                     targetStorageId, targetStorageIds, isShadow);
           }
+          LOG.info("Shadow Connect Success 2");
 
           mirrorOut.flush();
 
