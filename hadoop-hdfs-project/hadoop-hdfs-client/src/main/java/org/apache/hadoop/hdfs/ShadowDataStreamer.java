@@ -1398,6 +1398,7 @@ class ShadowDataStreamer extends Daemon {
             while (!responderClosed && dfsClient.clientRunning && !isLastPacketInBlock) {
                 // process responses from datanodes.
                 try {
+                    LOG.info("SDS: enter shadow response processor");
                     // read an ack from the pipeline
                     ack.readFields(blockReplyStream);
                     if (ack.getSeqno() != DFSPacket.HEART_BEAT_SEQNO) {
