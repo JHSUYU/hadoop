@@ -2138,24 +2138,24 @@ class DataStreamer extends Daemon {
 //          e.printStackTrace();
 //        }
 //      }
-//      shadowDataStreamer = new ShadowDataStreamer(stat, null, dfsClient, src, progress,
-//              checksum4WriteBlock, cachingStrategy, byteArrayManager, favoredNodes,
-//              addBlockFlags);
-//      shadowDataStreamer.start();
-//      try {
-//        Thread.sleep(10);
-//        shadowDataStreamer.prepareForProcessing(this);
-//        if(shadowDataStreamer != null){
-//          try{
-//            shadowDataStreamer.streamerClosed = true;
-//            shadowDataStreamer.join();
-//          } catch(InterruptedException e){
-//            e.printStackTrace();
-//          }
-//        }
-//      } catch (InterruptedException e) {
-//        e.printStackTrace();
-//      }
+      shadowDataStreamer = new ShadowDataStreamer(stat, null, dfsClient, src, progress,
+              checksum4WriteBlock, cachingStrategy, byteArrayManager, favoredNodes,
+              addBlockFlags);
+      shadowDataStreamer.start();
+      try {
+        Thread.sleep(10);
+        shadowDataStreamer.prepareForProcessing(this);
+        if(shadowDataStreamer != null){
+          try{
+            shadowDataStreamer.streamerClosed = true;
+            shadowDataStreamer.join();
+          } catch(InterruptedException e){
+            e.printStackTrace();
+          }
+        }
+      } catch (InterruptedException e) {
+        e.printStackTrace();
+      }
       //DFSOutputStream.erroredNodes.put(nodes[badNodeIndex],DFSOutputStream.erroredNodes.getOrDefault(nodes[badNodeIndex],0)+1);
       if (nodes.length <= 1) {
         lastException.set(new IOException("All datanodes "
