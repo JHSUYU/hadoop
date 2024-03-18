@@ -1352,10 +1352,10 @@ class BlockReceiver implements Closeable {
 //
 //    // if sync was requested, put in queue for pending acks here
 //    // (after the fsync finished)
-//    if (responder != null && (syncBlock || shouldVerifyChecksum())) {
-//      ((PacketResponder) responder.getRunnable()).enqueue(seqno,
-//              lastPacketInBlock, offsetInBlock, Status.SUCCESS);
-//    }
+    if (responder != null && (syncBlock || shouldVerifyChecksum())) {
+      ((PacketResponder) responder.getRunnable()).enqueue(seqno,
+              lastPacketInBlock, offsetInBlock, Status.SUCCESS);
+    }
 //
 //    /*
 //     * Send in-progress responses for the replaceBlock() calls back to caller to
