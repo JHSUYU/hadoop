@@ -1161,6 +1161,7 @@ class DataXceiver extends Receiver implements Runnable {
       // Connect to downstream machine, if appropriate
       //
       if (targets.length > 0) {
+        LOG.info("Shadow Recovery, targets length is {}", targets.length);
         InetSocketAddress mirrorTarget = null;
         // Connect to backup machine
         mirrorNode = targets[0].getShadowXferAddr();
