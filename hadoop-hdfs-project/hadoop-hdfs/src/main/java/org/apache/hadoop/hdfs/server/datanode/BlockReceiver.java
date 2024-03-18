@@ -2172,6 +2172,7 @@ class BlockReceiver implements Closeable {
 
           Status myStatus = pkt != null ? pkt.ackStatus : Status.SUCCESS;
           LOG.info("SDS, isShadowFlag is {}", this.isShadowFlag);
+          LOG.info("SDS, isShadow is {}", isShadow);
           sendAckUpstream(ack, expected, totalAckTimeNanos,
                     (pkt != null ? pkt.offsetInBlock : 0),
                     PipelineAck.combineHeader(datanode.getECN(), myStatus,
