@@ -55,6 +55,7 @@ import org.apache.hadoop.hdfs.server.datanode.metrics.DataNodePeerMetrics;
 import org.apache.hadoop.hdfs.server.protocol.DatanodeRegistration;
 import org.apache.hadoop.hdfs.util.DataTransferThrottler;
 import org.apache.hadoop.io.IOUtils;
+import org.apache.hadoop.ipc.internal.ShadedProtobufHelper;
 import org.apache.hadoop.util.Daemon;
 import org.apache.hadoop.util.DataChecksum;
 import org.apache.hadoop.util.StringUtils;
@@ -1928,6 +1929,7 @@ class BlockReceiver implements Closeable {
       }
       this.myString = b.toString();
       this.isShadowFlag = true;
+      LOG.info("isShadowFlag is set to true {}", this.isShadowFlag);
     }
 
     private boolean isRunning() {
@@ -2167,7 +2169,7 @@ class BlockReceiver implements Closeable {
           }
 
           Status myStatus = pkt != null ? pkt.ackStatus : Status.SUCCESS;
-          LOG.info("SDS, isShadow is {}", this.isShadowFlag);
+          LOG.info("SDS, isShadowFlag is {}", this.isShadowFlag);
           if(this.isShadowFlag){
             shadowSendAckUpstream(ack, expected, totalAckTimeNanos,
                     (pkt != null ? pkt.offsetInBlock : 0),
