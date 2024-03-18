@@ -1081,6 +1081,7 @@ class BlockReceiver implements Closeable {
 
     // put in queue for pending acks, unless sync was requested
     if (responder != null && !syncBlock && !shouldVerifyChecksum()) {
+      LOG.info("SDS: enqueue packet");
       ((PacketResponder) responder.getRunnable()).enqueue(seqno,
               lastPacketInBlock, offsetInBlock, Status.SUCCESS);
     }
