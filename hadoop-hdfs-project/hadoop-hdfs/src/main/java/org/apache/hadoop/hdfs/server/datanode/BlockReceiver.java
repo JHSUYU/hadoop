@@ -2041,12 +2041,191 @@ class BlockReceiver implements Closeable {
       }
     }
 
+    public void shadowRun(){
+      LOG.info("SDS, in run, isShadowFlag is {}", isShadowFlag);
+      datanode.metrics.incrDataNodePacketResponderCount();
+      boolean lastPacketInBlock = false;
+      final long startTime = CLIENT_TRACE_LOG.isInfoEnabled() ? System.nanoTime() : 0;
+      while (isRunning() && !lastPacketInBlock) {
+        long totalAckTimeNanos = 0;
+        boolean isInterrupted = false;
+        try {
+          Packet pkt = null;
+          long expected = -2;
+          PipelineAck ack = new PipelineAck();
+          long seqno = PipelineAck.UNKOWN_SEQNO;
+          long ackRecvNanoTime = 0;
+          try {
+            LOG.info("SDS, 2064 isShadowFlag is {}", isShadowFlag);
+            if (type != PacketResponderType.LAST_IN_PIPELINE && !mirrorError) {
+              DataNodeFaultInjector.get().failPipeline(replicaInfo, mirrorAddr);
+              // read an ack from downstream datanode
+              ack.readFields(downstreamIn);
+              DataNodeFaultInjector.get().markBadNode(mirrorAddr);
+              ackRecvNanoTime = System.nanoTime();
+              if (LOG.isDebugEnabled()) {
+                LOG.debug(myString + " got " + ack);
+              }
+              // Process an OOB ACK.
+              Status oobStatus = ack.getOOBStatus();
+              if (oobStatus != null) {
+                LOG.info("Relaying an out of band ack of type " + oobStatus);
+                sendAckUpstream(ack, PipelineAck.UNKOWN_SEQNO, 0L, 0L,
+                        PipelineAck.combineHeader(datanode.getECN(),
+                                Status.SUCCESS,
+                                datanode.getSLOWByBlockPoolId(block.getBlockPoolId())));
+                continue;
+              }
+              seqno = ack.getSeqno();
+            }
+            LOG.info("SDS, 2086 isShadowFlag is {}", isShadowFlag);
+            if (seqno != PipelineAck.UNKOWN_SEQNO
+                    || type == PacketResponderType.LAST_IN_PIPELINE) {
+              pkt = waitForAckHead(seqno);
+              LOG.info("SDS, 2091 isShadowFlag is {}", isShadowFlag);
+              LOG.info("SDS, running is {}, datanode.shouldRun is {}, datanode.isRestarting is {}", running, datanode.shouldRun, datanode.isRestarting());
+              if (!isRunning()) {
+                break;
+              }
+              LOG.info("SDS, 2094 isShadowFlag is {}", isShadowFlag);
+              expected = pkt.seqno;
+              if (type == PacketResponderType.HAS_DOWNSTREAM_IN_PIPELINE
+                      && seqno != expected) {
+                throw new IOException(myString + "seqno: expected=" + expected
+                        + ", received=" + seqno);
+              }
+              LOG.info("SDS, 2101 isShadowFlag is {}", isShadowFlag);
+              if (type == PacketResponderType.HAS_DOWNSTREAM_IN_PIPELINE) {
+                // The total ack time includes the ack times of downstream
+                // nodes.
+                // The value is 0 if this responder doesn't have a downstream
+                // DN in the pipeline.
+                totalAckTimeNanos = ackRecvNanoTime - pkt.ackEnqueueNanoTime;
+                // Report the elapsed time from ack send to ack receive minus
+                // the downstream ack time.
+                long ackTimeNanos = totalAckTimeNanos
+                        - ack.getDownstreamAckTimeNanos();
+                if (ackTimeNanos < 0) {
+                  if (LOG.isDebugEnabled()) {
+                    LOG.debug("Calculated invalid ack time: " + ackTimeNanos
+                            + "ns.");
+                  }
+                } else {
+                  datanode.metrics.addPacketAckRoundTripTimeNanos(ackTimeNanos);
+                }
+              }
+              lastPacketInBlock = pkt.lastPacketInBlock;
+            }
+            LOG.info("SDS, 2118 isShadowFlag is {}", isShadowFlag);
+          } catch (InterruptedException ine) {
+            isInterrupted = true;
+          } catch (IOException ioe) {
+            if (Thread.interrupted()) {
+              isInterrupted = true;
+            } else if (ioe instanceof EOFException && !packetSentInTime()) {
+              // The downstream error was caused by upstream including this
+              // node not sending packet in time. Let the upstream determine
+              // who is at fault.  If the immediate upstream node thinks it
+              // has sent a packet in time, this node will be reported as bad.
+              // Otherwise, the upstream node will propagate the error up by
+              // closing the connection.
+//              LOG.warn("The downstream error might be due to congestion in " +
+//                  "upstream including this node. Propagating the error: ",
+//                  ioe);
+//              throw ioe;
+              mirrorError = true;
+              LOG.info(myString, ioe);
+              if(Configuration.triggerAgain){
+                LOG.debug("[Failure Recovery] Triggering again");
+              }
+              Configuration.triggerAgain = true;
+
+            } else {
+              // continue to run even if can not read from mirror
+              // notify client of the error
+              // and wait for the client to shut down the pipeline
+              mirrorError = true;
+              LOG.info(myString, ioe);
+            }
+          }
+
+          if (Thread.interrupted() || isInterrupted) {
+            /*
+             * The receiver thread cancelled this thread. We could also check
+             * any other status updates from the receiver thread (e.g. if it is
+             * ok to write to replyOut). It is prudent to not send any more
+             * status back to the client because this datanode has a problem.
+             * The upstream datanode will detect that this datanode is bad, and
+             * rightly so.
+             *
+             * The receiver thread can also interrupt this thread for sending
+             * an out-of-band response upstream.
+             */
+            LOG.info(myString + ": Thread is interrupted.");
+            running = false;
+            continue;
+          }
+
+          if (lastPacketInBlock) {
+            // Finalize the block and close the block file
+            finalizeBlock(startTime);
+            // For test only, no-op in production system.
+            DataNodeFaultInjector.get().delayAckLastPacket();
+          }
+
+          Status myStatus = pkt != null ? pkt.ackStatus : Status.SUCCESS;
+          LOG.info("SDS, isShadowFlag is {}", this.isShadowFlag);
+          LOG.info("SDS, isShadow is {}", isShadow);
+          if(isShadowFlag){
+            shadowSendAckUpstream(ack, expected, totalAckTimeNanos,
+                    (pkt != null ? pkt.offsetInBlock : 0),
+                    PipelineAck.combineHeader(datanode.getECN(), myStatus,
+                            datanode.getSLOWByBlockPoolId(block.getBlockPoolId())));
+          }else{
+            sendAckUpstream(ack, expected, totalAckTimeNanos,
+                    (pkt != null ? pkt.offsetInBlock : 0),
+                    PipelineAck.combineHeader(datanode.getECN(), myStatus,
+                            datanode.getSLOWByBlockPoolId(block.getBlockPoolId())));
+          }
+
+          if (pkt != null) {
+            // remove the packet from the ack queue
+            removeAckHead();
+          }
+        } catch (IOException e) {
+          LOG.warn("IOException in PacketResponder.run(): ", e);
+          if (running) {
+            // Volume error check moved to FileIoProvider
+            LOG.info(myString, e);
+            running = false;
+            if (!Thread.interrupted()) { // failure not caused by interruption
+              receiverThread.interrupt();
+            }
+          }
+        } catch (Throwable e) {
+          if (running) {
+            LOG.info(myString, e);
+            running = false;
+            receiverThread.interrupt();
+          }
+        }
+      }
+      // Any exception will be caught and processed in the previous loop, so we
+      // will always arrive here when the thread exiting
+      datanode.metrics.decrDataNodePacketResponderCount();
+      LOG.info(myString + " terminating");
+    }
+
     /**
      * Thread to process incoming acks.
      * @see java.lang.Runnable#run()
      */
     @Override
     public void run() {
+      if(isShadowFlag){
+        shadowRun();
+        return;
+      }
       LOG.info("FR, in run, isShadowFlag is {}", isShadowFlag);
       datanode.metrics.incrDataNodePacketResponderCount();
       boolean lastPacketInBlock = false;
@@ -2179,8 +2358,8 @@ class BlockReceiver implements Closeable {
           }
 
           Status myStatus = pkt != null ? pkt.ackStatus : Status.SUCCESS;
-          LOG.info("SDS, isShadowFlag is {}", this.isShadowFlag);
-          LOG.info("SDS, isShadow is {}", isShadow);
+          LOG.info("FR, isShadowFlag is {}", this.isShadowFlag);
+          LOG.info("FR, isShadow is {}", isShadow);
           if(isShadowFlag){
             shadowSendAckUpstream(ack, expected, totalAckTimeNanos,
                     (pkt != null ? pkt.offsetInBlock : 0),
