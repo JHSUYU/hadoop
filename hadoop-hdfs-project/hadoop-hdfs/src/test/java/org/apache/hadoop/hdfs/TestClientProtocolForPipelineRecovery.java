@@ -387,15 +387,15 @@ public class TestClientProtocolForPipelineRecovery {
       cluster = new MiniDFSCluster.Builder(conf).numDataNodes(numDataNodes).build();
       cluster.waitActive();
 
-      long startTime = System.currentTimeMillis();
-
-      // CPU 使用率测量
-      ThreadMXBean threadMXBean = ManagementFactory.getThreadMXBean();
-      long startCpuTime = threadMXBean.getCurrentThreadCpuTime();
-
-      // 内存使用率测量
-      Runtime runtime = Runtime.getRuntime();
-      long startMemory = runtime.totalMemory() - runtime.freeMemory();
+//      long startTime = System.currentTimeMillis();
+//
+//      // CPU 使用率测量
+//      ThreadMXBean threadMXBean = ManagementFactory.getThreadMXBean();
+//      long startCpuTime = threadMXBean.getCurrentThreadCpuTime();
+//
+//      // 内存使用率测量
+//      Runtime runtime = Runtime.getRuntime();
+//      long startMemory = runtime.totalMemory() - runtime.freeMemory();
 
       FileSystem fs = cluster.getFileSystem();
       FSDataOutputStream out = fs.create(new Path("noheartbeat.dat"), (short)4);
@@ -428,22 +428,22 @@ public class TestClientProtocolForPipelineRecovery {
       DatanodeInfo[] newNodes = dfsOut.getPipeline();
       out.close();
 
-      // 执行时间计算
-      long endTime = System.currentTimeMillis();
-      long executionTime = endTime - startTime;
-      System.out.println("Execution Time: " + executionTime + " ms");
-
-      // CPU 使用率计算
-      long endCpuTime = threadMXBean.getCurrentThreadCpuTime();
-      long cpuTime = endCpuTime - startCpuTime;
-      double cpuUsage = (double) cpuTime / (endTime - startTime) * 100;
-      System.out.println("CPU Usage: " + cpuUsage + "%");
-
-      // 内存使用率计算
-      long endMemory = runtime.totalMemory() - runtime.freeMemory();
-      long usedMemory = endMemory - startMemory;
-      double memoryUsage = (double) usedMemory / runtime.maxMemory() * 100;
-      System.out.println("Memory Usage: " + memoryUsage + "%");
+//      // 执行时间计算
+//      long endTime = System.currentTimeMillis();
+//      long executionTime = endTime - startTime;
+//      System.out.println("Execution Time: " + executionTime + " ms");
+//
+//      // CPU 使用率计算
+//      long endCpuTime = threadMXBean.getCurrentThreadCpuTime();
+//      long cpuTime = endCpuTime - startCpuTime;
+//      double cpuUsage = (double) cpuTime / (endTime - startTime) * 100;
+//      System.out.println("CPU Usage: " + cpuUsage + "%");
+//
+//      // 内存使用率计算
+//      long endMemory = runtime.totalMemory() - runtime.freeMemory();
+//      long usedMemory = endMemory - startMemory;
+//      double memoryUsage = (double) usedMemory / runtime.maxMemory() * 100;
+//      System.out.println("Memory Usage: " + memoryUsage + "%");
 
       //verify rule1: The bad datanode should not be removed.
       Assert.assertTrue(Arrays.asList(newNodes).contains(orgNodes[1]));
