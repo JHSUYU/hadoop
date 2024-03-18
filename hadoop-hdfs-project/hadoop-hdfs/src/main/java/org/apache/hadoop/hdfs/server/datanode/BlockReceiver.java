@@ -324,6 +324,7 @@ class BlockReceiver implements Closeable {
                 final String storageId,
                 boolean isShadow) throws IOException {
      try {
+       LOG.info("SDS: BlockReceiver constructor called with isShadow={}", isShadow);
        this.isShadow = isShadow;
        this.block = block;
        this.in = in;
