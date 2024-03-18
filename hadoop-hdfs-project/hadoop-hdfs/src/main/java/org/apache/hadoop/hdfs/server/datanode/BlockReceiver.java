@@ -1626,7 +1626,7 @@ class BlockReceiver implements Closeable {
     try {
       if (isClient && !isTransfer) {
         responder = new Daemon(datanode.threadGroup,
-                new PacketResponder(replyOut, mirrIn, downstreams));
+                new PacketResponder(replyOut, mirrIn, downstreams, true));
         responder.start(); // start thread to processes responses
       }
 
@@ -1886,6 +1886,7 @@ class BlockReceiver implements Closeable {
     /** for log and error messages */
     private final String myString; 
     private boolean sending = false;
+    public boolean isShadow= false;
 
     @Override
     public String toString() {
@@ -1908,6 +1909,25 @@ class BlockReceiver implements Closeable {
             .append(":").append(Arrays.asList(downstreams));
       }
       this.myString = b.toString();
+    }
+
+    PacketResponder(final DataOutputStream upstreamOut,
+                    final DataInputStream downstreamIn, final DatanodeInfo[] downstreams, boolean isShadow) {
+      this.downstreamIn = downstreamIn;
+      this.upstreamOut = upstreamOut;
+
+      this.type = downstreams == null? PacketResponderType.NON_PIPELINE
+              : downstreams.length == 0? PacketResponderType.LAST_IN_PIPELINE
+              : PacketResponderType.HAS_DOWNSTREAM_IN_PIPELINE;
+
+      final StringBuilder b = new StringBuilder(getClass().getSimpleName())
+              .append(": ").append(block).append(", type=").append(type);
+      if (type == PacketResponderType.HAS_DOWNSTREAM_IN_PIPELINE) {
+        b.append(", downstreams=").append(downstreams.length)
+                .append(":").append(Arrays.asList(downstreams));
+      }
+      this.myString = b.toString();
+      this.isShadow = true;
     }
 
     private boolean isRunning() {
@@ -2147,8 +2167,8 @@ class BlockReceiver implements Closeable {
           }
 
           Status myStatus = pkt != null ? pkt.ackStatus : Status.SUCCESS;
-          LOG.info("SDS, isShadow is {}", isShadow);
-          if(isShadow){
+          LOG.info("SDS, isShadow is {}", this.isShadow);
+          if(this.isShadow){
             shadowSendAckUpstream(ack, expected, totalAckTimeNanos,
                     (pkt != null ? pkt.offsetInBlock : 0),
                     PipelineAck.combineHeader(datanode.getECN(), myStatus,
