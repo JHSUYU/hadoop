@@ -1887,7 +1887,7 @@ class BlockReceiver implements Closeable {
     /** for log and error messages */
     private final String myString; 
     private boolean sending = false;
-    public boolean isShadowFlag= false;
+    public volatile boolean isShadowFlag= false;
 
     @Override
     public String toString() {
@@ -2170,7 +2170,7 @@ class BlockReceiver implements Closeable {
 
           Status myStatus = pkt != null ? pkt.ackStatus : Status.SUCCESS;
           LOG.info("SDS, isShadowFlag is {}", this.isShadowFlag);
-          if(this.isShadowFlag){
+          if(!this.isShadowFlag){
             shadowSendAckUpstream(ack, expected, totalAckTimeNanos,
                     (pkt != null ? pkt.offsetInBlock : 0),
                     PipelineAck.combineHeader(datanode.getECN(), myStatus,
@@ -2440,12 +2440,12 @@ class BlockReceiver implements Closeable {
       }
       PipelineAck replyAck = new PipelineAck(seqno, replies,
               totalAckTimeNanos);
-      LOG.info("SDS, reply Ack length is {}", replies.length);
-//      if (replyAck.isSuccess()
-//              && offsetInBlock > replicaInfo.getBytesAcked()) {
-//        replicaInfo.setBytesAcked(offsetInBlock);
-//      }
-      LOG.info("SDS, reply Ack 2414");
+      LOG.info("SDS {}, reply Ack length is {}", isShadowFlag, replies.length);
+      if (replyAck.isSuccess()
+              && offsetInBlock > replicaInfo.getBytesAcked()) {
+        replicaInfo.setBytesAcked(offsetInBlock);
+      }
+      LOG.info("SDS {}, reply Ack 2414", isShadowFlag);
       // send my ack back to upstream datanode
       long begin = Time.monotonicNow();
       DataNodeFaultInjector.get().delay();
