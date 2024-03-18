@@ -2360,17 +2360,10 @@ class BlockReceiver implements Closeable {
           Status myStatus = pkt != null ? pkt.ackStatus : Status.SUCCESS;
           LOG.info("FR, isShadowFlag is {}", this.isShadowFlag);
           LOG.info("FR, isShadow is {}", isShadow);
-          if(isShadowFlag){
-            shadowSendAckUpstream(ack, expected, totalAckTimeNanos,
+          sendAckUpstream(ack, expected, totalAckTimeNanos,
                     (pkt != null ? pkt.offsetInBlock : 0),
                     PipelineAck.combineHeader(datanode.getECN(), myStatus,
                             datanode.getSLOWByBlockPoolId(block.getBlockPoolId())));
-          }else{
-            sendAckUpstream(ack, expected, totalAckTimeNanos,
-                    (pkt != null ? pkt.offsetInBlock : 0),
-                    PipelineAck.combineHeader(datanode.getECN(), myStatus,
-                            datanode.getSLOWByBlockPoolId(block.getBlockPoolId())));
-          }
 
           if (pkt != null) {
             // remove the packet from the ack queue
