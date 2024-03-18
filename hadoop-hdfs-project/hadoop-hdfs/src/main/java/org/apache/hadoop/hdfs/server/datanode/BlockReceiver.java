@@ -1494,7 +1494,7 @@ class BlockReceiver implements Closeable {
     try {
       if (isClient && !isTransfer) {
         responder = new Daemon(datanode.threadGroup, 
-            new PacketResponder(replyOut, mirrIn, downstreams));
+            new PacketResponder(replyOut, mirrIn, downstreams, false));
         responder.start(); // start thread to processes responses
       }
 
@@ -1930,7 +1930,7 @@ class BlockReceiver implements Closeable {
                 .append(":").append(Arrays.asList(downstreams));
       }
       this.myString = b.toString();
-      this.isShadowFlag = true;
+      this.isShadowFlag = isShadow;
       LOG.info("isShadowFlag is set to true {}", this.isShadowFlag);
     }
 
