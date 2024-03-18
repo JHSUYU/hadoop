@@ -2222,10 +2222,10 @@ class BlockReceiver implements Closeable {
      */
     @Override
     public void run() {
-      if(isShadowFlag){
-        shadowRun();
-        return;
-      }
+//      if(isShadowFlag){
+//        shadowRun();
+//        return;
+//      }
       LOG.info("FR, in run, isShadowFlag is {}", isShadowFlag);
       datanode.metrics.incrDataNodePacketResponderCount();
       boolean lastPacketInBlock = false;
