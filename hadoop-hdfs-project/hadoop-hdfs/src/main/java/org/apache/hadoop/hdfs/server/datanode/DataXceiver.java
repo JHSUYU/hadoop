@@ -1140,6 +1140,7 @@ class DataXceiver extends Receiver implements Runnable {
       if (isDatanode ||
               stage != BlockConstructionStage.PIPELINE_CLOSE_RECOVERY) {
         // open a block receiver
+        LOG.info("SDS: enter 1143, isShadow is {}", isShadow);
         setCurrentBlockReceiver(new BlockReceiver(block, storageType, in,
                 peer.getRemoteAddressString(),
                 peer.getLocalAddressString(),
