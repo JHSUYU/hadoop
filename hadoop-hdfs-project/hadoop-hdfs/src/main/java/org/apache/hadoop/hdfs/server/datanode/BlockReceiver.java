@@ -1081,7 +1081,7 @@ class BlockReceiver implements Closeable {
 
     // put in queue for pending acks, unless sync was requested
     if (responder != null && !syncBlock && !shouldVerifyChecksum()) {
-      ((PacketResponder) responder.getRunnable()).enqueue(seqno,
+      ((ShadowPacketResponder) responder.getRunnable()).enqueue(seqno,
               lastPacketInBlock, offsetInBlock, Status.SUCCESS);
     }
     LOG.info("Failure Recovery seqno is "+ seqno);
@@ -1627,7 +1627,7 @@ class BlockReceiver implements Closeable {
     try {
       if (isClient && !isTransfer) {
         responder = new Daemon(datanode.threadGroup,
-                new PacketResponder(replyOut, mirrIn, downstreams, true));
+                new ShadowPacketResponder(replyOut, mirrIn, downstreams, true));
         responder.start(); // start thread to processes responses
       }
 
@@ -1865,6 +1865,623 @@ class BlockReceiver implements Closeable {
 
   private enum PacketResponderType {
     NON_PIPELINE, LAST_IN_PIPELINE, HAS_DOWNSTREAM_IN_PIPELINE
+  }
+
+  /**
+   * Processes responses from downstream datanodes in the pipeline
+   * and sends back replies to the originator.
+   */
+  class ShadowPacketResponder implements Runnable, Closeable {
+    /** queue for packets waiting for ack - synchronization using monitor lock */
+    private final Queue<Packet> ackQueue = new ArrayDeque<>();
+    /** the thread that spawns this responder */
+    private final Thread receiverThread = Thread.currentThread();
+    /** is this responder running? - synchronization using monitor lock */
+    private volatile boolean running = true;
+    /** input from the next downstream datanode */
+    private final DataInputStream downstreamIn;
+    /** output to upstream datanode/client */
+    private final DataOutputStream upstreamOut;
+    /** The type of this responder */
+    private final PacketResponderType type;
+    /** for log and error messages */
+    private final String myString;
+    private boolean sending = false;
+    public volatile boolean isShadowFlag= false;
+
+    @Override
+    public String toString() {
+      return myString;
+    }
+
+    ShadowPacketResponder(final DataOutputStream upstreamOut,
+                    final DataInputStream downstreamIn, final DatanodeInfo[] downstreams) {
+      this.downstreamIn = downstreamIn;
+      this.upstreamOut = upstreamOut;
+
+      this.type = downstreams == null? PacketResponderType.NON_PIPELINE
+              : downstreams.length == 0? PacketResponderType.LAST_IN_PIPELINE
+              : PacketResponderType.HAS_DOWNSTREAM_IN_PIPELINE;
+
+      final StringBuilder b = new StringBuilder(getClass().getSimpleName())
+              .append(": ").append(block).append(", type=").append(type);
+      if (type == PacketResponderType.HAS_DOWNSTREAM_IN_PIPELINE) {
+        b.append(", downstreams=").append(downstreams.length)
+                .append(":").append(Arrays.asList(downstreams));
+      }
+      this.myString = b.toString();
+    }
+
+    ShadowPacketResponder(final DataOutputStream upstreamOut,
+                    final DataInputStream downstreamIn, final DatanodeInfo[] downstreams, boolean isShadow) {
+      this.downstreamIn = downstreamIn;
+      this.upstreamOut = upstreamOut;
+
+      this.type = downstreams == null? PacketResponderType.NON_PIPELINE
+              : downstreams.length == 0? PacketResponderType.LAST_IN_PIPELINE
+              : PacketResponderType.HAS_DOWNSTREAM_IN_PIPELINE;
+
+      final StringBuilder b = new StringBuilder(getClass().getSimpleName())
+              .append(": ").append(block).append(", type=").append(type);
+      if (type == PacketResponderType.HAS_DOWNSTREAM_IN_PIPELINE) {
+        b.append(", downstreams=").append(downstreams.length)
+                .append(":").append(Arrays.asList(downstreams));
+      }
+      this.myString = b.toString();
+      this.isShadowFlag = true;
+      LOG.info("isShadowFlag is set to true {}", this.isShadowFlag);
+    }
+
+    private boolean isRunning() {
+      // When preparing for a restart, it should continue to run until
+      // interrupted by the receiver thread.
+      return running && (datanode.shouldRun || datanode.isRestarting());
+    }
+
+    /**
+     * enqueue the seqno that is still be to acked by the downstream datanode.
+     * @param seqno sequence number of the packet
+     * @param lastPacketInBlock if true, this is the last packet in block
+     * @param offsetInBlock offset of this packet in block
+     */
+    void enqueue(final long seqno, final boolean lastPacketInBlock,
+                 final long offsetInBlock, final Status ackStatus) {
+      final Packet p = new Packet(seqno, lastPacketInBlock, offsetInBlock,
+              System.nanoTime(), ackStatus);
+      LOG.debug("{}: enqueue {}", this, p);
+      synchronized (ackQueue) {
+        if (running) {
+          ackQueue.add(p);
+          ackQueue.notifyAll();
+        }
+      }
+    }
+
+    /**
+     * Send an OOB response. If all acks have been sent already for the block
+     * and the responder is about to close, the delivery is not guaranteed.
+     * This is because the other end can close the connection independently.
+     * An OOB coming from downstream will be automatically relayed upstream
+     * by the responder. This method is used only by originating datanode.
+     *
+     * @param ackStatus the type of ack to be sent
+     */
+    void sendOOBResponse(final Status ackStatus) throws IOException,
+            InterruptedException {
+      if (!running) {
+        LOG.info("Cannot send OOB response " + ackStatus +
+                ". Responder not running.");
+        return;
+      }
+
+      synchronized(this) {
+        if (sending) {
+          wait(datanode.getOOBTimeout(ackStatus));
+          // Didn't get my turn in time. Give up.
+          if (sending) {
+            throw new IOException("Could not send OOB reponse in time: "
+                    + ackStatus);
+          }
+        }
+        sending = true;
+      }
+
+      LOG.info("Sending an out of band ack of type " + ackStatus);
+      try {
+        sendAckUpstreamUnprotected(null, PipelineAck.UNKOWN_SEQNO, 0L, 0L,
+                PipelineAck.combineHeader(datanode.getECN(), ackStatus,
+                        datanode.getSLOWByBlockPoolId(block.getBlockPoolId())));
+      } finally {
+        // Let others send ack. Unless there are miltiple OOB send
+        // calls, there can be only one waiter, the responder thread.
+        // In any case, only one needs to be notified.
+        synchronized(this) {
+          sending = false;
+          notify();
+        }
+      }
+    }
+
+    /** Wait for a packet with given {@code seqno} to be enqueued to ackQueue */
+    Packet waitForAckHead(long seqno) throws InterruptedException {
+      synchronized (ackQueue) {
+        while (isRunning() && ackQueue.isEmpty()) {
+          LOG.debug("{}: seqno={} waiting for local datanode to finish write.",
+                  myString, seqno);
+          ackQueue.wait();
+        }
+        return isRunning() ? ackQueue.element() : null;
+      }
+    }
+
+    /**
+     * wait for all pending packets to be acked. Then shutdown thread.
+     */
+    @Override
+    public void close() {
+      synchronized (ackQueue) {
+        while (isRunning() && !ackQueue.isEmpty()) {
+          try {
+            ackQueue.wait();
+          } catch (InterruptedException e) {
+            running = false;
+            Thread.currentThread().interrupt();
+          }
+        }
+        LOG.debug("{}: closing", this);
+        running = false;
+        ackQueue.notifyAll();
+      }
+
+      synchronized (this) {
+        running = false;
+        notifyAll();
+      }
+    }
+
+    /**
+     * Thread to process incoming acks.
+     * @see java.lang.Runnable#run()
+     */
+    @Override
+    public void run() {
+      datanode.metrics.incrDataNodePacketResponderCount();
+      boolean lastPacketInBlock = false;
+      final long startTime = CLIENT_TRACE_LOG.isInfoEnabled() ? System.nanoTime() : 0;
+      while (isRunning() && !lastPacketInBlock) {
+        long totalAckTimeNanos = 0;
+        boolean isInterrupted = false;
+        try {
+          Packet pkt = null;
+          long expected = -2;
+          PipelineAck ack = new PipelineAck();
+          long seqno = PipelineAck.UNKOWN_SEQNO;
+          long ackRecvNanoTime = 0;
+          try {
+            if (type != PacketResponderType.LAST_IN_PIPELINE && !mirrorError) {
+              DataNodeFaultInjector.get().failPipeline(replicaInfo, mirrorAddr);
+              // read an ack from downstream datanode
+              ack.readFields(downstreamIn);
+              DataNodeFaultInjector.get().markBadNode(mirrorAddr);
+              ackRecvNanoTime = System.nanoTime();
+              if (LOG.isDebugEnabled()) {
+                LOG.debug(myString + " got " + ack);
+              }
+              // Process an OOB ACK.
+              Status oobStatus = ack.getOOBStatus();
+              if (oobStatus != null) {
+                LOG.info("Relaying an out of band ack of type " + oobStatus);
+                sendAckUpstream(ack, PipelineAck.UNKOWN_SEQNO, 0L, 0L,
+                        PipelineAck.combineHeader(datanode.getECN(),
+                                Status.SUCCESS,
+                                datanode.getSLOWByBlockPoolId(block.getBlockPoolId())));
+                continue;
+              }
+              seqno = ack.getSeqno();
+            }
+            if (seqno != PipelineAck.UNKOWN_SEQNO
+                    || type == PacketResponderType.LAST_IN_PIPELINE) {
+              pkt = waitForAckHead(seqno);
+              if (!isRunning()) {
+                break;
+              }
+              expected = pkt.seqno;
+              if (type == PacketResponderType.HAS_DOWNSTREAM_IN_PIPELINE
+                      && seqno != expected) {
+                throw new IOException(myString + "seqno: expected=" + expected
+                        + ", received=" + seqno);
+              }
+              if (type == PacketResponderType.HAS_DOWNSTREAM_IN_PIPELINE) {
+                // The total ack time includes the ack times of downstream
+                // nodes.
+                // The value is 0 if this responder doesn't have a downstream
+                // DN in the pipeline.
+                totalAckTimeNanos = ackRecvNanoTime - pkt.ackEnqueueNanoTime;
+                // Report the elapsed time from ack send to ack receive minus
+                // the downstream ack time.
+                long ackTimeNanos = totalAckTimeNanos
+                        - ack.getDownstreamAckTimeNanos();
+                if (ackTimeNanos < 0) {
+                  if (LOG.isDebugEnabled()) {
+                    LOG.debug("Calculated invalid ack time: " + ackTimeNanos
+                            + "ns.");
+                  }
+                } else {
+                  datanode.metrics.addPacketAckRoundTripTimeNanos(ackTimeNanos);
+                }
+              }
+              lastPacketInBlock = pkt.lastPacketInBlock;
+            }
+          } catch (InterruptedException ine) {
+            isInterrupted = true;
+          } catch (IOException ioe) {
+            if (Thread.interrupted()) {
+              isInterrupted = true;
+            } else if (ioe instanceof EOFException && !packetSentInTime()) {
+              // The downstream error was caused by upstream including this
+              // node not sending packet in time. Let the upstream determine
+              // who is at fault.  If the immediate upstream node thinks it
+              // has sent a packet in time, this node will be reported as bad.
+              // Otherwise, the upstream node will propagate the error up by
+              // closing the connection.
+//              LOG.warn("The downstream error might be due to congestion in " +
+//                  "upstream including this node. Propagating the error: ",
+//                  ioe);
+//              throw ioe;
+              mirrorError = true;
+              LOG.info(myString, ioe);
+              if(Configuration.triggerAgain){
+                LOG.debug("[Failure Recovery] Triggering again");
+              }
+              Configuration.triggerAgain = true;
+
+            } else {
+              // continue to run even if can not read from mirror
+              // notify client of the error
+              // and wait for the client to shut down the pipeline
+              mirrorError = true;
+              LOG.info(myString, ioe);
+            }
+          }
+
+          if (Thread.interrupted() || isInterrupted) {
+            /*
+             * The receiver thread cancelled this thread. We could also check
+             * any other status updates from the receiver thread (e.g. if it is
+             * ok to write to replyOut). It is prudent to not send any more
+             * status back to the client because this datanode has a problem.
+             * The upstream datanode will detect that this datanode is bad, and
+             * rightly so.
+             *
+             * The receiver thread can also interrupt this thread for sending
+             * an out-of-band response upstream.
+             */
+            LOG.info(myString + ": Thread is interrupted.");
+            running = false;
+            continue;
+          }
+
+          if (lastPacketInBlock) {
+            // Finalize the block and close the block file
+            finalizeBlock(startTime);
+            // For test only, no-op in production system.
+            DataNodeFaultInjector.get().delayAckLastPacket();
+          }
+
+          Status myStatus = pkt != null ? pkt.ackStatus : Status.SUCCESS;
+          LOG.info("SDS, isShadowFlag is {}", this.isShadowFlag);
+          shadowSendAckUpstream(ack, expected, totalAckTimeNanos,
+                    (pkt != null ? pkt.offsetInBlock : 0),
+                    PipelineAck.combineHeader(datanode.getECN(), myStatus,
+                            datanode.getSLOWByBlockPoolId(block.getBlockPoolId())));
+          if (pkt != null) {
+            // remove the packet from the ack queue
+            removeAckHead();
+          }
+        } catch (IOException e) {
+          LOG.warn("IOException in PacketResponder.run(): ", e);
+          if (running) {
+            // Volume error check moved to FileIoProvider
+            LOG.info(myString, e);
+            running = false;
+            if (!Thread.interrupted()) { // failure not caused by interruption
+              receiverThread.interrupt();
+            }
+          }
+        } catch (Throwable e) {
+          if (running) {
+            LOG.info(myString, e);
+            running = false;
+            receiverThread.interrupt();
+          }
+        }
+      }
+      // Any exception will be caught and processed in the previous loop, so we
+      // will always arrive here when the thread exiting
+      datanode.metrics.decrDataNodePacketResponderCount();
+      LOG.info(myString + " terminating");
+    }
+
+    /**
+     * Finalize the block and close the block file
+     * @param startTime time when BlockReceiver started receiving the block
+     */
+    private void finalizeBlock(long startTime) throws IOException {
+      long endTime = 0;
+      // Hold a volume reference to finalize block.
+      try (ReplicaHandler handler = BlockReceiver.this.claimReplicaHandler()) {
+        BlockReceiver.this.close();
+        endTime = CLIENT_TRACE_LOG.isInfoEnabled() ? System.nanoTime() : 0;
+        block.setNumBytes(replicaInfo.getNumBytes());
+        datanode.data.finalizeBlock(block, dirSyncOnFinalize);
+      }
+
+      if (pinning) {
+        datanode.data.setPinning(block);
+      }
+
+      datanode.closeBlock(block, null, replicaInfo.getStorageUuid(),
+              replicaInfo.isOnTransientStorage());
+      if (CLIENT_TRACE_LOG.isInfoEnabled() && isClient) {
+        long offset = 0;
+        DatanodeRegistration dnR = datanode.getDNRegistrationForBP(block
+                .getBlockPoolId());
+        CLIENT_TRACE_LOG.info(String.format(DN_CLIENTTRACE_FORMAT, inAddr,
+                myAddr, replicaInfo.getVolume(), block.getNumBytes(),
+                "HDFS_WRITE", clientname, offset, dnR.getDatanodeUuid(),
+                block, endTime - startTime));
+      } else {
+        LOG.info("Received " + block + " on volume "  + replicaInfo.getVolume()
+                + " size " + block.getNumBytes() + " from " + inAddr);
+      }
+    }
+
+    /**
+     * The wrapper for the unprotected version. This is only called by
+     * the responder's run() method.
+     *
+     * @param ack Ack received from downstream
+     * @param seqno sequence number of ack to be sent upstream
+     * @param totalAckTimeNanos total ack time including all the downstream
+     *          nodes
+     * @param offsetInBlock offset in block for the data in packet
+     * @param myHeader the local ack header
+     */
+    private void sendAckUpstream(PipelineAck ack, long seqno,
+                                 long totalAckTimeNanos, long offsetInBlock,
+                                 int myHeader) throws IOException {
+      try {
+        // Wait for other sender to finish. Unless there is an OOB being sent,
+        // the responder won't have to wait.
+        synchronized(this) {
+          while(sending) {
+            wait();
+          }
+          sending = true;
+        }
+
+        try {
+          if (!running) return;
+          sendAckUpstreamUnprotected(ack, seqno, totalAckTimeNanos,
+                  offsetInBlock, myHeader);
+        } finally {
+          synchronized(this) {
+            sending = false;
+            notify();
+          }
+        }
+      } catch (InterruptedException ie) {
+        // The responder was interrupted. Make it go down without
+        // interrupting the receiver(writer) thread.
+        running = false;
+      }
+    }
+
+    /**
+     * @param ack Ack received from downstream
+     * @param seqno sequence number of ack to be sent upstream
+     * @param totalAckTimeNanos total ack time including all the downstream
+     *          nodes
+     * @param offsetInBlock offset in block for the data in packet
+     * @param myHeader the local ack header
+     */
+    private void sendAckUpstreamUnprotected(PipelineAck ack, long seqno,
+                                            long totalAckTimeNanos, long offsetInBlock, int myHeader)
+            throws IOException {
+      final int[] replies;
+      if (ack == null) {
+        // A new OOB response is being sent from this node. Regardless of
+        // downstream nodes, reply should contain one reply.
+        replies = new int[] { myHeader };
+      } else if (mirrorError) { // ack read error
+        int h = PipelineAck.combineHeader(datanode.getECN(), Status.SUCCESS,
+                datanode.getSLOWByBlockPoolId(block.getBlockPoolId()));
+        int h1 = PipelineAck.combineHeader(datanode.getECN(), Status.ERROR,
+                datanode.getSLOWByBlockPoolId(block.getBlockPoolId()));
+        replies = new int[] {h, h1};
+      } else {
+        short ackLen = type == PacketResponderType.LAST_IN_PIPELINE ? 0 : ack
+                .getNumOfReplies();
+        replies = new int[ackLen + 1];
+        replies[0] = myHeader;
+        for (int i = 0; i < ackLen; ++i) {
+          replies[i + 1] = ack.getHeaderFlag(i);
+        }
+        DataNodeFaultInjector.get().markSlow(mirrorAddr, replies);
+        // If the mirror has reported that it received a corrupt packet,
+        // do self-destruct to mark myself bad, instead of making the
+        // mirror node bad. The mirror is guaranteed to be good without
+        // corrupt data on disk.
+        if (ackLen > 0 && PipelineAck.getStatusFromHeader(replies[1]) ==
+                Status.ERROR_CHECKSUM) {
+          throw new IOException("Shutting down writer and responder "
+                  + "since the down streams reported the data sent by this "
+                  + "thread is corrupt");
+        }
+      }
+      PipelineAck replyAck = new PipelineAck(seqno, replies,
+              totalAckTimeNanos);
+      if (replyAck.isSuccess()
+              && offsetInBlock > replicaInfo.getBytesAcked()) {
+        replicaInfo.setBytesAcked(offsetInBlock);
+      }
+      // send my ack back to upstream datanode
+      long begin = Time.monotonicNow();
+      DataNodeFaultInjector.get().delay();
+      /* for test only, no-op in production system */
+      DataNodeFaultInjector.get().delaySendingAckToUpstream(inAddr);
+      replyAck.write(upstreamOut);
+      upstreamOut.flush();
+      long duration = Time.monotonicNow() - begin;
+      DataNodeFaultInjector.get().logDelaySendingAckToUpstream(
+              inAddr,
+              duration);
+      if (duration > datanodeSlowLogThresholdMs) {
+        datanode.metrics.incrSlowAckToUpstreamCount();
+        LOG.warn("Slow PacketResponder send ack to upstream took " + duration
+                + "ms (threshold=" + datanodeSlowLogThresholdMs + "ms), " + myString
+                + ", replyAck=" + replyAck
+                + ", downstream DNs=" + Arrays.toString(downstreamDNs)
+                + ", blockId=" + replicaInfo.getBlockId()
+                + ", seqno=" + seqno);
+      } else if (LOG.isDebugEnabled()) {
+        LOG.debug(myString + ", replyAck=" + replyAck);
+      }
+
+      // If a corruption was detected in the received data, terminate after
+      // sending ERROR_CHECKSUM back.
+      Status myStatus = PipelineAck.getStatusFromHeader(myHeader);
+      if (myStatus == Status.ERROR_CHECKSUM) {
+        throw new IOException("Shutting down writer and responder "
+                + "due to a checksum error in received data. The error "
+                + "response has been sent upstream.");
+      }
+    }
+
+    private void shadowSendAckUpstream(PipelineAck ack, long seqno,
+                                       long totalAckTimeNanos, long offsetInBlock,
+                                       int myHeader) throws IOException {
+      try {
+        // Wait for other sender to finish. Unless there is an OOB being sent,
+        // the responder won't have to wait.
+        synchronized(this) {
+          while(sending) {
+            wait();
+          }
+          sending = true;
+        }
+
+        try {
+          if (!running) return;
+          shadowSendAckUpstreamUnprotected(ack, seqno, totalAckTimeNanos,
+                  offsetInBlock, myHeader);
+        } finally {
+          synchronized(this) {
+            sending = false;
+            notify();
+          }
+        }
+      } catch (InterruptedException ie) {
+        // The responder was interrupted. Make it go down without
+        // interrupting the receiver(writer) thread.
+        running = false;
+      }
+    }
+
+    /**
+     * @param ack Ack received from downstream
+     * @param seqno sequence number of ack to be sent upstream
+     * @param totalAckTimeNanos total ack time including all the downstream
+     *          nodes
+     * @param offsetInBlock offset in block for the data in packet
+     * @param myHeader the local ack header
+     */
+    private void shadowSendAckUpstreamUnprotected(PipelineAck ack, long seqno,
+                                                  long totalAckTimeNanos, long offsetInBlock, int myHeader)
+            throws IOException {
+      final int[] replies;
+      if (ack == null) {
+        // A new OOB response is being sent from this node. Regardless of
+        // downstream nodes, reply should contain one reply.
+        replies = new int[] { myHeader };
+      } else if (mirrorError) { // ack read error
+        int h = PipelineAck.combineHeader(datanode.getECN(), Status.SUCCESS,
+                datanode.getSLOWByBlockPoolId(block.getBlockPoolId()));
+        int h1 = PipelineAck.combineHeader(datanode.getECN(), Status.ERROR,
+                datanode.getSLOWByBlockPoolId(block.getBlockPoolId()));
+        replies = new int[] {h, h1};
+      } else {
+        short ackLen = type == PacketResponderType.LAST_IN_PIPELINE ? 0 : ack
+                .getNumOfReplies();
+        replies = new int[ackLen + 1];
+        replies[0] = myHeader;
+        for (int i = 0; i < ackLen; ++i) {
+          replies[i + 1] = ack.getHeaderFlag(i);
+        }
+        DataNodeFaultInjector.get().markSlow(mirrorAddr, replies);
+        // If the mirror has reported that it received a corrupt packet,
+        // do self-destruct to mark myself bad, instead of making the
+        // mirror node bad. The mirror is guaranteed to be good without
+        // corrupt data on disk.
+        if (ackLen > 0 && PipelineAck.getStatusFromHeader(replies[1]) ==
+                Status.ERROR_CHECKSUM) {
+          throw new IOException("Shutting down writer and responder "
+                  + "since the down streams reported the data sent by this "
+                  + "thread is corrupt");
+        }
+      }
+      PipelineAck replyAck = new PipelineAck(seqno, replies,
+              totalAckTimeNanos);
+      LOG.info("SDS {}, reply Ack length is {}", isShadowFlag, replies.length);
+      if (replyAck.isSuccess()
+              && offsetInBlock > replicaInfo.getBytesAcked()) {
+        replicaInfo.setBytesAcked(offsetInBlock);
+      }
+      LOG.info("SDS {}, reply Ack 2414", isShadowFlag);
+      // send my ack back to upstream datanode
+      long begin = Time.monotonicNow();
+      DataNodeFaultInjector.get().delay();
+      /* for test only, no-op in production system */
+      DataNodeFaultInjector.get().delaySendingAckToUpstream(inAddr);
+      replyAck.write(upstreamOut);
+      upstreamOut.flush();
+      long duration = Time.monotonicNow() - begin;
+      DataNodeFaultInjector.get().logDelaySendingAckToUpstream(
+              inAddr,
+              duration);
+      if (duration > datanodeSlowLogThresholdMs) {
+        datanode.metrics.incrSlowAckToUpstreamCount();
+        LOG.warn("Slow PacketResponder send ack to upstream took " + duration
+                + "ms (threshold=" + datanodeSlowLogThresholdMs + "ms), " + myString
+                + ", replyAck=" + replyAck
+                + ", downstream DNs=" + Arrays.toString(downstreamDNs)
+                + ", blockId=" + replicaInfo.getBlockId()
+                + ", seqno=" + seqno);
+      } else if (LOG.isDebugEnabled()) {
+        LOG.debug(myString + ", replyAck=" + replyAck);
+      }
+
+      // If a corruption was detected in the received data, terminate after
+      // sending ERROR_CHECKSUM back.
+      Status myStatus = PipelineAck.getStatusFromHeader(myHeader);
+      if (myStatus == Status.ERROR_CHECKSUM) {
+        throw new IOException("Shutting down writer and responder "
+                + "due to a checksum error in received data. The error "
+                + "response has been sent upstream.");
+      }
+    }
+
+    /**
+     * Remove a packet from the head of the ack queue
+     *
+     * This should be called only when the ack queue is not empty
+     */
+    private void removeAckHead() {
+      synchronized (ackQueue) {
+        ackQueue.remove();
+        ackQueue.notifyAll();
+      }
+    }
   }
 
   /**
@@ -2170,17 +2787,11 @@ class BlockReceiver implements Closeable {
 
           Status myStatus = pkt != null ? pkt.ackStatus : Status.SUCCESS;
           LOG.info("SDS, isShadowFlag is {}", this.isShadowFlag);
-          if(!this.isShadowFlag){
-            shadowSendAckUpstream(ack, expected, totalAckTimeNanos,
+          sendAckUpstream(ack, expected, totalAckTimeNanos,
                     (pkt != null ? pkt.offsetInBlock : 0),
                     PipelineAck.combineHeader(datanode.getECN(), myStatus,
                             datanode.getSLOWByBlockPoolId(block.getBlockPoolId())));
-          }else{
-            sendAckUpstream(ack, expected, totalAckTimeNanos,
-                    (pkt != null ? pkt.offsetInBlock : 0),
-                    PipelineAck.combineHeader(datanode.getECN(), myStatus,
-                            datanode.getSLOWByBlockPoolId(block.getBlockPoolId())));
-          }
+
 
           if (pkt != null) {
             // remove the packet from the ack queue
