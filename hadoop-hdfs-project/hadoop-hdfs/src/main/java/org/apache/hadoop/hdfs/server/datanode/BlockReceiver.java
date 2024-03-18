@@ -1886,7 +1886,7 @@ class BlockReceiver implements Closeable {
     /** for log and error messages */
     private final String myString; 
     private boolean sending = false;
-    public boolean isShadow= false;
+    public boolean isShadowFlag= false;
 
     @Override
     public String toString() {
@@ -1927,7 +1927,7 @@ class BlockReceiver implements Closeable {
                 .append(":").append(Arrays.asList(downstreams));
       }
       this.myString = b.toString();
-      this.isShadow = true;
+      this.isShadowFlag = true;
     }
 
     private boolean isRunning() {
@@ -2167,8 +2167,8 @@ class BlockReceiver implements Closeable {
           }
 
           Status myStatus = pkt != null ? pkt.ackStatus : Status.SUCCESS;
-          LOG.info("SDS, isShadow is {}", this.isShadow);
-          if(this.isShadow){
+          LOG.info("SDS, isShadow is {}", this.isShadowFlag);
+          if(this.isShadowFlag){
             shadowSendAckUpstream(ack, expected, totalAckTimeNanos,
                     (pkt != null ? pkt.offsetInBlock : 0),
                     PipelineAck.combineHeader(datanode.getECN(), myStatus,
