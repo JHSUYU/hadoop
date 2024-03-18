@@ -2091,12 +2091,14 @@ class BlockReceiver implements Closeable {
               if (!isRunning()) {
                 break;
               }
+              LOG.info("FR, 2094 isShadowFlag is {}", isShadowFlag);
               expected = pkt.seqno;
               if (type == PacketResponderType.HAS_DOWNSTREAM_IN_PIPELINE
                   && seqno != expected) {
                 throw new IOException(myString + "seqno: expected=" + expected
                     + ", received=" + seqno);
               }
+              LOG.info("FR, 2101 isShadowFlag is {}", isShadowFlag);
               if (type == PacketResponderType.HAS_DOWNSTREAM_IN_PIPELINE) {
                 // The total ack time includes the ack times of downstream
                 // nodes.
