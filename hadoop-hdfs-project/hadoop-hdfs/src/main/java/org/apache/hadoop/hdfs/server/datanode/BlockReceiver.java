@@ -2170,6 +2170,7 @@ class BlockReceiver implements Closeable {
 
           Status myStatus = pkt != null ? pkt.ackStatus : Status.SUCCESS;
           LOG.info("SDS, isShadowFlag is {}", this.isShadowFlag);
+          LOG.info("FR, call shadowSendAckUpstream() with myStatus: {} and datanode.getECN(): {}", myStatus, datanode.getECN());
           shadowSendAckUpstream(ack, expected, totalAckTimeNanos,
                     (pkt != null ? pkt.offsetInBlock : 0),
                     PipelineAck.combineHeader(datanode.getECN(), myStatus,
@@ -2373,6 +2374,7 @@ class BlockReceiver implements Closeable {
 
         try {
           if (!running) return;
+          LOG.info("FR: shadowSendAckUpstreamUnprotected " + ack + " " + seqno + " " + totalAckTimeNanos + " " + offsetInBlock + " " + myHeader);
           shadowSendAckUpstreamUnprotected(ack, seqno, totalAckTimeNanos,
                   offsetInBlock, myHeader);
         } finally {
