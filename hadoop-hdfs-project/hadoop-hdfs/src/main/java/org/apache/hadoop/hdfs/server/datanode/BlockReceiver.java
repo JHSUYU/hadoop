@@ -1637,31 +1637,31 @@ class BlockReceiver implements Closeable {
       // indicate responder to gracefully shutdown.
       // Mark that responder has been closed for future processing
       if (responder != null) {
-        ((PacketResponder)responder.getRunnable()).close();
+        ((ShadowPacketResponder)responder.getRunnable()).close();
         responderClosed = true;
       }
 
       // If this write is for a replication or transfer-RBW/Finalized,
       // then finalize block or convert temporary to RBW.
       // For client-writes, the block is finalized in the PacketResponder.
-      if (isDatanode || isTransfer) {
-        // Hold a volume reference to finalize block.
-        try (ReplicaHandler handler = claimReplicaHandler()) {
-          // close the block/crc files
-          close();
-          block.setNumBytes(replicaInfo.getNumBytes());
-
-          if (stage == BlockConstructionStage.TRANSFER_RBW) {
-            // for TRANSFER_RBW, convert temporary to RBW
-            datanode.data.convertTemporaryToRbw(block);
-          } else {
-            // for isDatnode or TRANSFER_FINALIZED
-            // Finalize the block.
-            datanode.data.finalizeBlock(block, dirSyncOnFinalize);
-          }
-        }
-        datanode.metrics.incrBlocksWritten();
-      }
+//      if (isDatanode || isTransfer) {
+//        // Hold a volume reference to finalize block.
+//        try (ReplicaHandler handler = claimReplicaHandler()) {
+//          // close the block/crc files
+//          close();
+//          block.setNumBytes(replicaInfo.getNumBytes());
+//
+//          if (stage == BlockConstructionStage.TRANSFER_RBW) {
+//            // for TRANSFER_RBW, convert temporary to RBW
+//            datanode.data.convertTemporaryToRbw(block);
+//          } else {
+//            // for isDatnode or TRANSFER_FINALIZED
+//            // Finalize the block.
+//            datanode.data.finalizeBlock(block, dirSyncOnFinalize);
+//          }
+//        }
+//        datanode.metrics.incrBlocksWritten();
+//      }
 
     } catch (IOException ioe) {
       replicaInfo.releaseAllBytesReserved();
@@ -2045,6 +2045,7 @@ class BlockReceiver implements Closeable {
      */
     @Override
     public void run() {
+      LOG.info("ShadowPacketResponder is running");
       datanode.metrics.incrDataNodePacketResponderCount();
       boolean lastPacketInBlock = false;
       final long startTime = CLIENT_TRACE_LOG.isInfoEnabled() ? System.nanoTime() : 0;
