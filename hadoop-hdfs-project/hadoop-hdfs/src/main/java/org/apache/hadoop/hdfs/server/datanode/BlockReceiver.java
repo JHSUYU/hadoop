@@ -2007,13 +2007,13 @@ class BlockReceiver implements Closeable {
     /** Wait for a packet with given {@code seqno} to be enqueued to ackQueue */
     Packet waitForAckHead(long seqno) throws InterruptedException {
       synchronized (ackQueue) {
-        LOG.info("SDS, {}, waitForAckHead1, running={}", isShadow,running);
+        LOG.info("SDS, waitForAckHead1, running={}, isShadow = {}", isShadow,running);
         while (isRunning() && ackQueue.isEmpty()) {
           LOG.debug("{}: seqno={} waiting for local datanode to finish write.",
               myString, seqno);
           ackQueue.wait();
         }
-        LOG.info("SDS, {}, waitForAckHead2, running={}", isShadow, running);
+        LOG.info("SDS, waitForAckHead2, running={}, isShadow = {}", isShadow, running);
         return isRunning() ? ackQueue.element() : null;
       }
     }
