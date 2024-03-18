@@ -738,6 +738,8 @@ class BlockReceiver implements Closeable {
     if (replicaInfo.getNumBytes() < offsetInBlock) {
       replicaInfo.setNumBytes(offsetInBlock);
     }
+
+    LOG.info("Original: syncBlock is {}, shouldVerifyCheckSum is {}" , syncBlock, shouldVerifyChecksum());
     
     // put in queue for pending acks, unless sync was requested
     if (responder != null && !syncBlock && !shouldVerifyChecksum()) {
@@ -2274,6 +2276,7 @@ class BlockReceiver implements Closeable {
               LOG.info("FR, 2091 isShadowFlag is {}", isShadowFlag);
               LOG.info("FR, running is {}, datanode.shouldRun is {}, datanode.isRestarting is {}", running, datanode.shouldRun, datanode.isRestarting());
               if (!isRunning()) {
+                LOG.info("Original, not running");
                 break;
               }
               LOG.info("FR, 2094 isShadowFlag is {}", isShadowFlag);
