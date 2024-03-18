@@ -2146,6 +2146,7 @@ class BlockReceiver implements Closeable {
           }
 
           Status myStatus = pkt != null ? pkt.ackStatus : Status.SUCCESS;
+          LOG.info("SDS, isShadow is {}", isShadow);
           if(isShadow){
             shadowSendAckUpstream(ack, expected, totalAckTimeNanos,
                     (pkt != null ? pkt.offsetInBlock : 0),
