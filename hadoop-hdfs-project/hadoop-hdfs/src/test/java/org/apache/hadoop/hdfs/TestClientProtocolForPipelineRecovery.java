@@ -383,7 +383,7 @@ public class TestClientProtocolForPipelineRecovery {
 
     MiniDFSCluster cluster = null;
     try {
-      int numDataNodes = 4;
+      int numDataNodes = 2;
       cluster = new MiniDFSCluster.Builder(conf).numDataNodes(numDataNodes).build();
       cluster.waitActive();
 
