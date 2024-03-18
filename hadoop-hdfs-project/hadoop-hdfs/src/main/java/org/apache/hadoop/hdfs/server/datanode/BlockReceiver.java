@@ -2047,6 +2047,7 @@ class BlockReceiver implements Closeable {
      */
     @Override
     public void run() {
+      LOG.info("FR, in run, isShadowFlag is {}", isShadowFlag);
       datanode.metrics.incrDataNodePacketResponderCount();
       boolean lastPacketInBlock = false;
       final long startTime = CLIENT_TRACE_LOG.isInfoEnabled() ? System.nanoTime() : 0;
