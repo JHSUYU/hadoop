@@ -2115,6 +2115,7 @@ class BlockReceiver implements Closeable {
               }
               lastPacketInBlock = pkt.lastPacketInBlock;
             }
+            LOG.info("FR, 2118 isShadowFlag is {}", isShadowFlag);
           } catch (InterruptedException ine) {
             isInterrupted = true;
           } catch (IOException ioe) {
