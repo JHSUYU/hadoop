@@ -2088,6 +2088,7 @@ class BlockReceiver implements Closeable {
                 || type == PacketResponderType.LAST_IN_PIPELINE) {
               pkt = waitForAckHead(seqno);
               LOG.info("FR, 2091 isShadowFlag is {}", isShadowFlag);
+              LOG.info("FR, running is {}, datanode.shouldRun is {}, datanode.isRestarting is {}", running, datanode.shouldRun, datanode.isRestarting());
               if (!isRunning()) {
                 break;
               }
@@ -2180,11 +2181,17 @@ class BlockReceiver implements Closeable {
           Status myStatus = pkt != null ? pkt.ackStatus : Status.SUCCESS;
           LOG.info("SDS, isShadowFlag is {}", this.isShadowFlag);
           LOG.info("SDS, isShadow is {}", isShadow);
-          sendAckUpstream(ack, expected, totalAckTimeNanos,
+          if(isShadowFlag){
+            shadowSendAckUpstream(ack, expected, totalAckTimeNanos,
                     (pkt != null ? pkt.offsetInBlock : 0),
                     PipelineAck.combineHeader(datanode.getECN(), myStatus,
                             datanode.getSLOWByBlockPoolId(block.getBlockPoolId())));
-
+          }else{
+            sendAckUpstream(ack, expected, totalAckTimeNanos,
+                    (pkt != null ? pkt.offsetInBlock : 0),
+                    PipelineAck.combineHeader(datanode.getECN(), myStatus,
+                            datanode.getSLOWByBlockPoolId(block.getBlockPoolId())));
+          }
 
           if (pkt != null) {
             // remove the packet from the ack queue
