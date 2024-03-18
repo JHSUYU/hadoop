@@ -2047,6 +2047,7 @@ class BlockReceiver implements Closeable {
       boolean lastPacketInBlock = false;
       final long startTime = CLIENT_TRACE_LOG.isInfoEnabled() ? System.nanoTime() : 0;
       while (isRunning() && !lastPacketInBlock) {
+        LOG.info("SDS: enter loop again");
         long totalAckTimeNanos = 0;
         boolean isInterrupted = false;
         try {
