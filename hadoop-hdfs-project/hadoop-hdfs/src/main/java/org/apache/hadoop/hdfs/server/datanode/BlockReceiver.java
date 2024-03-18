@@ -1079,6 +1079,7 @@ class BlockReceiver implements Closeable {
 //      replicaInfo.setNumBytes(offsetInBlock);
 //    }
 
+    LOG.info("SDS: syncBlock is {}, shouldVerifyCheckSum is {}" , syncBlock, shouldVerifyChecksum());
     // put in queue for pending acks, unless sync was requested
     if (responder != null && !syncBlock && !shouldVerifyChecksum()) {
       LOG.info("SDS: enqueue packet");
