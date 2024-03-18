@@ -121,7 +121,8 @@ class BlockReceiver implements Closeable {
   private final boolean isDatanode;
 
   /** the block to receive */
-  private final ExtendedBlock block; 
+  private final ExtendedBlock block;
+  public boolean isShadow;
   /** the replica to write */
   private ReplicaInPipeline replicaInfo;
   /** pipeline stage */
@@ -323,6 +324,7 @@ class BlockReceiver implements Closeable {
                 final String storageId,
                 boolean isShadow) throws IOException {
      try {
+       this.isShadow = isShadow;
        this.block = block;
        this.in = in;
        this.inAddr = inAddr;
@@ -2144,10 +2146,18 @@ class BlockReceiver implements Closeable {
           }
 
           Status myStatus = pkt != null ? pkt.ackStatus : Status.SUCCESS;
-          shadowSendAckUpstream(ack, expected, totalAckTimeNanos,
-            (pkt != null ? pkt.offsetInBlock : 0),
-              PipelineAck.combineHeader(datanode.getECN(), myStatus,
-                  datanode.getSLOWByBlockPoolId(block.getBlockPoolId())));
+          if(isShadow){
+            shadowSendAckUpstream(ack, expected, totalAckTimeNanos,
+                    (pkt != null ? pkt.offsetInBlock : 0),
+                    PipelineAck.combineHeader(datanode.getECN(), myStatus,
+                            datanode.getSLOWByBlockPoolId(block.getBlockPoolId())));
+          }else{
+            sendAckUpstream(ack, expected, totalAckTimeNanos,
+                    (pkt != null ? pkt.offsetInBlock : 0),
+                    PipelineAck.combineHeader(datanode.getECN(), myStatus,
+                            datanode.getSLOWByBlockPoolId(block.getBlockPoolId())));
+          }
+
           if (pkt != null) {
             // remove the packet from the ack queue
             removeAckHead();
