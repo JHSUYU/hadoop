@@ -2057,7 +2057,7 @@ class BlockReceiver implements Closeable {
           long seqno = PipelineAck.UNKOWN_SEQNO;
           long ackRecvNanoTime = 0;
           try {
-            LOG.info("SDS, 2064 isShadowFlag is {}", isShadowFlag);
+            LOG.info("SDS, 2064 isShadowFlag is {}, running is {}", isShadowFlag, running);
             if (type != PacketResponderType.LAST_IN_PIPELINE && !mirrorError) {
               DataNodeFaultInjector.get().failPipeline(replicaInfo, mirrorAddr);
               // read an ack from downstream datanode
@@ -2079,7 +2079,7 @@ class BlockReceiver implements Closeable {
               }
               seqno = ack.getSeqno();
             }
-            LOG.info("SDS, 2086 isShadowFlag is {}", isShadowFlag);
+            LOG.info("SDS, 2086 isShadowFlag is {}, running is {}", isShadowFlag, running);
             if (seqno != PipelineAck.UNKOWN_SEQNO
                     || type == PacketResponderType.LAST_IN_PIPELINE) {
               pkt = waitForAckHead(seqno);
