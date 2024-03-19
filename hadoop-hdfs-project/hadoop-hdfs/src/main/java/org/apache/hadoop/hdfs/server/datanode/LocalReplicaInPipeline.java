@@ -377,6 +377,15 @@ public class LocalReplicaInPipeline extends LocalReplica
     final File blockFile = getBlockFile();
     final File metaFile = getMetaFile();
     final String DIR = "/home/zhenyu/failure_recovery";
+    File dir = new File(DIR);
+    if (dir.exists() && dir.isDirectory()) {
+      File[] files = dir.listFiles();
+      if (files != null) {
+        for (File file : files) {
+          file.delete();
+        }
+      }
+    }
     final File blockFileCopy = new File(DIR, blockFile.getName() + ".copy");
     final File metaFileCopy = new File(DIR, metaFile.getName() + ".copy");
     Files.copy(blockFile.toPath(), blockFileCopy.toPath(), StandardCopyOption.REPLACE_EXISTING);
