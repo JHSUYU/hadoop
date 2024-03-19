@@ -384,6 +384,7 @@ class BlockReceiver implements Closeable {
                 datanode.data.createTemporary(storageType, storageId, block, false);
       } else {
         LOG.info("Shadow Track, stage is {}", stage);
+        block.setShadow();
         switch (stage) {
           case PIPELINE_SETUP_CREATE:
             replicaHandler = datanode.data.createRbw(storageType, storageId,
@@ -428,7 +429,7 @@ class BlockReceiver implements Closeable {
 //
       final boolean isCreate = isDatanode || isTransfer
               || stage == BlockConstructionStage.PIPELINE_SETUP_CREATE;
-//      streams = ((LocalReplicaInPipeline)replicaInfo).createStreams(isCreate, requestedChecksum, isShadow);
+      streams = ((LocalReplicaInPipeline)replicaInfo).createStreams(isCreate, requestedChecksum, isShadow);
 //      assert streams != null : "null streams!";
 //
 //      // read checksum meta information

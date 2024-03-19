@@ -291,6 +291,7 @@ public class LocalReplicaInPipeline extends LocalReplica
   @Override // ReplicaInPipeline
   public ReplicaOutputStreams createStreams(boolean isCreate,
       DataChecksum requestedChecksum) throws IOException {
+    LOG.info("Failure  Recovery, dir is {}", getDir());
     final File blockFile = getBlockFile();
     final File metaFile = getMetaFile();
     if (DataNode.LOG.isDebugEnabled()) {

@@ -1660,6 +1660,9 @@ class FsDatasetImpl implements FsDatasetSpi<FsVolumeImpl> {
   public ReplicaHandler recoverRbw(
       ExtendedBlock b, long newGS, long minBytesRcvd, long maxBytesRcvd)
       throws IOException {
+    if(b.isShadow){
+      return shadowRecoverRbw(b, newGS, minBytesRcvd, maxBytesRcvd);
+    }
     LOG.info("Recover RBW replica " + b);
     long startTimeMs = Time.monotonicNow();
     try {
@@ -1691,6 +1694,38 @@ class FsDatasetImpl implements FsDatasetSpi<FsVolumeImpl> {
         long recoverRbwMs = Time.monotonicNow() - startTimeMs;
         dataNodeMetrics.addRecoverRbwOp(recoverRbwMs);
       }
+    }
+  }
+  // FsDatasetSpi
+  public ReplicaHandler shadowRecoverRbw(
+          ExtendedBlock b, long newGS, long minBytesRcvd, long maxBytesRcvd)
+          throws IOException {
+    LOG.info("ShadowRecover RBW replica " + b);
+    long startTimeMs = Time.monotonicNow();
+
+    try {
+      while (true) {
+        try {
+            ReplicaInfo replicaInfo =
+                    getReplicaInfo(b.getBlockPoolId(), b.getBlockId());
+            // check the replica's state
+            if (replicaInfo.getState() != ReplicaState.RBW) {
+              throw new ReplicaNotFoundException(
+                      ReplicaNotFoundException.NON_RBW_REPLICA + replicaInfo);
+            }
+            ReplicaInPipeline rbw = (ReplicaInPipeline) replicaInfo;
+            if (!rbw.attemptToSetWriter(null, Thread.currentThread())) {
+              throw new MustStopExistingWriter(rbw);
+            }
+            LOG.info("At " + datanode.getDisplayName() + ", Recovering " + rbw);
+            return shadowRecoverRbwImpl(rbw, b, newGS, minBytesRcvd, maxBytesRcvd);
+        } catch (MustStopExistingWriter e) {
+          e.getReplicaInPipeline().stopWriter(
+                  datanode.getDnConf().getXceiverStopTimeout());
+        }
+      }
+    } finally {
+
     }
   }
 
@@ -1753,6 +1788,16 @@ class FsDatasetImpl implements FsDatasetSpi<FsVolumeImpl> {
       }
       return new ReplicaHandler(rbw, ref);
     }
+  }
+
+  private ReplicaHandler shadowRecoverRbwImpl(ReplicaInPipeline rbw,
+                                        ExtendedBlock b, long newGS, long minBytesRcvd, long maxBytesRcvd)
+          throws IOException {
+
+      FsVolumeReference ref = rbw.getReplicaInfo()
+              .getVolume().obtainReference();
+
+      return new ReplicaHandler(rbw, ref);
   }
   
   @Override // FsDatasetSpi
