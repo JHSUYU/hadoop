@@ -373,8 +373,14 @@ public class LocalReplicaInPipeline extends LocalReplica
   public ReplicaOutputStreams createStreams(boolean isCreate,
                                             DataChecksum requestedChecksum, boolean isShadow) throws IOException {
     LOG.info("Shadow Failure Recovery, dir is {}", getDir());
+    LOG.info("Shadow Failure Recovery, isCreate is {}", isCreate);
     final File blockFile = getBlockFile();
     final File metaFile = getMetaFile();
+    final File blockFileCopy = new File(getDir(), blockFile.getName() + ".copy");
+    final File metaFileCopy = new File(getDir(), metaFile.getName() + ".copy");
+    Files.copy(blockFile.toPath(), blockFileCopy.toPath(), StandardCopyOption.REPLACE_EXISTING);
+    Files.copy(metaFile.toPath(), metaFileCopy.toPath(), StandardCopyOption.REPLACE_EXISTING);
+    LOG.info("Shadow Failure Recovery, finish copy");
     if (DataNode.LOG.isDebugEnabled()) {
       DataNode.LOG.debug("writeTo blockfile is " + blockFile +
               " of size " + blockFile.length());
@@ -389,7 +395,7 @@ public class LocalReplicaInPipeline extends LocalReplica
     final DataChecksum checksum;
 
     final RandomAccessFile metaRAF =
-            getFileIoProvider().getRandomAccessFile(getVolume(), metaFile, "rw");
+            getFileIoProvider().getRandomAccessFile(getVolume(), metaFileCopy, "rw");
 
     if (!isCreate) {
       // For append or recovery, we must enforce the existing checksum.
@@ -398,6 +404,7 @@ public class LocalReplicaInPipeline extends LocalReplica
       try {
         BlockMetadataHeader header =
                 BlockMetadataHeader.readHeader(metaRAF);
+        LOG.info("Shadow Failure Recovery, finish readHeader");
         checksum = header.getChecksum();
 
         if (checksum.getBytesPerChecksum() !=
@@ -433,16 +440,15 @@ public class LocalReplicaInPipeline extends LocalReplica
     final FileIoProvider fileIoProvider = getFileIoProvider();
     FileOutputStream blockOut = null;
     FileOutputStream crcOut = null;
+    LOG.info("Shadow Failure Recovery, 443");
     try {
-      blockOut = fileIoProvider.getFileOutputStream(
-              getVolume(), new RandomAccessFile(blockFile, "rw").getFD());
+      blockOut = fileIoProvider.getFileOutputStream(getVolume(), new RandomAccessFile(blockFileCopy, "rw").getFD());
       crcOut = fileIoProvider.getFileOutputStream(getVolume(), metaRAF.getFD());
       if (!isCreate) {
         blockOut.getChannel().position(blockDiskSize);
         crcOut.getChannel().position(crcDiskSize);
       }
-      return new ReplicaOutputStreams(blockOut, crcOut, checksum,
-              getVolume(), fileIoProvider);
+      return new ReplicaOutputStreams(blockOut, crcOut, checksum, getVolume(), fileIoProvider);
     } catch (IOException e) {
       IOUtils.closeStream(blockOut);
       IOUtils.closeStream(crcOut);
