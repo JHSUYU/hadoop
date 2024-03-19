@@ -407,45 +407,45 @@ public class LocalReplicaInPipeline extends LocalReplica
     final RandomAccessFile metaRAF =
             getFileIoProvider().getRandomAccessFile(getVolume(), metaFileCopy, "rw");
 
-//    if (!isCreate) {
-//      // For append or recovery, we must enforce the existing checksum.
-//      // Also, verify that the file has correct lengths, etc.
-//      boolean checkedMeta = false;
-//      try {
-//        BlockMetadataHeader header =
-//                BlockMetadataHeader.readHeader(metaRAF);
-//        LOG.info("Shadow Failure Recovery, finish readHeader");
-//        checksum = header.getChecksum();
-//
-//        if (checksum.getBytesPerChecksum() !=
-//                requestedChecksum.getBytesPerChecksum()) {
-//          throw new IOException("Client requested checksum " +
-//                  requestedChecksum + " when appending to an existing block " +
-//                  "with different chunk size: " + checksum);
-//        }
-//
-//        int bytesPerChunk = checksum.getBytesPerChecksum();
-//        int checksumSize = checksum.getChecksumSize();
-//
-//        blockDiskSize = bytesOnDisk;
-//        crcDiskSize = BlockMetadataHeader.getHeaderSize() +
-//                (blockDiskSize+bytesPerChunk-1)/bytesPerChunk*checksumSize;
-//        if (blockDiskSize > 0 &&
-//                (blockDiskSize > blockFile.length() ||
-//                        crcDiskSize>metaFile.length())) {
-//          throw new IOException("Corrupted block: " + this);
-//        }
-//        checkedMeta = true;
-//      } finally {
-//        if (!checkedMeta) {
-//          // clean up in case of exceptions.
-//          IOUtils.closeStream(metaRAF);
-//        }
-//      }
-//    } else {
-//      // for create, we can use the requested checksum
-//      checksum = requestedChecksum;
-//    }
+    if (!isCreate) {
+      // For append or recovery, we must enforce the existing checksum.
+      // Also, verify that the file has correct lengths, etc.
+      boolean checkedMeta = false;
+      try {
+        BlockMetadataHeader header =
+                BlockMetadataHeader.readHeader(metaRAF);
+        LOG.info("Shadow Failure Recovery, finish readHeader");
+        checksum = header.getChecksum();
+
+        if (checksum.getBytesPerChecksum() !=
+                requestedChecksum.getBytesPerChecksum()) {
+          throw new IOException("Client requested checksum " +
+                  requestedChecksum + " when appending to an existing block " +
+                  "with different chunk size: " + checksum);
+        }
+
+        int bytesPerChunk = checksum.getBytesPerChecksum();
+        int checksumSize = checksum.getChecksumSize();
+
+        blockDiskSize = bytesOnDisk;
+        crcDiskSize = BlockMetadataHeader.getHeaderSize() +
+                (blockDiskSize+bytesPerChunk-1)/bytesPerChunk*checksumSize;
+        if (blockDiskSize > 0 &&
+                (blockDiskSize > blockFile.length() ||
+                        crcDiskSize>metaFile.length())) {
+          throw new IOException("Corrupted block: " + this);
+        }
+        checkedMeta = true;
+      } finally {
+        if (!checkedMeta) {
+          // clean up in case of exceptions.
+          IOUtils.closeStream(metaRAF);
+        }
+      }
+    } else {
+      // for create, we can use the requested checksum
+      checksum = requestedChecksum;
+    }
 //
 //    final FileIoProvider fileIoProvider = getFileIoProvider();
 //    FileOutputStream blockOut = null;
