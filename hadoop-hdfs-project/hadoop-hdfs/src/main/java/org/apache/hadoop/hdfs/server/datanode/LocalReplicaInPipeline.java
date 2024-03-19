@@ -372,7 +372,7 @@ public class LocalReplicaInPipeline extends LocalReplica
   // ReplicaInPipeline
   public ReplicaOutputStreams createStreams(boolean isCreate,
                                             DataChecksum requestedChecksum, boolean isShadow) throws IOException {
-    LOG.info("Failure  Recovery, dir is {}", getDir());
+    LOG.info("Shadow Failure Recovery, dir is {}", getDir());
     final File blockFile = getBlockFile();
     final File metaFile = getMetaFile();
     if (DataNode.LOG.isDebugEnabled()) {
