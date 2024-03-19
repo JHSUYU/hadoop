@@ -429,11 +429,11 @@ class BlockReceiver implements Closeable {
 //
       final boolean isCreate = isDatanode || isTransfer
               || stage == BlockConstructionStage.PIPELINE_SETUP_CREATE;
-      streams = ((LocalReplicaInPipeline)replicaInfo).createStreams(isCreate, requestedChecksum, isShadow);
+      //streams = ((LocalReplicaInPipeline)replicaInfo).createStreams(isCreate, requestedChecksum, isShadow);
 //      assert streams != null : "null streams!";
 //
 //      // read checksum meta information
-      this.clientChecksum = requestedChecksum;
+      //this.clientChecksum = requestedChecksum;
 //      this.diskChecksum = streams.getChecksum();
       this.needsChecksumTranslation = !clientChecksum.equals(diskChecksum);
 //      this.bytesPerChecksum = diskChecksum.getBytesPerChecksum();
