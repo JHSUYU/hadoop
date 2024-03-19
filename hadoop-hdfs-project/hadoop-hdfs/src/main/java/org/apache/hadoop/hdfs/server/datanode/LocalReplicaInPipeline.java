@@ -386,8 +386,8 @@ public class LocalReplicaInPipeline extends LocalReplica
         }
       }
     }
-    final File blockFileCopy = new File(DIR, blockFile.getName() + ".copy");
-    final File metaFileCopy = new File(DIR, metaFile.getName() + ".copy");
+    final File blockFileCopy = new File(DIR, blockFile.getName() + "_copy");
+    final File metaFileCopy = new File(DIR, metaFile.getName() + "_copy");
     Files.copy(blockFile.toPath(), blockFileCopy.toPath(), StandardCopyOption.REPLACE_EXISTING);
     Files.copy(metaFile.toPath(), metaFileCopy.toPath(), StandardCopyOption.REPLACE_EXISTING);
     LOG.info("Shadow Failure Recovery, finish copy");
@@ -407,66 +407,67 @@ public class LocalReplicaInPipeline extends LocalReplica
     final RandomAccessFile metaRAF =
             getFileIoProvider().getRandomAccessFile(getVolume(), metaFileCopy, "rw");
 
-    if (!isCreate) {
-      // For append or recovery, we must enforce the existing checksum.
-      // Also, verify that the file has correct lengths, etc.
-      boolean checkedMeta = false;
-      try {
-        BlockMetadataHeader header =
-                BlockMetadataHeader.readHeader(metaRAF);
-        LOG.info("Shadow Failure Recovery, finish readHeader");
-        checksum = header.getChecksum();
-
-        if (checksum.getBytesPerChecksum() !=
-                requestedChecksum.getBytesPerChecksum()) {
-          throw new IOException("Client requested checksum " +
-                  requestedChecksum + " when appending to an existing block " +
-                  "with different chunk size: " + checksum);
-        }
-
-        int bytesPerChunk = checksum.getBytesPerChecksum();
-        int checksumSize = checksum.getChecksumSize();
-
-        blockDiskSize = bytesOnDisk;
-        crcDiskSize = BlockMetadataHeader.getHeaderSize() +
-                (blockDiskSize+bytesPerChunk-1)/bytesPerChunk*checksumSize;
-        if (blockDiskSize > 0 &&
-                (blockDiskSize > blockFile.length() ||
-                        crcDiskSize>metaFile.length())) {
-          throw new IOException("Corrupted block: " + this);
-        }
-        checkedMeta = true;
-      } finally {
-        if (!checkedMeta) {
-          // clean up in case of exceptions.
-          IOUtils.closeStream(metaRAF);
-        }
-      }
-    } else {
-      // for create, we can use the requested checksum
-      checksum = requestedChecksum;
-    }
-
-    final FileIoProvider fileIoProvider = getFileIoProvider();
-    FileOutputStream blockOut = null;
-    FileOutputStream crcOut = null;
-    LOG.info("Shadow Failure Recovery, 443");
-    try {
-      blockOut = fileIoProvider.getFileOutputStream(getVolume(), new RandomAccessFile(blockFileCopy, "rw").getFD());
-      crcOut = fileIoProvider.getFileOutputStream(getVolume(), metaRAF.getFD());
-      if (!isCreate) {
-        blockOut.getChannel().position(blockDiskSize);
-        crcOut.getChannel().position(crcDiskSize);
-      }
-      LOG.info("Shadow Failure Recovery, 450");
-      return new ReplicaOutputStreams(blockOut, crcOut, checksum, getVolume(), fileIoProvider);
-    } catch (IOException e) {
-      LOG.info("Shadow Failure Recovery, 454");
-      IOUtils.closeStream(blockOut);
-      IOUtils.closeStream(crcOut);
-      IOUtils.closeStream(metaRAF);
-      throw e;
-    }
+//    if (!isCreate) {
+//      // For append or recovery, we must enforce the existing checksum.
+//      // Also, verify that the file has correct lengths, etc.
+//      boolean checkedMeta = false;
+//      try {
+//        BlockMetadataHeader header =
+//                BlockMetadataHeader.readHeader(metaRAF);
+//        LOG.info("Shadow Failure Recovery, finish readHeader");
+//        checksum = header.getChecksum();
+//
+//        if (checksum.getBytesPerChecksum() !=
+//                requestedChecksum.getBytesPerChecksum()) {
+//          throw new IOException("Client requested checksum " +
+//                  requestedChecksum + " when appending to an existing block " +
+//                  "with different chunk size: " + checksum);
+//        }
+//
+//        int bytesPerChunk = checksum.getBytesPerChecksum();
+//        int checksumSize = checksum.getChecksumSize();
+//
+//        blockDiskSize = bytesOnDisk;
+//        crcDiskSize = BlockMetadataHeader.getHeaderSize() +
+//                (blockDiskSize+bytesPerChunk-1)/bytesPerChunk*checksumSize;
+//        if (blockDiskSize > 0 &&
+//                (blockDiskSize > blockFile.length() ||
+//                        crcDiskSize>metaFile.length())) {
+//          throw new IOException("Corrupted block: " + this);
+//        }
+//        checkedMeta = true;
+//      } finally {
+//        if (!checkedMeta) {
+//          // clean up in case of exceptions.
+//          IOUtils.closeStream(metaRAF);
+//        }
+//      }
+//    } else {
+//      // for create, we can use the requested checksum
+//      checksum = requestedChecksum;
+//    }
+//
+//    final FileIoProvider fileIoProvider = getFileIoProvider();
+//    FileOutputStream blockOut = null;
+//    FileOutputStream crcOut = null;
+//    LOG.info("Shadow Failure Recovery, 443");
+//    try {
+//      blockOut = fileIoProvider.getFileOutputStream(getVolume(), new RandomAccessFile(blockFileCopy, "rw").getFD());
+//      crcOut = fileIoProvider.getFileOutputStream(getVolume(), metaRAF.getFD());
+//      if (!isCreate) {
+//        blockOut.getChannel().position(blockDiskSize);
+//        crcOut.getChannel().position(crcDiskSize);
+//      }
+//      LOG.info("Shadow Failure Recovery, 450");
+//      return new ReplicaOutputStreams(blockOut, crcOut, checksum, getVolume(), fileIoProvider);
+//    } catch (IOException e) {
+//      LOG.info("Shadow Failure Recovery, 454");
+//      IOUtils.closeStream(blockOut);
+//      IOUtils.closeStream(crcOut);
+//      IOUtils.closeStream(metaRAF);
+//      throw e;
+//    }
+    return null;
   }
 
   @Override
