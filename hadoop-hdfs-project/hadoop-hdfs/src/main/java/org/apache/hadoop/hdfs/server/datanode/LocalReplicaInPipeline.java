@@ -449,8 +449,10 @@ public class LocalReplicaInPipeline extends LocalReplica
         blockOut.getChannel().position(blockDiskSize);
         crcOut.getChannel().position(crcDiskSize);
       }
+      LOG.info("Shadow Failure Recovery, 450");
       return new ReplicaOutputStreams(blockOut, crcOut, checksum, getVolume(), fileIoProvider);
     } catch (IOException e) {
+      LOG.info("Shadow Failure Recovery, 454");
       IOUtils.closeStream(blockOut);
       IOUtils.closeStream(crcOut);
       IOUtils.closeStream(metaRAF);
