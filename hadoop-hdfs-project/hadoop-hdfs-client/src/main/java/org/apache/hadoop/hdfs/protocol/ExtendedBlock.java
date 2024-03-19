@@ -29,6 +29,11 @@ import org.apache.hadoop.classification.InterfaceStability;
 public class ExtendedBlock {
   private String poolId;
   private Block block;
+  public boolean isShadow = false;
+
+  public void setShadow(){
+    isShadow = true;
+  }
 
   public ExtendedBlock() {
     this(null, 0, 0, 0);
