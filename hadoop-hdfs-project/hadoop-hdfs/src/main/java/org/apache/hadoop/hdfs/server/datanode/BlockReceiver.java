@@ -2633,10 +2633,10 @@ class BlockReceiver implements Closeable {
       PipelineAck replyAck = new PipelineAck(seqno, replies,
               totalAckTimeNanos);
       LOG.info("SDS {}, reply Ack length is {}", isShadowFlag, replies.length);
-      if (replyAck.isSuccess()
-              && offsetInBlock > replicaInfo.getBytesAcked()) {
-        replicaInfo.setBytesAcked(offsetInBlock);
-      }
+//      if (replyAck.isSuccess()
+//              && offsetInBlock > replicaInfo.getBytesAcked()) {
+//        replicaInfo.setBytesAcked(offsetInBlock);
+//      }
       LOG.info("SDS {}, reply Ack 2414", isShadowFlag);
       // send my ack back to upstream datanode
       long begin = Time.monotonicNow();
