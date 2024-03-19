@@ -375,50 +375,50 @@ class BlockReceiver implements Closeable {
          );
        }
 
-//      //
-//      // Open local disk out
-//      //
-//      if (isDatanode) { //replication or move
-//        LOG.info("Shadow Track, isDatanode is {}", isDatanode);
-//        replicaHandler =
-//                datanode.data.createTemporary(storageType, storageId, block, false);
-//      } else {
-//        LOG.info("Shadow Track, stage is {}", stage);
-//        switch (stage) {
-//          case PIPELINE_SETUP_CREATE:
-//            replicaHandler = datanode.data.createRbw(storageType, storageId,
-//                    block, allowLazyPersist);
-//            datanode.notifyNamenodeReceivingBlock(
-//                    block, replicaHandler.getReplica().getStorageUuid());
-//            break;
-//          case PIPELINE_SETUP_STREAMING_RECOVERY:
-//            replicaHandler = datanode.data.recoverRbw(
-//                    block, newGs, minBytesRcvd, maxBytesRcvd);
-//            block.setGenerationStamp(newGs);
-//            break;
-//          case PIPELINE_SETUP_APPEND:
-//            replicaHandler = datanode.data.append(block, newGs, minBytesRcvd);
-//            block.setGenerationStamp(newGs);
-//            datanode.notifyNamenodeReceivingBlock(
-//                    block, replicaHandler.getReplica().getStorageUuid());
-//            break;
-//          case PIPELINE_SETUP_APPEND_RECOVERY:
-//            replicaHandler = datanode.data.recoverAppend(block, newGs, minBytesRcvd);
-//            block.setGenerationStamp(newGs);
-//            datanode.notifyNamenodeReceivingBlock(
-//                    block, replicaHandler.getReplica().getStorageUuid());
-//            break;
-//          case TRANSFER_RBW:
-//          case TRANSFER_FINALIZED:
-//            // this is a transfer destination
-//            replicaHandler = datanode.data.createTemporary(storageType, storageId,
-//                    block, isTransfer);
-//            break;
-//          default: throw new IOException("Unsupported stage " + stage +
-//                  " while receiving block " + block + " from " + inAddr);
-//        }
-//      }
-//      replicaInfo = replicaHandler.getReplica();
+      //
+      // Open local disk out
+      //
+      if (isDatanode) { //replication or move
+        LOG.info("Shadow Track, isDatanode is {}", isDatanode);
+        replicaHandler =
+                datanode.data.createTemporary(storageType, storageId, block, false);
+      } else {
+        LOG.info("Shadow Track, stage is {}", stage);
+        switch (stage) {
+          case PIPELINE_SETUP_CREATE:
+            replicaHandler = datanode.data.createRbw(storageType, storageId,
+                    block, allowLazyPersist);
+            datanode.notifyNamenodeReceivingBlock(
+                    block, replicaHandler.getReplica().getStorageUuid());
+            break;
+          case PIPELINE_SETUP_STREAMING_RECOVERY:
+            replicaHandler = datanode.data.recoverRbw(
+                    block, newGs, minBytesRcvd, maxBytesRcvd);
+            block.setGenerationStamp(newGs);
+            break;
+          case PIPELINE_SETUP_APPEND:
+            replicaHandler = datanode.data.append(block, newGs, minBytesRcvd);
+            block.setGenerationStamp(newGs);
+            datanode.notifyNamenodeReceivingBlock(
+                    block, replicaHandler.getReplica().getStorageUuid());
+            break;
+          case PIPELINE_SETUP_APPEND_RECOVERY:
+            replicaHandler = datanode.data.recoverAppend(block, newGs, minBytesRcvd);
+            block.setGenerationStamp(newGs);
+            datanode.notifyNamenodeReceivingBlock(
+                    block, replicaHandler.getReplica().getStorageUuid());
+            break;
+          case TRANSFER_RBW:
+          case TRANSFER_FINALIZED:
+            // this is a transfer destination
+            replicaHandler = datanode.data.createTemporary(storageType, storageId,
+                    block, isTransfer);
+            break;
+          default: throw new IOException("Unsupported stage " + stage +
+                  " while receiving block " + block + " from " + inAddr);
+        }
+      }
+      replicaInfo = replicaHandler.getReplica();
       this.dropCacheBehindWrites = (cachingStrategy.getDropBehind() == null) ?
               datanode.getDnConf().dropCacheBehindWrites :
               cachingStrategy.getDropBehind();
