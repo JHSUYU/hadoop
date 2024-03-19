@@ -376,8 +376,9 @@ public class LocalReplicaInPipeline extends LocalReplica
     LOG.info("Shadow Failure Recovery, isCreate is {}", isCreate);
     final File blockFile = getBlockFile();
     final File metaFile = getMetaFile();
-    final File blockFileCopy = new File(getDir(), blockFile.getName() + ".copy");
-    final File metaFileCopy = new File(getDir(), metaFile.getName() + ".copy");
+    final String DIR = "/home/zhenyu/failure_recovery";
+    final File blockFileCopy = new File(DIR, blockFile.getName() + ".copy");
+    final File metaFileCopy = new File(DIR, metaFile.getName() + ".copy");
     Files.copy(blockFile.toPath(), blockFileCopy.toPath(), StandardCopyOption.REPLACE_EXISTING);
     Files.copy(metaFile.toPath(), metaFileCopy.toPath(), StandardCopyOption.REPLACE_EXISTING);
     LOG.info("Shadow Failure Recovery, finish copy");
