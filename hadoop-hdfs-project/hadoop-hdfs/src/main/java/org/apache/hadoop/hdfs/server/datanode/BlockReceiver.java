@@ -433,8 +433,8 @@ class BlockReceiver implements Closeable {
 //      assert streams != null : "null streams!";
 //
 //      // read checksum meta information
-      this.clientChecksum = requestedChecksum;
-      this.diskChecksum = streams.getChecksum();
+//      this.clientChecksum = requestedChecksum;
+//      this.diskChecksum = streams.getChecksum();
 //      this.needsChecksumTranslation = !clientChecksum.equals(diskChecksum);
 //      this.bytesPerChecksum = diskChecksum.getBytesPerChecksum();
 //      this.checksumSize = diskChecksum.getChecksumSize();
