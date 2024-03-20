@@ -1147,8 +1147,7 @@ class DataXceiver extends Receiver implements Runnable {
                 stage, latestGenerationStamp, minBytesRcvd, maxBytesRcvd,
                 clientname, srcDataNode, datanode, requestedChecksum,
                 cachingStrategy, allowLazyPersist, pinning, storageId, isShadow));
-//        replica = blockReceiver.getReplica();
-//        blockReceiver = null;
+        replica = blockReceiver.getReplica();
       } else {
         replica = datanode.data.recoverClose(
                 block, latestGenerationStamp, minBytesRcvd);
