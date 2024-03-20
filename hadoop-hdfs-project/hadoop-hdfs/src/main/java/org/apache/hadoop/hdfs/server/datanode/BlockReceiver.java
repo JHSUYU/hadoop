@@ -1186,6 +1186,7 @@ class BlockReceiver implements Closeable {
 
       final boolean shouldNotWriteChecksum = checksumReceivedLen == 0
               && streams.isTransientStorage();
+      LOG.info("SDS: shouldNotWriteChecksum is {}", shouldNotWriteChecksum);
       try {
         long onDiskLen = replicaInfo.getBytesOnDisk();
         if (onDiskLen<offsetInBlock) {
@@ -1212,6 +1213,7 @@ class BlockReceiver implements Closeable {
           // instead. This reduces disk reads and cpu load.
           boolean doCrcRecalc = overwriteLastCrc &&
                   (lastChunkBoundary != firstByteInBlock);
+          LOG.info("SDS: onDiskLen is {}, partialChunkSizeOnDisk is {}, lastChunkBoundary is {}, alignedOnDisk is {}, alignedInPacket is {}, overwriteLastCrc is {}, doCrcRecalc is {}", onDiskLen, partialChunkSizeOnDisk, lastChunkBoundary, alignedOnDisk, alignedInPacket, overwriteLastCrc, doCrcRecalc);
 
           // If this is a partial chunk, then verify that this is the only
           // chunk in the packet. If the starting offset is not chunk
