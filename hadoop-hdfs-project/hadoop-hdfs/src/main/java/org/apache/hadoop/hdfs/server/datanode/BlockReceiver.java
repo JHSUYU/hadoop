@@ -443,6 +443,7 @@ class BlockReceiver implements Closeable {
               streams.getChecksumOut(), DFSUtilClient.getSmallBufferSize(
               datanode.getConf())));
       // write data chunk header if creating a new replica
+       LOG.info("Shadow Track, isCreate is {}", isCreate);
       if (isCreate) {
         BlockMetadataHeader.writeHeader(checksumOut, diskChecksum);
       }
