@@ -434,20 +434,18 @@ class BlockReceiver implements Closeable {
 //
 //      // read checksum meta information
       this.clientChecksum = requestedChecksum;
-//      this.diskChecksum = streams.getChecksum();
+      this.diskChecksum = streams.getChecksum();
       this.needsChecksumTranslation = !clientChecksum.equals(diskChecksum);
-//      this.bytesPerChecksum = diskChecksum.getBytesPerChecksum();
-//      this.checksumSize = diskChecksum.getChecksumSize();
-       this.bytesPerChecksum =0;
-       this.checksumSize = 0;
+      this.bytesPerChecksum = diskChecksum.getBytesPerChecksum();
+      this.checksumSize = diskChecksum.getChecksumSize();
 //
-//      this.checksumOut = new DataOutputStream(new BufferedOutputStream(
-//              streams.getChecksumOut(), DFSUtilClient.getSmallBufferSize(
-//              datanode.getConf())));
-//      // write data chunk header if creating a new replica
-//      if (isCreate) {
-//        BlockMetadataHeader.writeHeader(checksumOut, diskChecksum);
-//      }
+      this.checksumOut = new DataOutputStream(new BufferedOutputStream(
+              streams.getChecksumOut(), DFSUtilClient.getSmallBufferSize(
+              datanode.getConf())));
+      // write data chunk header if creating a new replica
+      if (isCreate) {
+        BlockMetadataHeader.writeHeader(checksumOut, diskChecksum);
+      }
      } finally {
 
      }
@@ -1145,7 +1143,7 @@ class BlockReceiver implements Closeable {
     } else {
       final int checksumLen = diskChecksum.getChecksumSize(len);
       final int checksumReceivedLen = checksumBuf.capacity();
-
+      LOG.info("SDS: checksumLen is {}, checksumReceivedLen is {}", checksumLen, checksumReceivedLen);
       if (checksumReceivedLen > 0 && checksumReceivedLen != checksumLen) {
         throw new IOException("Invalid checksum length: received length is "
                 + checksumReceivedLen + " but expected length is " + checksumLen);
@@ -1176,6 +1174,7 @@ class BlockReceiver implements Closeable {
 //        }
 //      }
 
+      LOG.info("SDS: checksumReceivedLen is {}, streams.isTransientStorage() is {}", checksumReceivedLen, streams.isTransientStorage());
       if (checksumReceivedLen == 0 && !streams.isTransientStorage()) {
         // checksum is missing, need to calculate it
         checksumBuf = ByteBuffer.allocate(checksumLen);
