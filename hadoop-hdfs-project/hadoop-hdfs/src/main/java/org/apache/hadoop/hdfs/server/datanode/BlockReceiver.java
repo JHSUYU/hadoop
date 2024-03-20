@@ -1189,6 +1189,7 @@ class BlockReceiver implements Closeable {
       LOG.info("SDS: shouldNotWriteChecksum is {}", shouldNotWriteChecksum);
       try {
         long onDiskLen = replicaInfo.getBytesOnDisk();
+        LOG.info("SDS: onDiskLen is {}, offsetInBlock is {}", onDiskLen, offsetInBlock);
         if (onDiskLen<offsetInBlock) {
           // Normally the beginning of an incoming packet is aligned with the
           // existing data on disk. If the beginning packet data offset is not
