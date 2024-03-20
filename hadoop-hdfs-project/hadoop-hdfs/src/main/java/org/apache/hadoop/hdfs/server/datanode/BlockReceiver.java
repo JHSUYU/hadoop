@@ -1687,7 +1687,7 @@ class BlockReceiver implements Closeable {
         // premature termination of responder.
         LOG.info("Shutting down for restart (" + block + ").");
       } else {
-        LOG.info("Exception for " + block, ioe);
+        LOG.info("Shadow Track Exception for " + block, ioe);
         throw ioe;
       }
     } finally {
