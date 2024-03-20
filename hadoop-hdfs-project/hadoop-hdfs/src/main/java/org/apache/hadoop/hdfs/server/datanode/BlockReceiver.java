@@ -433,19 +433,16 @@ class BlockReceiver implements Closeable {
 //      assert streams != null : "null streams!";
 //
 //      // read checksum meta information
-       this.needsChecksumTranslation = false;
-//      this.clientChecksum = requestedChecksum;
-//      this.diskChecksum = streams.getChecksum();
-//      this.needsChecksumTranslation = !clientChecksum.equals(diskChecksum);
-//      this.bytesPerChecksum = diskChecksum.getBytesPerChecksum();
-//      this.checksumSize = diskChecksum.getChecksumSize();
-       this.bytesPerChecksum = 0;
-       this.checksumSize = 0;
+      this.clientChecksum = requestedChecksum;
+      this.diskChecksum = streams.getChecksum();
+      this.needsChecksumTranslation = !clientChecksum.equals(diskChecksum);
+      this.bytesPerChecksum = diskChecksum.getBytesPerChecksum();
+      this.checksumSize = diskChecksum.getChecksumSize();
+      LOG.info("this.clientChecksum is {}, this.diskChecksum is {}, this.needsChecksumTranslation is {}, bytesPerChecksum is{}, checksumSize is {}", this.clientChecksum, this.diskChecksum, this.needsChecksumTranslation, this.bytesPerChecksum, this.checksumSize);
 //
 //      this.checksumOut = new DataOutputStream(new BufferedOutputStream(
 //              streams.getChecksumOut(), DFSUtilClient.getSmallBufferSize(
 //              datanode.getConf())));
-      LOG.info("this.checksumOut is {}, this.clientChecksum is {}, this.diskChecksum is {}", this.checksumOut, this.clientChecksum, this.diskChecksum);
       // write data chunk header if creating a new replica
        LOG.info("Shadow Track, isCreate is {}", isCreate);
       if (isCreate) {
