@@ -447,27 +447,27 @@ public class LocalReplicaInPipeline extends LocalReplica
       checksum = requestedChecksum;
     }
 //
-//    final FileIoProvider fileIoProvider = getFileIoProvider();
-//    FileOutputStream blockOut = null;
-//    FileOutputStream crcOut = null;
-//    LOG.info("Shadow Failure Recovery, 443");
-//    try {
-//      blockOut = fileIoProvider.getFileOutputStream(getVolume(), new RandomAccessFile(blockFileCopy, "rw").getFD());
-//      crcOut = fileIoProvider.getFileOutputStream(getVolume(), metaRAF.getFD());
-//      if (!isCreate) {
-//        blockOut.getChannel().position(blockDiskSize);
-//        crcOut.getChannel().position(crcDiskSize);
-//      }
-//      LOG.info("Shadow Failure Recovery, 450");
-//      return new ReplicaOutputStreams(blockOut, crcOut, checksum, getVolume(), fileIoProvider);
-//    } catch (IOException e) {
-//      LOG.info("Shadow Failure Recovery, 454");
-//      IOUtils.closeStream(blockOut);
-//      IOUtils.closeStream(crcOut);
-//      IOUtils.closeStream(metaRAF);
-//      throw e;
-//    }
-    return null;
+    final FileIoProvider fileIoProvider = getFileIoProvider();
+    FileOutputStream blockOut = null;
+    FileOutputStream crcOut = null;
+    LOG.info("Shadow Failure Recovery, 443");
+    try {
+      blockOut = fileIoProvider.getFileOutputStream(getVolume(), new RandomAccessFile(blockFileCopy, "rw").getFD());
+      crcOut = fileIoProvider.getFileOutputStream(getVolume(), metaRAF.getFD());
+      if (!isCreate) {
+        blockOut.getChannel().position(blockDiskSize);
+        crcOut.getChannel().position(crcDiskSize);
+      }
+      LOG.info("Shadow Failure Recovery, 450");
+      return new ReplicaOutputStreams(blockOut, crcOut, checksum, getVolume(), fileIoProvider);
+    } catch (IOException e) {
+      LOG.info("Shadow Failure Recovery, 454");
+      IOUtils.closeStream(blockOut);
+      IOUtils.closeStream(crcOut);
+      IOUtils.closeStream(metaRAF);
+      throw e;
+    }
+
   }
 
   @Override
