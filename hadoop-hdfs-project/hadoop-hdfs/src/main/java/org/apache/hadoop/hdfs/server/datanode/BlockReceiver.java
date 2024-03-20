@@ -809,6 +809,7 @@ class BlockReceiver implements Closeable {
             + checksumReceivedLen + " but expected length is " + checksumLen);
       }
 
+      LOG.info("checksumReceivedLen is {}, checksumLen is {}", checksumReceivedLen, checksumLen);
       if (checksumReceivedLen > 0 && shouldVerifyChecksum()) {
         try {
           verifyChunks(dataBuf, checksumBuf);
@@ -846,6 +847,7 @@ class BlockReceiver implements Closeable {
           && streams.isTransientStorage();
       try {
         long onDiskLen = replicaInfo.getBytesOnDisk();
+        LOG.info("Original: onDiskLen is {}, offsetInBlock is {}", onDiskLen, offsetInBlock);
         if (onDiskLen<offsetInBlock) {
           // Normally the beginning of an incoming packet is aligned with the
           // existing data on disk. If the beginning packet data offset is not
