@@ -723,6 +723,7 @@ class DataStreamer extends Daemon {
     this.storageTypes = storageTypes;
     this.storageIDs = storageIDs;
 
+    LOG.info("shadowRecovery is " + shadowRecovery + " for block " + block + " in file " + src);
     if (shadowRecovery){
       this.shadowNodes = nodes;
       this.shadowStorageTypes = storageTypes;
@@ -2007,7 +2008,7 @@ class DataStreamer extends Daemon {
         return;
       }
 
-      handleDatanodeReplacement();
+      //handleDatanodeReplacement();
 
       // get a new generation stamp and an access token
       final LocatedBlock lb = updateBlockForPipeline();
