@@ -953,94 +953,94 @@ class ShadowDataStreamer extends Daemon {
                     initDataStreaming();
                 }
 
-                long lastByteOffsetInBlock = one.getLastByteOffsetBlock();
-                if (lastByteOffsetInBlock > stat.getBlockSize()) {
-                    throw new IOException("BlockSize " + stat.getBlockSize() +
-                            " < lastByteOffsetInBlock, " + this + ", " + one);
-                }
-
-                if (one.isLastPacketInBlock()) {
-                    // wait for all data packets have been successfully acked
-                    waitForAllAcks();
-                    if(shouldStop()) {
-                        continue;
-                    }
-                    stage = BlockConstructionStage.PIPELINE_CLOSE;
-                }
-
-                // send the packet
-                SpanContext spanContext = null;
-                synchronized (dataQueue) {
-                    // move packet from dataQueue to ackQueue
-                    if (!one.isHeartbeatPacket()) {
-                        if (scope != null) {
-                            one.setSpan(scope.span());
-                            spanContext = scope.span().getContext();
-                            scope.close();
-                        }
-                        scope = null;
-                        dataQueue.removeFirst();
-                        ackQueue.addLast(one);
-                        packetSendTime.put(one.getSeqno(), Time.monotonicNowNanos());
-                        dataQueue.notifyAll();
-                    }
-                }
-
-                LOG.debug("{} sending {}", this, one);
-
-                // write out data to remote datanode
-                try (TraceScope ignored = dfsClient.getTracer().
-                        newScope("DataStreamer#writeTo", spanContext)) {
-                    sendPacket(one);
-                } catch (IOException e) {
-                    // HDFS-3398 treat primary DN is down since client is unable to
-                    // write to primary DN. If a failed or restarting node has already
-                    // been recorded by the responder, the following call will have no
-                    // effect. Pipeline recovery can handle only one node error at a
-                    // time. If the primary node fails again during the recovery, it
-                    // will be taken out then.
-                    errorState.markFirstNodeIfNotMarked();
-                    throw e;
-                }
-
-                // update bytesSent
-                long tmpBytesSent = one.getLastByteOffsetBlock();
-                if (bytesSent < tmpBytesSent) {
-                    bytesSent = tmpBytesSent;
-                }
-
-                if (shouldStop()) {
-                    continue;
-                }
-
-                // Is this block full?
-                if (one.isLastPacketInBlock()) {
-                    // wait for the close packet has been acked
-                    try {
-                        waitForAllAcks();
-                    } catch (IOException ioe) {
-                        // No need to do a close recovery if the last packet was acked.
-                        // i.e. ackQueue is empty.  waitForAllAcks() can get an exception
-                        // (e.g. connection reset) while sending a heartbeat packet,
-                        // if the DN sends the final ack and closes the connection.
-                        synchronized (dataQueue) {
-                            if (!ackQueue.isEmpty()) {
-                                throw ioe;
-                            }
-                        }
-                    }
-                    if (shouldStop()) {
-                        continue;
-                    }
-
-                    endBlock();
-                }
-                if (progress != null) { progress.progress(); }
-
-                // This is used by unit test to trigger race conditions.
-                if (artificialSlowdown != 0 && dfsClient.clientRunning) {
-                    Thread.sleep(artificialSlowdown);
-                }
+//                long lastByteOffsetInBlock = one.getLastByteOffsetBlock();
+//                if (lastByteOffsetInBlock > stat.getBlockSize()) {
+//                    throw new IOException("BlockSize " + stat.getBlockSize() +
+//                            " < lastByteOffsetInBlock, " + this + ", " + one);
+//                }
+//
+//                if (one.isLastPacketInBlock()) {
+//                    // wait for all data packets have been successfully acked
+//                    waitForAllAcks();
+//                    if(shouldStop()) {
+//                        continue;
+//                    }
+//                    stage = BlockConstructionStage.PIPELINE_CLOSE;
+//                }
+//
+//                // send the packet
+//                SpanContext spanContext = null;
+//                synchronized (dataQueue) {
+//                    // move packet from dataQueue to ackQueue
+//                    if (!one.isHeartbeatPacket()) {
+//                        if (scope != null) {
+//                            one.setSpan(scope.span());
+//                            spanContext = scope.span().getContext();
+//                            scope.close();
+//                        }
+//                        scope = null;
+//                        dataQueue.removeFirst();
+//                        ackQueue.addLast(one);
+//                        packetSendTime.put(one.getSeqno(), Time.monotonicNowNanos());
+//                        dataQueue.notifyAll();
+//                    }
+//                }
+//
+//                LOG.debug("{} sending {}", this, one);
+//
+//                // write out data to remote datanode
+//                try (TraceScope ignored = dfsClient.getTracer().
+//                        newScope("DataStreamer#writeTo", spanContext)) {
+//                    sendPacket(one);
+//                } catch (IOException e) {
+//                    // HDFS-3398 treat primary DN is down since client is unable to
+//                    // write to primary DN. If a failed or restarting node has already
+//                    // been recorded by the responder, the following call will have no
+//                    // effect. Pipeline recovery can handle only one node error at a
+//                    // time. If the primary node fails again during the recovery, it
+//                    // will be taken out then.
+//                    errorState.markFirstNodeIfNotMarked();
+//                    throw e;
+//                }
+//
+//                // update bytesSent
+//                long tmpBytesSent = one.getLastByteOffsetBlock();
+//                if (bytesSent < tmpBytesSent) {
+//                    bytesSent = tmpBytesSent;
+//                }
+//
+//                if (shouldStop()) {
+//                    continue;
+//                }
+//
+//                // Is this block full?
+//                if (one.isLastPacketInBlock()) {
+//                    // wait for the close packet has been acked
+//                    try {
+//                        waitForAllAcks();
+//                    } catch (IOException ioe) {
+//                        // No need to do a close recovery if the last packet was acked.
+//                        // i.e. ackQueue is empty.  waitForAllAcks() can get an exception
+//                        // (e.g. connection reset) while sending a heartbeat packet,
+//                        // if the DN sends the final ack and closes the connection.
+//                        synchronized (dataQueue) {
+//                            if (!ackQueue.isEmpty()) {
+//                                throw ioe;
+//                            }
+//                        }
+//                    }
+//                    if (shouldStop()) {
+//                        continue;
+//                    }
+//
+//                    endBlock();
+//                }
+//                if (progress != null) { progress.progress(); }
+//
+//                // This is used by unit test to trigger race conditions.
+//                if (artificialSlowdown != 0 && dfsClient.clientRunning) {
+//                    Thread.sleep(artificialSlowdown);
+//                }
             } catch (Throwable e) {
                 // Log warning if there was a real error.
                 if (!errorState.isRestartingNode()) {
