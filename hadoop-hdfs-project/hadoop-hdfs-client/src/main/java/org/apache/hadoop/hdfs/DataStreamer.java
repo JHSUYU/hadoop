@@ -909,7 +909,7 @@ class DataStreamer extends Daemon {
           // effect. Pipeline recovery can handle only one node error at a
           // time. If the primary node fails again during the recovery, it
           // will be taken out then.
-          LOG.info("DataStreamer Exception: " + this, e);
+          LOG.info("DataStreamer Exception in 912: " + this, e);
           errorState.markFirstNodeIfNotMarked();
           throw e;
         }

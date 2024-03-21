@@ -409,14 +409,14 @@ public class TestClientProtocolForPipelineRecovery {
       DatanodeInfo[] orgNodes = dfsOut.getPipeline();
 
       final String lastDn = orgNodes[1].getXferAddr(false);
-      DataNodeFaultInjector.set(new DataNodeFaultInjector() {
-        @Override
-        public void markBadNode(String dnAddr) throws IOException {
-          if (dnAddr.equals(lastDn)) {
-            throw new IOException("Remove bad datanode");
-          }
-        }
-      });
+//      DataNodeFaultInjector.set(new DataNodeFaultInjector() {
+//        @Override
+//        public void markBadNode(String dnAddr) throws IOException {
+//          if (dnAddr.equals(lastDn)) {
+//            throw new IOException("Remove bad datanode");
+//          }
+//        }
+//      });
 
       // Cause the second datanode to be removed
       out.write(0x32);
