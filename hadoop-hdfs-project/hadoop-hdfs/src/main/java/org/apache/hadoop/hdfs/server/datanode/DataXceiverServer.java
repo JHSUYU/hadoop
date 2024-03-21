@@ -303,15 +303,10 @@ class DataXceiverServer implements Runnable {
 
         LOG.info("Accepted a new connection: {} {}" , curXceiverCount, isShadow);
 
-        if(this.isShadow){
-          new Daemon(datanode.shadowThreadGroup,
-                  DataXceiver.create(peer, datanode, this, this.isShadow))
-                  .start();
-        }else{
-          new Daemon(datanode.threadGroup,
-                  DataXceiver.create(peer, datanode, this, this.isShadow))
-                  .start();
-        }
+        new Daemon(datanode.threadGroup,
+                DataXceiver.create(peer, datanode, this, this.isShadow))
+                .start();
+
 
       } catch (SocketTimeoutException ignored) {
         // wake up to see if should continue to run
