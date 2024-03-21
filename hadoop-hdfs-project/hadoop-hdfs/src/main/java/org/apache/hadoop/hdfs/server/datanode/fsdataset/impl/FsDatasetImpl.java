@@ -1706,6 +1706,8 @@ class FsDatasetImpl implements FsDatasetSpi<FsVolumeImpl> {
     try {
       while (true) {
         try {
+          try (AutoCloseableLock lock = lockManager.writeLock(LockLevel.VOLUME,
+                  b.getBlockPoolId(), getStorageUuidForLock(b))) {
             ReplicaInfo replicaInfo =
                     getReplicaInfo(b.getBlockPoolId(), b.getBlockId());
             // check the replica's state
@@ -1719,6 +1721,7 @@ class FsDatasetImpl implements FsDatasetSpi<FsVolumeImpl> {
             }
             LOG.info("At " + datanode.getDisplayName() + ", Recovering " + rbw);
             return shadowRecoverRbwImpl(rbw, b, newGS, minBytesRcvd, maxBytesRcvd);
+          }
         } catch (MustStopExistingWriter e) {
           e.getReplicaInPipeline().stopWriter(
                   datanode.getDnConf().getXceiverStopTimeout());

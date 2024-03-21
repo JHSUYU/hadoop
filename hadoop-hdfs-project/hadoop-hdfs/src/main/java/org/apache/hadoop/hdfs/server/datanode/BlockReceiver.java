@@ -1500,7 +1500,7 @@ class BlockReceiver implements Closeable {
     boolean responderClosed = false;
     mirrorOut = mirrOut;
     mirrorAddr = mirrAddr;
-    initPerfMonitoring(downstreams);
+    //initPerfMonitoring(downstreams);
     throttler = throttlerArg;
 
     this.replyOut = replyOut;
