@@ -2008,7 +2008,7 @@ class DataStreamer extends Daemon {
         return;
       }
 
-      handleDatanodeReplacement();
+      //handleDatanodeReplacement();
 
       // get a new generation stamp and an access token
       final LocatedBlock lb = updateBlockForPipeline();
