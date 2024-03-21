@@ -909,6 +909,7 @@ class DataStreamer extends Daemon {
           // effect. Pipeline recovery can handle only one node error at a
           // time. If the primary node fails again during the recovery, it
           // will be taken out then.
+          LOG.info("DataStreamer Exception: " + this, e);
           errorState.markFirstNodeIfNotMarked();
           throw e;
         }
@@ -2413,67 +2414,7 @@ class DataStreamer extends Daemon {
 
         LOG.info("DataStreamer, pipelineStatus is: {}, firstBadLink is {}", pipelineStatus, firstBadLink);
 
-
-//        if(recoveryFlag) {
-//          LOG.info("Before shadowDataStreamer.prepareForSender");
-//          shadowDataStreamer.prepareForSender(blockCopy, nodeStorageTypes[0], accessToken,
-//                  dfsClient.clientName, nodes, nodeStorageTypes, null, bcs,
-//                  nodes.length, block.getNumBytes(), bytesSent, newGS,
-//                  checksum4WriteBlock, cachingStrategy.get(), isLazyPersistFile,
-//                  (targetPinnings != null && targetPinnings[0]), targetPinnings,
-//                  nodeStorageIDs[0], nodeStorageIDs, dataStreamer);
-//          LOG.info("After shadowDataStreamer.prepareForSender");
-//        }
-
-//        if(recoveryFlag) {
-//          try {
-//            shadowDataStreamer.prepareForSender(blockCopy, nodeStorageTypes[0], accessToken,
-//                    dfsClient.clientName, nodes, nodeStorageTypes, null, bcs,
-//                    nodes.length, block.getNumBytes(), bytesSent, newGS,
-//                    checksum4WriteBlock, cachingStrategy.get(), isLazyPersistFile,
-//                    (targetPinnings != null && targetPinnings[0]), targetPinnings,
-//                    nodeStorageIDs[0], nodeStorageIDs, this);
-//          } catch (IOException e) {
-//            e.printStackTrace();
-//          }
-//        }
-
         LOG.info("Failure Recovery 2403");
-
-//        if(recoveryFlag) {
-//          Thread t= new Thread(new Runnable() {
-//            @Override
-//            public void run() {
-//              try {
-//                shadowS = shadowCreateSocketForPipeline(nodes[0], nodes.length, dfsClient);
-//                OutputStream shadowUnbufOut = NetUtils.getOutputStream(shadowS, writeTimeout);
-//                InputStream shadowUnbufIn = NetUtils.getInputStream(shadowS, readTimeout);
-//                IOStreamPair shadowSaslStreams = dfsClient.saslClient.socketSend(shadowS,
-//                        shadowUnbufOut, shadowUnbufIn, dfsClient, accessToken, nodes[0]);
-//                shadowUnbufOut = shadowSaslStreams.out;
-//                shadowUnbufIn = shadowSaslStreams.in;
-//                shadowOut[0] = new DataOutputStream(new BufferedOutputStream(shadowUnbufOut,
-//                        DFSUtilClient.getSmallBufferSize(dfsClient.getConfiguration())));
-//                shadowBlockReplyStream = new DataInputStream(shadowUnbufIn);
-//                new Sender(shadowOut[0]).writeBlock(blockCopy, nodeStorageTypes[0], accessToken,
-//                        dfsClient.clientName, nodes, nodeStorageTypes, null, bcs,
-//                        nodes.length, block.getNumBytes(), bytesSent, newGS,
-//                        checksum4WriteBlock, cachingStrategy.get(), isLazyPersistFile,
-//                        (targetPinnings != null && targetPinnings[0]), targetPinnings,
-//                        nodeStorageIDs[0], nodeStorageIDs);
-//                // receive ack for connect
-//                BlockOpResponseProto resp_ = BlockOpResponseProto.parseFrom(
-//                        PBHelperClient.vintPrefixed(shadowBlockReplyStream));
-//                Status pipelineStatus_ = resp_.getStatus();
-//                String firstBadLink_ = resp_.getFirstBadLink();
-//                LOG.info("Failure Recovery 2409, pipelineStatus_ is {}, firstBadLink_ is {}", pipelineStatus_, firstBadLink_);
-//              } catch (IOException e) {
-//                e.printStackTrace();
-//              }
-//            }
-//          });
-//          t.start();
-//          }
 
         // Got an restart OOB ack.
         // If a node is already restarting, this status is not likely from
