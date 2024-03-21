@@ -1690,67 +1690,67 @@ class BlockReceiver implements Closeable {
         throw ioe;
       }
     } finally {
-//      // Clear the previous interrupt state of this thread.
-//      Thread.interrupted();
-//
-//      // If a shutdown for restart was initiated, upstream needs to be notified.
-//      // There is no need to do anything special if the responder was closed
-//      // normally.
-//      if (!responderClosed) { // Data transfer was not complete.
-//        if (responder != null) {
-//          // In case this datanode is shutting down for quick restart,
-//          // send a special ack upstream.
-//          if (datanode.isRestarting() && isClient && !isTransfer) {
-//            try (Writer out = new OutputStreamWriter(
-//                    replicaInfo.createRestartMetaStream(), "UTF-8")) {
-//              // write out the current time.
-//              out.write(Long.toString(Time.now() + restartBudget));
-//              out.flush();
-//            } catch (IOException ioe) {
-//              // The worst case is not recovering this RBW replica.
-//              // Client will fall back to regular pipeline recovery.
-//            } finally {
-//              IOUtils.closeStream(streams.getDataOut());
-//            }
-//            try {
-//              // Even if the connection is closed after the ack packet is
-//              // flushed, the client can react to the connection closure
-//              // first. Insert a delay to lower the chance of client
-//              // missing the OOB ack.
-//              Thread.sleep(1000);
-//            } catch (InterruptedException ie) {
-//              // It is already going down. Ignore this.
-//            }
-//          }
-//          responder.interrupt();
-//        }
-//        IOUtils.closeStream(this);
-//        cleanupBlock();
-//      }
-//      if (responder != null) {
-//        try {
-//          responder.interrupt();
-//          // join() on the responder should timeout a bit earlier than the
-//          // configured deadline. Otherwise, the join() on this thread will
-//          // likely timeout as well.
-//          long joinTimeout = datanode.getDnConf().getXceiverStopTimeout();
-//          joinTimeout = joinTimeout > 1  ? joinTimeout*8/10 : joinTimeout;
-//          responder.join(joinTimeout);
-//          if (responder.isAlive()) {
-//            String msg = "Join on responder thread " + responder
-//                    + " timed out";
-//            LOG.warn(msg + "\n" + StringUtils.getStackTrace(responder));
-//            throw new IOException(msg);
-//          }
-//        } catch (InterruptedException e) {
-//          responder.interrupt();
-//          // do not throw if shutting down for restart.
-//          if (!datanode.isRestarting()) {
-//            throw new InterruptedIOException("Interrupted receiveBlock");
-//          }
-//        }
-//        responder = null;
-//      }
+      // Clear the previous interrupt state of this thread.
+      Thread.interrupted();
+
+      // If a shutdown for restart was initiated, upstream needs to be notified.
+      // There is no need to do anything special if the responder was closed
+      // normally.
+      if (!responderClosed) { // Data transfer was not complete.
+        if (responder != null) {
+          // In case this datanode is shutting down for quick restart,
+          // send a special ack upstream.
+          if (datanode.isRestarting() && isClient && !isTransfer) {
+            try (Writer out = new OutputStreamWriter(
+                    replicaInfo.createRestartMetaStream(), "UTF-8")) {
+              // write out the current time.
+              out.write(Long.toString(Time.now() + restartBudget));
+              out.flush();
+            } catch (IOException ioe) {
+              // The worst case is not recovering this RBW replica.
+              // Client will fall back to regular pipeline recovery.
+            } finally {
+              IOUtils.closeStream(streams.getDataOut());
+            }
+            try {
+              // Even if the connection is closed after the ack packet is
+              // flushed, the client can react to the connection closure
+              // first. Insert a delay to lower the chance of client
+              // missing the OOB ack.
+              Thread.sleep(1000);
+            } catch (InterruptedException ie) {
+              // It is already going down. Ignore this.
+            }
+          }
+          responder.interrupt();
+        }
+        IOUtils.closeStream(this);
+        cleanupBlock();
+      }
+      if (responder != null) {
+        try {
+          responder.interrupt();
+          // join() on the responder should timeout a bit earlier than the
+          // configured deadline. Otherwise, the join() on this thread will
+          // likely timeout as well.
+          long joinTimeout = datanode.getDnConf().getXceiverStopTimeout();
+          joinTimeout = joinTimeout > 1  ? joinTimeout*8/10 : joinTimeout;
+          responder.join(joinTimeout);
+          if (responder.isAlive()) {
+            String msg = "Join on responder thread " + responder
+                    + " timed out";
+            LOG.warn(msg + "\n" + StringUtils.getStackTrace(responder));
+            throw new IOException(msg);
+          }
+        } catch (InterruptedException e) {
+          responder.interrupt();
+          // do not throw if shutting down for restart.
+          if (!datanode.isRestarting()) {
+            throw new InterruptedIOException("Interrupted receiveBlock");
+          }
+        }
+        responder = null;
+      }
     }
   }
 
