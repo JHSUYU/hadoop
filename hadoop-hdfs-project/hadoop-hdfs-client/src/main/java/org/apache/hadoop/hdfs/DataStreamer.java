@@ -2411,6 +2411,9 @@ class DataStreamer extends Daemon {
         Status pipelineStatus = resp.getStatus();
         firstBadLink = resp.getFirstBadLink();
 
+        LOG.info("DataStreamer, pipelineStatus is: {}, firstBadLink is {}", pipelineStatus, firstBadLink);
+
+
 //        if(recoveryFlag) {
 //          LOG.info("Before shadowDataStreamer.prepareForSender");
 //          shadowDataStreamer.prepareForSender(blockCopy, nodeStorageTypes[0], accessToken,
@@ -2495,6 +2498,7 @@ class DataStreamer extends Daemon {
         failed.removeAll(restartingNodes);
         restartingNodes.clear();
       } catch (IOException ie) {
+        LOG.info("DataStreamer, Exception in createBlockOutputStream");
         if (!errorState.isRestartingNode()) {
           LOG.warn("Exception in createBlockOutputStream " + this, ie);
         }
