@@ -2138,18 +2138,15 @@ class DataStreamer extends Daemon {
 //          e.printStackTrace();
 //        }
 //      }
-      if(count >=1){
-        LOG.info("Recovery fail");
-        return true;
-      }
       count+=1;
-      shadowDataStreamer = new ShadowDataStreamer(stat, null, dfsClient, src, progress,
-              checksum4WriteBlock, cachingStrategy, byteArrayManager, favoredNodes,
-              addBlockFlags);
-      shadowDataStreamer.start();
-      try {
-        Thread.sleep(10);
-        shadowDataStreamer.prepareForProcessing(this);
+      if(count ==1){
+        shadowDataStreamer = new ShadowDataStreamer(stat, null, dfsClient, src, progress,
+                checksum4WriteBlock, cachingStrategy, byteArrayManager, favoredNodes,
+                addBlockFlags);
+        shadowDataStreamer.start();
+        try {
+          Thread.sleep(100);
+          shadowDataStreamer.prepareForProcessing(this);
 //        if(shadowDataStreamer != null){
 //          try{
 //            shadowDataStreamer.streamerClosed = true;
@@ -2158,9 +2155,12 @@ class DataStreamer extends Daemon {
 //            e.printStackTrace();
 //          }
 //        }
-      } catch (InterruptedException e) {
-        e.printStackTrace();
+        } catch (InterruptedException e) {
+          e.printStackTrace();
+        }
       }
+
+
       //DFSOutputStream.erroredNodes.put(nodes[badNodeIndex],DFSOutputStream.erroredNodes.getOrDefault(nodes[badNodeIndex],0)+1);
       if (nodes.length <= 1) {
         lastException.set(new IOException("All datanodes "
