@@ -988,20 +988,20 @@ class ShadowDataStreamer extends Daemon {
 
                 LOG.debug("{} sending {}", this, one);
 
-//                // write out data to remote datanode
-//                try (TraceScope ignored = dfsClient.getTracer().
-//                        newScope("DataStreamer#writeTo", spanContext)) {
-//                    sendPacket(one);
-//                } catch (IOException e) {
-//                    // HDFS-3398 treat primary DN is down since client is unable to
-//                    // write to primary DN. If a failed or restarting node has already
-//                    // been recorded by the responder, the following call will have no
-//                    // effect. Pipeline recovery can handle only one node error at a
-//                    // time. If the primary node fails again during the recovery, it
-//                    // will be taken out then.
-//                    errorState.markFirstNodeIfNotMarked();
-//                    throw e;
-//                }
+                // write out data to remote datanode
+                try (TraceScope ignored = dfsClient.getTracer().
+                        newScope("DataStreamer#writeTo", spanContext)) {
+                    sendPacket(one);
+                } catch (IOException e) {
+                    // HDFS-3398 treat primary DN is down since client is unable to
+                    // write to primary DN. If a failed or restarting node has already
+                    // been recorded by the responder, the following call will have no
+                    // effect. Pipeline recovery can handle only one node error at a
+                    // time. If the primary node fails again during the recovery, it
+                    // will be taken out then.
+                    errorState.markFirstNodeIfNotMarked();
+                    throw e;
+                }
 //
 //                // update bytesSent
 //                long tmpBytesSent = one.getLastByteOffsetBlock();
