@@ -1142,229 +1142,229 @@ class BlockReceiver implements Closeable {
     ByteBuffer checksumBuf = packetReceiver.getChecksumSlice();
     LOG.info("SDS: dataBuf is {}, checksumBuf is {}", dataBuf, checksumBuf);
     LOG.info("isLastPacketInBlock is {}, len is {}", lastPacketInBlock, len);
-//    if (lastPacketInBlock || len == 0) {
-//      if(LOG.isDebugEnabled()) {
-//        LOG.debug("Receiving an empty packet or the end of the block " + block);
-//      }
-//      // sync block if requested
-//      if (syncBlock) {
-//        flushOrSync(true, seqno);
-//      }
-//    } else {
-//      final int checksumLen = diskChecksum.getChecksumSize(len);
-//      final int checksumReceivedLen = checksumBuf.capacity();
-//      LOG.info("SDS: checksumLen is {}, checksumReceivedLen is {}", checksumLen, checksumReceivedLen);
-//      if (checksumReceivedLen > 0 && checksumReceivedLen != checksumLen) {
-//        throw new IOException("Invalid checksum length: received length is "
-//                + checksumReceivedLen + " but expected length is " + checksumLen);
-//      }
-//
-////      if (checksumReceivedLen > 0 && shouldVerifyChecksum()) {
-////        try {
-////          verifyChunks(dataBuf, checksumBuf);
-////        } catch (IOException ioe) {
-////          // checksum error detected locally. there is no reason to continue.
-////          if (responder != null) {
-////            try {
-////              ((PacketResponder) responder.getRunnable()).enqueue(seqno,
-////                      lastPacketInBlock, offsetInBlock,
-////                      Status.ERROR_CHECKSUM);
-////              // Wait until the responder sends back the response
-////              // and interrupt this thread.
-////              Thread.sleep(3000);
-////            } catch (InterruptedException e) { }
-////          }
-////          throw new IOException("Terminating due to a checksum error." + ioe);
-////        }
-////
-////        if (needsChecksumTranslation) {
-////          // overwrite the checksums in the packet buffer with the
-////          // appropriate polynomial for the disk storage.
-////          translateChunks(dataBuf, checksumBuf);
-////        }
-////      }
-//
-//      LOG.info("SDS: checksumReceivedLen is {}, streams.isTransientStorage() is {}", checksumReceivedLen, streams.isTransientStorage());
-//      if (checksumReceivedLen == 0 && !streams.isTransientStorage()) {
-//        // checksum is missing, need to calculate it
-//        checksumBuf = ByteBuffer.allocate(checksumLen);
-//        diskChecksum.calculateChunkedSums(dataBuf, checksumBuf);
-//      }
-//
-//      // by this point, the data in the buffer uses the disk checksum
-//
-//      final boolean shouldNotWriteChecksum = checksumReceivedLen == 0
-//              && streams.isTransientStorage();
-//      LOG.info("SDS: shouldNotWriteChecksum is {}", shouldNotWriteChecksum);
-//      try {
-//        long onDiskLen = replicaInfo.getBytesOnDisk();
-//        LOG.info("SDS: onDiskLen is {}, offsetInBlock is {}", onDiskLen, offsetInBlock);
-//        if (onDiskLen<offsetInBlock) {
-//          // Normally the beginning of an incoming packet is aligned with the
-//          // existing data on disk. If the beginning packet data offset is not
-//          // checksum chunk aligned, the end of packet will not go beyond the
-//          // next chunk boundary.
-//          // When a failure-recovery is involved, the client state and the
-//          // the datanode state may not exactly agree. I.e. the client may
-//          // resend part of data that is already on disk. Correct number of
-//          // bytes should be skipped when writing the data and checksum
-//          // buffers out to disk.
-//          long partialChunkSizeOnDisk = onDiskLen % bytesPerChecksum;
-//          long lastChunkBoundary = onDiskLen - partialChunkSizeOnDisk;
-//          boolean alignedOnDisk = partialChunkSizeOnDisk == 0;
-//          boolean alignedInPacket = firstByteInBlock % bytesPerChecksum == 0;
-//
-//          // If the end of the on-disk data is not chunk-aligned, the last
-//          // checksum needs to be overwritten.
-//          boolean overwriteLastCrc = !alignedOnDisk && !shouldNotWriteChecksum;
-//          // If the starting offset of the packat data is at the last chunk
-//          // boundary of the data on disk, the partial checksum recalculation
-//          // can be skipped and the checksum supplied by the client can be used
-//          // instead. This reduces disk reads and cpu load.
-//          boolean doCrcRecalc = overwriteLastCrc &&
-//                  (lastChunkBoundary != firstByteInBlock);
-//          LOG.info("SDS: onDiskLen is {}, partialChunkSizeOnDisk is {}, lastChunkBoundary is {}, alignedOnDisk is {}, alignedInPacket is {}, overwriteLastCrc is {}, doCrcRecalc is {}", onDiskLen, partialChunkSizeOnDisk, lastChunkBoundary, alignedOnDisk, alignedInPacket, overwriteLastCrc, doCrcRecalc);
-//
-//          // If this is a partial chunk, then verify that this is the only
-//          // chunk in the packet. If the starting offset is not chunk
-//          // aligned, the packet should terminate at or before the next
-//          // chunk boundary.
-//          if (!alignedInPacket && len > bytesPerChecksum) {
-//            throw new IOException("Unexpected packet data length for "
-//                    +  block + " from " + inAddr + ": a partial chunk must be "
-//                    + " sent in an individual packet (data length = " + len
-//                    +  " > bytesPerChecksum = " + bytesPerChecksum + ")");
+    if (lastPacketInBlock || len == 0) {
+      if(LOG.isDebugEnabled()) {
+        LOG.debug("Receiving an empty packet or the end of the block " + block);
+      }
+      // sync block if requested
+      if (syncBlock) {
+        flushOrSync(true, seqno);
+      }
+    } else {
+      final int checksumLen = diskChecksum.getChecksumSize(len);
+      final int checksumReceivedLen = checksumBuf.capacity();
+      LOG.info("SDS: checksumLen is {}, checksumReceivedLen is {}", checksumLen, checksumReceivedLen);
+      if (checksumReceivedLen > 0 && checksumReceivedLen != checksumLen) {
+        throw new IOException("Invalid checksum length: received length is "
+                + checksumReceivedLen + " but expected length is " + checksumLen);
+      }
+
+//      if (checksumReceivedLen > 0 && shouldVerifyChecksum()) {
+//        try {
+//          verifyChunks(dataBuf, checksumBuf);
+//        } catch (IOException ioe) {
+//          // checksum error detected locally. there is no reason to continue.
+//          if (responder != null) {
+//            try {
+//              ((PacketResponder) responder.getRunnable()).enqueue(seqno,
+//                      lastPacketInBlock, offsetInBlock,
+//                      Status.ERROR_CHECKSUM);
+//              // Wait until the responder sends back the response
+//              // and interrupt this thread.
+//              Thread.sleep(3000);
+//            } catch (InterruptedException e) { }
 //          }
-//
-//          // If the last portion of the block file is not a full chunk,
-//          // then read in pre-existing partial data chunk and recalculate
-//          // the checksum so that the checksum calculation can continue
-//          // from the right state. If the client provided the checksum for
-//          // the whole chunk, this is not necessary.
-//          Checksum partialCrc = null;
-//          if (doCrcRecalc) {
-//            if (LOG.isDebugEnabled()) {
-//              LOG.debug("receivePacket for " + block
-//                      + ": previous write did not end at the chunk boundary."
-//                      + " onDiskLen=" + onDiskLen);
-//            }
-//            long offsetInChecksum = BlockMetadataHeader.getHeaderSize() +
-//                    onDiskLen / bytesPerChecksum * checksumSize;
-//            partialCrc = computePartialChunkCrc(onDiskLen, offsetInChecksum);
-//          }
-//
-//          // The data buffer position where write will begin. If the packet
-//          // data and on-disk data have no overlap, this will not be at the
-//          // beginning of the buffer.
-//          int startByteToDisk = (int)(onDiskLen-firstByteInBlock)
-//                  + dataBuf.arrayOffset() + dataBuf.position();
-//
-//          // Actual number of data bytes to write.
-//          int numBytesToDisk = (int)(offsetInBlock-onDiskLen);
-//
-//          // Write data to disk.
-//          long begin = Time.monotonicNow();
-//          streams.writeDataToDisk(dataBuf.array(),
-//                  startByteToDisk, numBytesToDisk);
-//          LOG.info("SDS: write to disk");
-//
-//          // no-op in prod
-//          DataNodeFaultInjector.get().delayWriteToDisk();
-//          long duration = Time.monotonicNow() - begin;
-//          if (duration > datanodeSlowLogThresholdMs) {
-//            datanode.metrics.incrPacketsSlowWriteToDisk();
-//            if (LOG.isWarnEnabled()) {
-//              LOG.warn("Slow BlockReceiver write data to disk cost: {}ms " +
-//                              "(threshold={}ms), volume={}, blockId={}, seqno={}",
-//                      duration, datanodeSlowLogThresholdMs, getVolumeBaseUri(),
-//                      replicaInfo.getBlockId(), seqno);
-//            }
-//          }
-//
-//          if (duration > maxWriteToDiskMs) {
-//            maxWriteToDiskMs = duration;
-//          }
-//
-////          final byte[] lastCrc;
-////          if (shouldNotWriteChecksum) {
-////            lastCrc = null;
-////          } else {
-////            int skip = 0;
-////            byte[] crcBytes = null;
-////
-////            // First, prepare to overwrite the partial crc at the end.
-////            if (overwriteLastCrc) { // not chunk-aligned on disk
-////              // prepare to overwrite last checksum
-////              adjustCrcFilePosition();
-////            }
-////
-////            // The CRC was recalculated for the last partial chunk. Update the
-////            // CRC by reading the rest of the chunk, then write it out.
-////            if (doCrcRecalc) {
-////              // Calculate new crc for this chunk.
-////              int bytesToReadForRecalc =
-////                      (int)(bytesPerChecksum - partialChunkSizeOnDisk);
-////              if (numBytesToDisk < bytesToReadForRecalc) {
-////                bytesToReadForRecalc = numBytesToDisk;
-////              }
-////
-////              partialCrc.update(dataBuf.array(), startByteToDisk,
-////                      bytesToReadForRecalc);
-////              byte[] buf = FSOutputSummer.convertToByteStream(partialCrc,
-////                      checksumSize);
-////              crcBytes = copyLastChunkChecksum(buf, checksumSize, buf.length);
-////              checksumOut.write(buf);
-////              if(LOG.isDebugEnabled()) {
-////                LOG.debug("Writing out partial crc for data len " + len +
-////                        ", skip=" + skip);
-////              }
-////              skip++; //  For the partial chunk that was just read.
-////            }
-////
-////            // Determine how many checksums need to be skipped up to the last
-////            // boundary. The checksum after the boundary was already counted
-////            // above. Only count the number of checksums skipped up to the
-////            // boundary here.
-////            long skippedDataBytes = lastChunkBoundary - firstByteInBlock;
-////
-////            if (skippedDataBytes > 0) {
-////              skip += (int)(skippedDataBytes / bytesPerChecksum) +
-////                      ((skippedDataBytes % bytesPerChecksum == 0) ? 0 : 1);
-////            }
-////            skip *= checksumSize; // Convert to number of bytes
-////
-////            // write the rest of checksum
-////            final int offset = checksumBuf.arrayOffset() +
-////                    checksumBuf.position() + skip;
-////            final int end = offset + checksumLen - skip;
-////            // If offset >= end, there is no more checksum to write.
-////            // I.e. a partial chunk checksum rewrite happened and there is no
-////            // more to write after that.
-////            if (offset >= end && doCrcRecalc) {
-////              lastCrc = crcBytes;
-////            } else {
-////              final int remainingBytes = checksumLen - skip;
-////              lastCrc = copyLastChunkChecksum(checksumBuf.array(),
-////                      checksumSize, end);
-////              checksumOut.write(checksumBuf.array(), offset, remainingBytes);
-////            }
-////          }
-////
-////          /// flush entire packet, sync if requested
-////          flushOrSync(syncBlock, seqno);
-////
-////          replicaInfo.setLastChecksumAndDataLen(offsetInBlock, lastCrc);
-////
-////          datanode.metrics.incrBytesWritten(numBytesToDisk);
-////          datanode.metrics.incrTotalWriteTime(duration);
-////
-////          manageWriterOsCache(offsetInBlock, seqno);
+//          throw new IOException("Terminating due to a checksum error." + ioe);
 //        }
-//      } catch (IOException iex) {
-//        // Volume error check moved to FileIoProvider
-//        throw iex;
+//
+//        if (needsChecksumTranslation) {
+//          // overwrite the checksums in the packet buffer with the
+//          // appropriate polynomial for the disk storage.
+//          translateChunks(dataBuf, checksumBuf);
+//        }
 //      }
-//    }
+
+      LOG.info("SDS: checksumReceivedLen is {}, streams.isTransientStorage() is {}", checksumReceivedLen, streams.isTransientStorage());
+      if (checksumReceivedLen == 0 && !streams.isTransientStorage()) {
+        // checksum is missing, need to calculate it
+        checksumBuf = ByteBuffer.allocate(checksumLen);
+        diskChecksum.calculateChunkedSums(dataBuf, checksumBuf);
+      }
+
+      // by this point, the data in the buffer uses the disk checksum
+
+      final boolean shouldNotWriteChecksum = checksumReceivedLen == 0
+              && streams.isTransientStorage();
+      LOG.info("SDS: shouldNotWriteChecksum is {}", shouldNotWriteChecksum);
+      try {
+        long onDiskLen = replicaInfo.getBytesOnDisk();
+        LOG.info("SDS: onDiskLen is {}, offsetInBlock is {}", onDiskLen, offsetInBlock);
+        if (onDiskLen<offsetInBlock) {
+          // Normally the beginning of an incoming packet is aligned with the
+          // existing data on disk. If the beginning packet data offset is not
+          // checksum chunk aligned, the end of packet will not go beyond the
+          // next chunk boundary.
+          // When a failure-recovery is involved, the client state and the
+          // the datanode state may not exactly agree. I.e. the client may
+          // resend part of data that is already on disk. Correct number of
+          // bytes should be skipped when writing the data and checksum
+          // buffers out to disk.
+          long partialChunkSizeOnDisk = onDiskLen % bytesPerChecksum;
+          long lastChunkBoundary = onDiskLen - partialChunkSizeOnDisk;
+          boolean alignedOnDisk = partialChunkSizeOnDisk == 0;
+          boolean alignedInPacket = firstByteInBlock % bytesPerChecksum == 0;
+
+          // If the end of the on-disk data is not chunk-aligned, the last
+          // checksum needs to be overwritten.
+          boolean overwriteLastCrc = !alignedOnDisk && !shouldNotWriteChecksum;
+          // If the starting offset of the packat data is at the last chunk
+          // boundary of the data on disk, the partial checksum recalculation
+          // can be skipped and the checksum supplied by the client can be used
+          // instead. This reduces disk reads and cpu load.
+          boolean doCrcRecalc = overwriteLastCrc &&
+                  (lastChunkBoundary != firstByteInBlock);
+          LOG.info("SDS: onDiskLen is {}, partialChunkSizeOnDisk is {}, lastChunkBoundary is {}, alignedOnDisk is {}, alignedInPacket is {}, overwriteLastCrc is {}, doCrcRecalc is {}", onDiskLen, partialChunkSizeOnDisk, lastChunkBoundary, alignedOnDisk, alignedInPacket, overwriteLastCrc, doCrcRecalc);
+
+          // If this is a partial chunk, then verify that this is the only
+          // chunk in the packet. If the starting offset is not chunk
+          // aligned, the packet should terminate at or before the next
+          // chunk boundary.
+          if (!alignedInPacket && len > bytesPerChecksum) {
+            throw new IOException("Unexpected packet data length for "
+                    +  block + " from " + inAddr + ": a partial chunk must be "
+                    + " sent in an individual packet (data length = " + len
+                    +  " > bytesPerChecksum = " + bytesPerChecksum + ")");
+          }
+
+          // If the last portion of the block file is not a full chunk,
+          // then read in pre-existing partial data chunk and recalculate
+          // the checksum so that the checksum calculation can continue
+          // from the right state. If the client provided the checksum for
+          // the whole chunk, this is not necessary.
+          Checksum partialCrc = null;
+          if (doCrcRecalc) {
+            if (LOG.isDebugEnabled()) {
+              LOG.debug("receivePacket for " + block
+                      + ": previous write did not end at the chunk boundary."
+                      + " onDiskLen=" + onDiskLen);
+            }
+            long offsetInChecksum = BlockMetadataHeader.getHeaderSize() +
+                    onDiskLen / bytesPerChecksum * checksumSize;
+            partialCrc = computePartialChunkCrc(onDiskLen, offsetInChecksum);
+          }
+
+          // The data buffer position where write will begin. If the packet
+          // data and on-disk data have no overlap, this will not be at the
+          // beginning of the buffer.
+          int startByteToDisk = (int)(onDiskLen-firstByteInBlock)
+                  + dataBuf.arrayOffset() + dataBuf.position();
+
+          // Actual number of data bytes to write.
+          int numBytesToDisk = (int)(offsetInBlock-onDiskLen);
+
+          // Write data to disk.
+          long begin = Time.monotonicNow();
+          streams.writeDataToDisk(dataBuf.array(),
+                  startByteToDisk, numBytesToDisk);
+          LOG.info("SDS: write to disk");
+
+          // no-op in prod
+          DataNodeFaultInjector.get().delayWriteToDisk();
+          long duration = Time.monotonicNow() - begin;
+          if (duration > datanodeSlowLogThresholdMs) {
+            datanode.metrics.incrPacketsSlowWriteToDisk();
+            if (LOG.isWarnEnabled()) {
+              LOG.warn("Slow BlockReceiver write data to disk cost: {}ms " +
+                              "(threshold={}ms), volume={}, blockId={}, seqno={}",
+                      duration, datanodeSlowLogThresholdMs, getVolumeBaseUri(),
+                      replicaInfo.getBlockId(), seqno);
+            }
+          }
+
+          if (duration > maxWriteToDiskMs) {
+            maxWriteToDiskMs = duration;
+          }
+
+//          final byte[] lastCrc;
+//          if (shouldNotWriteChecksum) {
+//            lastCrc = null;
+//          } else {
+//            int skip = 0;
+//            byte[] crcBytes = null;
+//
+//            // First, prepare to overwrite the partial crc at the end.
+//            if (overwriteLastCrc) { // not chunk-aligned on disk
+//              // prepare to overwrite last checksum
+//              adjustCrcFilePosition();
+//            }
+//
+//            // The CRC was recalculated for the last partial chunk. Update the
+//            // CRC by reading the rest of the chunk, then write it out.
+//            if (doCrcRecalc) {
+//              // Calculate new crc for this chunk.
+//              int bytesToReadForRecalc =
+//                      (int)(bytesPerChecksum - partialChunkSizeOnDisk);
+//              if (numBytesToDisk < bytesToReadForRecalc) {
+//                bytesToReadForRecalc = numBytesToDisk;
+//              }
+//
+//              partialCrc.update(dataBuf.array(), startByteToDisk,
+//                      bytesToReadForRecalc);
+//              byte[] buf = FSOutputSummer.convertToByteStream(partialCrc,
+//                      checksumSize);
+//              crcBytes = copyLastChunkChecksum(buf, checksumSize, buf.length);
+//              checksumOut.write(buf);
+//              if(LOG.isDebugEnabled()) {
+//                LOG.debug("Writing out partial crc for data len " + len +
+//                        ", skip=" + skip);
+//              }
+//              skip++; //  For the partial chunk that was just read.
+//            }
+//
+//            // Determine how many checksums need to be skipped up to the last
+//            // boundary. The checksum after the boundary was already counted
+//            // above. Only count the number of checksums skipped up to the
+//            // boundary here.
+//            long skippedDataBytes = lastChunkBoundary - firstByteInBlock;
+//
+//            if (skippedDataBytes > 0) {
+//              skip += (int)(skippedDataBytes / bytesPerChecksum) +
+//                      ((skippedDataBytes % bytesPerChecksum == 0) ? 0 : 1);
+//            }
+//            skip *= checksumSize; // Convert to number of bytes
+//
+//            // write the rest of checksum
+//            final int offset = checksumBuf.arrayOffset() +
+//                    checksumBuf.position() + skip;
+//            final int end = offset + checksumLen - skip;
+//            // If offset >= end, there is no more checksum to write.
+//            // I.e. a partial chunk checksum rewrite happened and there is no
+//            // more to write after that.
+//            if (offset >= end && doCrcRecalc) {
+//              lastCrc = crcBytes;
+//            } else {
+//              final int remainingBytes = checksumLen - skip;
+//              lastCrc = copyLastChunkChecksum(checksumBuf.array(),
+//                      checksumSize, end);
+//              checksumOut.write(checksumBuf.array(), offset, remainingBytes);
+//            }
+//          }
+//
+//          /// flush entire packet, sync if requested
+//          flushOrSync(syncBlock, seqno);
+//
+//          replicaInfo.setLastChecksumAndDataLen(offsetInBlock, lastCrc);
+//
+//          datanode.metrics.incrBytesWritten(numBytesToDisk);
+//          datanode.metrics.incrTotalWriteTime(duration);
+//
+//          manageWriterOsCache(offsetInBlock, seqno);
+        }
+      } catch (IOException iex) {
+        // Volume error check moved to FileIoProvider
+        throw iex;
+      }
+    }
 //
 //    // if sync was requested, put in queue for pending acks here
 //    // (after the fsync finished)
