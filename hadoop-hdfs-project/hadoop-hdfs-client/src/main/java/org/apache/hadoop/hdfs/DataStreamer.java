@@ -2140,7 +2140,7 @@ class DataStreamer extends Daemon {
 //        }
 //      }
       count+=1;
-      if(count ==-1){
+      if(count ==1){
         shadowDataStreamer = new ShadowDataStreamer(stat, null, dfsClient, src, progress,
                 checksum4WriteBlock, cachingStrategy, byteArrayManager, favoredNodes,
                 addBlockFlags);
