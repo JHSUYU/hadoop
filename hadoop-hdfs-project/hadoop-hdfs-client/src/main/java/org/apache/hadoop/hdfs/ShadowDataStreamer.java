@@ -564,10 +564,16 @@ class ShadowDataStreamer extends Daemon {
         this.blockStream = null;
         this.blockReplyStream = null;
         this.s = null;
-        this.dataQueue.addAll(dataStreamer.dataQueue);
+        for(int i=0;i<dataStreamer.dataQueue.size();i++){
+            this.dataQueue.add(dataStreamer.dataQueue.get(i).deepCopy());
+        }
+        //this.dataQueue.addAll(dataStreamer.dataQueue);
         this.stage = dataStreamer.getStage();
         this.bytesSent = dataStreamer.bytesSent;
         this.ackQueue.addAll(dataStreamer.getAckQueue());
+        for(int i=0;i<dataStreamer.getAckQueue().size();i++){
+            this.ackQueue.add(dataStreamer.getAckQueue().get(i).deepCopy());
+        }
         ExtendedBlock block = new ExtendedBlock(dataStreamer.getBlock());
         this.block = new BlockToWrite(block);
         this.nodes = new DatanodeInfo[dataStreamer.getNodes().length];

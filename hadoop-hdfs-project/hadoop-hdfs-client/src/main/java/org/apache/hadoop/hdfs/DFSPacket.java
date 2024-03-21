@@ -360,4 +360,24 @@ public class DFSPacket {
   public Span getSpan() {
     return span;
   }
+
+  public DFSPacket deepCopy() {
+    DFSPacket newPacket = new DFSPacket(
+            Arrays.copyOf(buf, buf.length),
+            maxChunks,
+            offsetInBlock,
+            seqno,
+            checksumPos - checksumStart,
+            lastPacketInBlock
+    );
+    newPacket.syncBlock = syncBlock;
+    newPacket.numChunks = numChunks;
+    newPacket.checksumStart = checksumStart;
+    newPacket.checksumPos = checksumPos;
+    newPacket.dataPos = dataPos;
+    newPacket.traceParents = Arrays.copyOf(traceParents, traceParentsUsed);
+    newPacket.traceParentsUsed = traceParentsUsed;
+    newPacket.span = span;
+    return newPacket;
+  }
 }
