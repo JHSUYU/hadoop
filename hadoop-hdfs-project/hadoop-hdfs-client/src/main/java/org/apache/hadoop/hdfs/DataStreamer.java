@@ -2008,7 +2008,7 @@ class DataStreamer extends Daemon {
         return;
       }
 
-      //handleDatanodeReplacement();
+      handleDatanodeReplacement();
 
       // get a new generation stamp and an access token
       final LocatedBlock lb = updateBlockForPipeline();
@@ -2221,6 +2221,7 @@ class DataStreamer extends Daemon {
     if (dfsClient.dtpReplaceDatanodeOnFailure.satisfy(stat.getReplication(),
         nodes, isAppend, isHflushed)) {
       try {
+        LOG.info("Failure Recovery: enter handleDatanodeReplacement.");
         addDatanode2ExistingPipeline();
       } catch(IOException ioe) {
         if (!dfsClient.dtpReplaceDatanodeOnFailure.isBestEffort()) {
