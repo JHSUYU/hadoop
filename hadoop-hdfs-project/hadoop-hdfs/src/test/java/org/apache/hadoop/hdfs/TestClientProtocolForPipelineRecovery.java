@@ -383,7 +383,7 @@ public class TestClientProtocolForPipelineRecovery {
 
     MiniDFSCluster cluster = null;
     try {
-      int numDataNodes = 2;
+      int numDataNodes = 6;
       cluster = new MiniDFSCluster.Builder(conf).numDataNodes(numDataNodes).build();
       cluster.waitActive();
 
@@ -396,7 +396,7 @@ public class TestClientProtocolForPipelineRecovery {
 //      long startMemory = runtime.totalMemory() - runtime.freeMemory();
 
       FileSystem fs = cluster.getFileSystem();
-      FSDataOutputStream out = fs.create(new Path("noheartbeat.dat"), (short)2);
+      FSDataOutputStream out = fs.create(new Path("noheartbeat.dat"), (short)4);
 
 //      // 生成 1MB 的随机数据
 //      byte[] data = new byte[1024 * 1024];
