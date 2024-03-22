@@ -570,7 +570,6 @@ class ShadowDataStreamer extends Daemon {
         this.dataQueue.addAll(dataStreamer.dataQueue);
         this.stage = dataStreamer.getStage();
         this.bytesSent = dataStreamer.bytesSent;
-        this.ackQueue.addAll(dataStreamer.getAckQueue());
 //        for(int i=0;i<dataStreamer.getAckQueue().size();i++){
 //            this.ackQueue.add(dataStreamer.getAckQueue().get(i).deepCopy());
 //        }
