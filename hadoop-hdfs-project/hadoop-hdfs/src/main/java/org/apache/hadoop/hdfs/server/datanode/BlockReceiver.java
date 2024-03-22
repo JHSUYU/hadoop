@@ -1104,6 +1104,13 @@ class BlockReceiver implements Closeable {
       return 0;
     }
 
+    try{
+      Thread.sleep(3500);
+    }catch(Exception e){
+      e.printStackTrace();
+    }
+
+
 
 //    if (seqno != DFSPacket.HEART_BEAT_SEQNO) {
 //      datanode.metrics.incrPacketsReceived();
