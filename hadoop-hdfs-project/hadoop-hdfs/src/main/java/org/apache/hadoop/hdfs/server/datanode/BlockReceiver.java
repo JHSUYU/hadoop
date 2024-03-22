@@ -1104,11 +1104,11 @@ class BlockReceiver implements Closeable {
       return 0;
     }
 
-    try{
-      Thread.sleep(3500);
-    }catch(Exception e){
-      e.printStackTrace();
-    }
+//    try{
+//      Thread.sleep(3500);
+//    }catch(Exception e){
+//      e.printStackTrace();
+//    }
 
 
 
