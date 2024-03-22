@@ -452,6 +452,66 @@ public class TestClientProtocolForPipelineRecovery {
   }
 
   @Test
+  public void testShadowExecutionRule1() throws Exception {
+    // Make the first datanode to not relay heartbeat packet.
+    DataNodeFaultInjector oldDnInjector = DataNodeFaultInjector.get();
+
+    // Setting the timeout to be 3 seconds. Normally heartbeat packet
+    // would be sent every 1.5 seconds if there is no data traffic.
+    Configuration conf = new HdfsConfiguration();
+    conf.set(HdfsClientConfigKeys.DFS_CLIENT_SOCKET_TIMEOUT_KEY, "3000");
+
+    MiniDFSCluster cluster = null;
+    try {
+      int numDataNodes = 6;
+      cluster = new MiniDFSCluster.Builder(conf).numDataNodes(numDataNodes).build();
+      cluster.waitActive();
+
+
+      FileSystem fs = cluster.getFileSystem();
+      FSDataOutputStream out = fs.create(new Path("noheartbeat.dat"), (short)4);
+
+      out.write(0x31);
+      out.hflush();
+
+      DFSOutputStream dfsOut = (DFSOutputStream)out.getWrappedStream();
+      // original pipeline
+      DatanodeInfo[] orgNodes = dfsOut.getPipeline();
+
+      final String lastDn = orgNodes[1].getXferAddr(false);
+      DataNodeFaultInjector.set(new DataNodeFaultInjector() {
+        @Override
+        public void markBadNode(String dnAddr) throws IOException {
+          if (dnAddr.equals(lastDn)) {
+            throw new IOException("Remove bad datanode");
+          }
+        }
+      });
+
+      // Cause the second datanode to be removed
+      out.write(0x32);
+      out.hflush();
+
+      dfsOut.shadowStreamer.streamerClosed = true;
+      dfsOut.shadowStreamer.join();
+      DatanodeInfo[] shadowNodes = dfsOut.shadowStreamer.getNodes();
+
+      Assert.assertFalse(Arrays.asList(shadowNodes).contains(orgNodes[1]));
+
+
+      // new pipeline
+      DatanodeInfo[] newNodes = dfsOut.getPipeline();
+      out.close();
+
+    } finally {
+      DataNodeFaultInjector.set(oldDnInjector);
+      if (cluster != null) {
+        cluster.shutdown();
+      }
+    }
+  }
+
+  @Test
   public void testDefaultRule2andRule3() throws Exception {
     // Make the first datanode to not relay heartbeat packet.
     DataNodeFaultInjector oldDnInjector = DataNodeFaultInjector.get();
