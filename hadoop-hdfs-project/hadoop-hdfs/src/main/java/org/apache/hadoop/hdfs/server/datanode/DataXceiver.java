@@ -263,6 +263,7 @@ class DataXceiver extends Receiver implements Runnable {
       }
       dataXceiverServer.addPeer(peer, Thread.currentThread(), this);
       peer.setWriteTimeout(datanode.getDnConf().socketWriteTimeout);
+      LOG.info("Failure Recovery socketWriteTimeout is 263" +datanode.getDnConf().socketWriteTimeout);
       InputStream input = socketIn;
       LOG.info("Failure Recovery isShadow is 265" +this.isShadow);
       try {
