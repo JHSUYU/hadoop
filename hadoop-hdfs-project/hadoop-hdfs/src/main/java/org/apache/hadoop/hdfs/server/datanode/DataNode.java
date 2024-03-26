@@ -2197,7 +2197,7 @@ public class DataNode extends ReconfigurableBase
     try {
       data.addBlockPool(nsInfo.getBlockPoolID(), getConf());
     } catch (AddBlockPoolException e) {
-      handleAddBlockPoolError(e);
+      throw new IOException("Failed to add block pool " + bpos, e);
     }
     // HDFS-14993: check disk after add the block pool info.
     checkDiskError();
