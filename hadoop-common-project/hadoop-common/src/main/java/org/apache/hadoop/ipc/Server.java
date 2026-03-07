@@ -125,6 +125,9 @@ import org.apache.hadoop.tracing.SpanContext;
 import org.apache.hadoop.tracing.TraceScope;
 import org.apache.hadoop.tracing.Tracer;
 import org.apache.hadoop.tracing.TraceUtils;
+import io.opentelemetry.api.baggage.Baggage;
+import io.opentelemetry.context.Context;
+import io.opentelemetry.context.Scope;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.hadoop.thirdparty.com.google.common.annotations.VisibleForTesting;
 import org.apache.hadoop.thirdparty.protobuf.ByteString;
@@ -793,6 +796,7 @@ public abstract class Server {
     final byte[] clientId;
     private final Span span; // the trace span on the server side
     private final CallerContext callerContext; // the call context
+    String traceId; // OpenTelemetry Baggage traceId
     private boolean deferredResponse = false;
     private int priorityLevel;
     // the priority level assigned by scheduler, 0 by default
@@ -2712,6 +2716,11 @@ public abstract class Server {
           ProtoUtil.convert(header.getRpcKind()),
           header.getClientId().toByteArray(), span, callerContext);
 
+      // Propagate OpenTelemetry Baggage traceId if present
+      if (header.hasTraceId()) {
+        call.traceId = header.getTraceId();
+      }
+
       // Save the priority level assignment by the scheduler
       call.setPriorityLevel(callQueue.getPriorityLevel(call));
       call.markCallCoordinated(false);
@@ -2931,6 +2940,7 @@ public abstract class Server {
       SERVER.set(Server.this);
       while (running) {
         TraceScope traceScope = null;
+        Scope baggageScope = null;
         Call call = null;
         long startTimeNanos = 0;
         // True iff the connection for this call has been dropped.
@@ -2970,6 +2980,13 @@ public abstract class Server {
           }
           // always update the current call context
           CallerContext.setCurrent(call.callerContext);
+          // Set OpenTelemetry Baggage traceId if present
+          if (call.traceId != null) {
+            Baggage baggage = Baggage.builder()
+                .put("traceId", call.traceId)
+                .build();
+            baggageScope = Context.current().with(baggage).makeCurrent();
+          }
           UserGroupInformation remoteUser = call.getRemoteUser();
           connDropped = !call.isOpen();
           if (remoteUser != null) {
@@ -2993,6 +3010,10 @@ public abstract class Server {
           }
         } finally {
           CurCall.set(null);
+          if (baggageScope != null) {
+            baggageScope.close();
+            baggageScope = null;
+          }
           IOUtils.cleanupWithLogger(LOG, traceScope);
           if (call != null) {
             updateMetrics(call, startTimeNanos, connDropped);

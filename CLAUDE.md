@@ -81,7 +81,20 @@ cross-process request flow tracing.
 - Added `<dependency>` entries (no version, inherited from parent) in `hadoop-common-project/hadoop-common/pom.xml` (before closing `</dependencies>` at line ~375)
 - Build verified: `mvn package -pl hadoop-common-project/hadoop-common -DskipTests` → BUILD SUCCESS
 
-### Next Step: Phase 1 — Protobuf Change
-- Add `optional string traceId = <next field number>` to `RpcRequestHeaderProto` in `hadoop-common-project/hadoop-common/src/main/proto/RpcHeader.proto`
-- Regenerate Java code with `mvn generate-sources -pl hadoop-common-project/hadoop-common`
-- Verify build still passes
+### Phase 1: Protobuf Change ✅
+- Added `optional string traceId = 9` to `RpcRequestHeaderProto` in `hadoop-common-project/hadoop-common/src/main/proto/RpcHeader.proto`
+- Regenerated Java code with `mvn generate-sources -pl hadoop-common-project/hadoop-common` → BUILD SUCCESS
+- Build verified with `mvn package -pl hadoop-common-project/hadoop-common -DskipTests` → BUILD SUCCESS
+
+### Phase 2: RPC Client (sender) ✅
+- Found that ALL RPC request headers are built through a single method: `ProtoUtil.makeRpcRequestHeader()` in `hadoop-common-project/hadoop-common/src/main/java/org/apache/hadoop/util/ProtoUtil.java`
+- Callers: `Client.java` (x3), `SaslRpcClient.java` (x1) — all go through this single choke point
+- Added `Baggage.current().getEntryValue("traceId")` read + `result.setTraceId(traceId)` in `ProtoUtil.makeRpcRequestHeader()`
+- Build verified: BUILD SUCCESS
+
+### Phase 3: RPC Server (receiver) ✅
+- All RPC request headers are parsed in `Server.java` → `Connection.processRpcRequest()` — single entry point
+- Added `traceId` field to `Server.Call` class to carry the traceId from parsing to execution
+- In `processRpcRequest()`: extract traceId from header and store on the `RpcCall` object
+- In `Handler.run()`: if `call.traceId` is set, create OpenTelemetry `Baggage` with the traceId, attach to `Context.current()`, and close the `Scope` in finally block
+- Build verified: BUILD SUCCESS

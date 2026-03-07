@@ -33,6 +33,8 @@ import org.apache.hadoop.tracing.Span;
 import org.apache.hadoop.tracing.Tracer;
 import org.apache.hadoop.tracing.TraceUtils;
 
+import io.opentelemetry.api.baggage.Baggage;
+
 import org.apache.hadoop.thirdparty.protobuf.ByteString;
 
 public abstract class ProtoUtil {
@@ -185,6 +187,12 @@ public abstract class ProtoUtil {
           RPCTraceInfoProto.newBuilder().setSpanContext(
               TraceUtils.spanContextToByteString(span.getContext()));
       result.setTraceInfo(traceInfoProtoBuilder);
+    }
+
+    // Add OpenTelemetry Baggage traceId if present
+    String traceId = Baggage.current().getEntryValue("traceId");
+    if (traceId != null) {
+      result.setTraceId(traceId);
     }
 
     // Add caller context if it is not null
