@@ -1,0 +1,12 @@
+hadoop-yarn-project/
+hadoop-mapreduce-project/
+hadoop-tools/
+hadoop-minicluster/
+hadoop-client-modules/
+hadoop-cloud-storage-project/
+hadoop-assemblies/
+**/target/
+**/node_modules/
+**/*.jar
+**/*.class
+**/generated-sources/
