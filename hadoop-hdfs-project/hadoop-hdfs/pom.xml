@@ -523,6 +523,36 @@ https://maven.apache.org/xsd/maven-4.0.0.xsd">
       </build>
     </profile>
     <profile>
+      <id>dist</id>
+      <activation>
+        <activeByDefault>true</activeByDefault>
+      </activation>
+      <build>
+        <plugins>
+          <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-dependency-plugin</artifactId>
+            <executions>
+              <execution>
+                <id>copy-deps-to-share</id>
+                <phase>package</phase>
+                <goals>
+                  <goal>copy-dependencies</goal>
+                </goals>
+                <configuration>
+                  <outputDirectory>${project.build.directory}/${project.artifactId}-${project.version}/share/hadoop/hdfs/lib</outputDirectory>
+                  <includeScope>runtime</includeScope>
+                  <excludeGroupIds>org.apache.ant</excludeGroupIds>
+                  <excludeArtifactIds>jdiff</excludeArtifactIds>
+                </configuration>
+              </execution>
+            </executions>
+          </plugin>
+        </plugins>
+      </build>
+    </profile>
+
+    <profile>
       <id>java9</id>
       <activation>
         <jdk>[9,)</jdk>
