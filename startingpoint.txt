@@ -1,0 +1,220 @@
+# HDFS Entry Points — Method Signatures (main source only, no test code)
+# Source interfaces cover: client↔namenode, datanode↔namenode, datanode↔datanode, datanode-local dataset
+
+## 1. ClientProtocol  (client ↔ namenode)
+Interface: org.apache.hadoop.hdfs.protocol.ClientProtocol
+File: hadoop-hdfs-project/hadoop-hdfs-client/src/main/java/org/apache/hadoop/hdfs/protocol/ClientProtocol.java
+
+### File / Block Operations
+  HdfsFileStatus create(String src, FsPermission masked, String clientName, EnumSetWritable<CreateFlag> flag, boolean createParent, short replication, long blockSize, CryptoProtocolVersion[] supportedVersions, String ecPolicyName, String storagePolicy) throws IOException;
+  LastBlockWithStatus append(String src, String clientName, EnumSetWritable<CreateFlag> flag) throws IOException;
+  boolean complete(String src, String clientName, ExtendedBlock last, long fileId) throws IOException;
+  void abandonBlock(ExtendedBlock b, long fileId, String src, String holder) throws IOException;
+  LocatedBlock addBlock(String src, String clientName, ExtendedBlock previous, DatanodeInfo[] excludeNodes, long fileId, String[] favoredNodes, EnumSet<AddBlockFlag> addBlockFlags) throws IOException;
+  LocatedBlock getAdditionalDatanode(final String src, final long fileId, final ExtendedBlock blk, final DatanodeInfo[] existings, final String[] existingStorageIDs, final DatanodeInfo[] excludes, final int numAdditionalNodes, final String clientName) throws IOException;
+  LocatedBlocks getBlockLocations(String src, long offset, long length) throws IOException;
+  LocatedBlock updateBlockForPipeline(ExtendedBlock block, String clientName) throws IOException;
+  void updatePipeline(String clientName, ExtendedBlock oldBlock, ExtendedBlock newBlock, DatanodeID[] newNodes, String[] newStorageIDs) throws IOException;
+  void fsync(String src, long inodeId, String client, long lastBlockLength) throws IOException;
+  boolean truncate(String src, long newLength, String clientName) throws IOException;
+  void concat(String trg, String[] srcs) throws IOException;
+
+  ### Namespace Operations
+  boolean rename(String src, String dst) throws IOException;
+  void rename2(String src, String dst, Options.Rename... options) throws IOException;
+  boolean delete(String src, boolean recursive) throws IOException;
+  boolean mkdirs(String src, FsPermission masked, boolean createParent) throws IOException;
+  void createSymlink(String target, String link, FsPermission dirPerm, boolean createParent) throws IOException;
+  String getLinkTarget(String path) throws IOException;
+
+  ### Metadata / Stat
+  HdfsFileStatus getFileInfo(String src) throws IOException;
+  HdfsFileStatus getFileLinkInfo(String src) throws IOException;
+  HdfsLocatedFileStatus getLocatedFileInfo(String src, boolean needBlockToken) throws IOException;
+  DirectoryListing getListing(String src, byte[] startAfter, boolean needLocation) throws IOException;
+  BatchedDirectoryListing getBatchedListing(String[] srcs, byte[] startAfter, boolean needLocation) throws IOException;
+  boolean isFileClosed(String src) throws IOException;
+  ContentSummary getContentSummary(String path) throws IOException;
+  FsServerDefaults getServerDefaults() throws IOException;
+  long getPreferredBlockSize(String filename) throws IOException;
+  void checkAccess(String path, FsAction mode) throws IOException;
+  void msync() throws IOException;
+
+  ### Lease
+  void renewLease(String clientName) throws IOException;
+  boolean recoverLease(String src, String clientName) throws IOException;
+  void reportBadBlocks(LocatedBlock[] blocks) throws IOException;
+
+  ### Replication / Storage Policy
+  boolean setReplication(String src, short replication) throws IOException;
+  void setStoragePolicy(String src, String policyName) throws IOException;
+  void unsetStoragePolicy(String src) throws IOException;
+  BlockStoragePolicy getStoragePolicy(String path) throws IOException;
+  BlockStoragePolicy[] getStoragePolicies() throws IOException;
+  void satisfyStoragePolicy(String path) throws IOException;
+
+  ### Permissions / Ownership
+  void setPermission(String src, FsPermission permission) throws IOException;
+  void setOwner(String src, String username, String groupname) throws IOException;
+  void setTimes(String src, long mtime, long atime) throws IOException;
+
+  ### Quota
+  void setQuota(String path, long namespaceQuota, long storagespaceQuota, StorageType type) throws IOException;
+  QuotaUsage getQuotaUsage(String path) throws IOException;
+
+  ### ACL
+  void modifyAclEntries(String src, List<AclEntry> aclSpec) throws IOException;
+  void removeAclEntries(String src, List<AclEntry> aclSpec) throws IOException;
+  void removeDefaultAcl(String src) throws IOException;
+  void removeAcl(String src) throws IOException;
+  void setAcl(String src, List<AclEntry> aclSpec) throws IOException;
+  AclStatus getAclStatus(String src) throws IOException;
+
+  ### XAttr
+  void setXAttr(String src, XAttr xAttr, EnumSet<XAttrSetFlag> flag) throws IOException;
+  List<XAttr> getXAttrs(String src, List<XAttr> xAttrs) throws IOException;
+  List<XAttr> listXAttrs(String src) throws IOException;
+  void removeXAttr(String src, XAttr xAttr) throws IOException;
+
+  ### Snapshot
+  SnapshottableDirectoryStatus[] getSnapshottableDirListing() throws IOException;
+  String createSnapshot(String snapshotRoot, String snapshotName) throws IOException;
+  void deleteSnapshot(String snapshotRoot, String snapshotName) throws IOException;
+  void renameSnapshot(String snapshotRoot, String snapshotOldName, String snapshotNewName) throws IOException;
+  void allowSnapshot(String snapshotRoot) throws IOException;
+  void disallowSnapshot(String snapshotRoot) throws IOException;
+  SnapshotDiffReport getSnapshotDiffReport(String snapshotRoot, String fromSnapshot, String toSnapshot) throws IOException;
+  SnapshotDiffReportListing getSnapshotDiffReportListing(String snapshotRoot, String fromSnapshot, String toSnapshot, byte[] startPath, int index) throws IOException;
+
+  ### Encryption
+  void createEncryptionZone(String src, String keyName) throws IOException;
+  EncryptionZone getEZForPath(String src) throws IOException;
+  BatchedEntries<EncryptionZone> listEncryptionZones(long prevId) throws IOException;
+  void reencryptEncryptionZone(String zone, ReencryptAction action) throws IOException;
+  BatchedEntries<ZoneReencryptionStatus> listReencryptionStatus(long prevId) throws IOException;
+
+  ### Erasure Coding
+  void setErasureCodingPolicy(String src, String ecPolicyName) throws IOException;
+  void unsetErasureCodingPolicy(String src) throws IOException;
+  ErasureCodingPolicy getErasureCodingPolicy(String src) throws IOException;
+  ErasureCodingPolicyInfo[] getErasureCodingPolicies() throws IOException;
+  AddErasureCodingPolicyResponse[] addErasureCodingPolicies(ErasureCodingPolicy[] policies) throws IOException;
+  void removeErasureCodingPolicy(String ecPolicyName) throws IOException;
+  void enableErasureCodingPolicy(String ecPolicyName) throws IOException;
+  void disableErasureCodingPolicy(String ecPolicyName) throws IOException;
+  Map<String, String> getErasureCodingCodecs() throws IOException;
+  ECTopologyVerifierResult getECTopologyResultForPolicies(String... policyNames) throws IOException;
+
+  ### Cache
+  long addCacheDirective(CacheDirectiveInfo directive, EnumSet<CacheFlag> flags) throws IOException;
+  void modifyCacheDirective(CacheDirectiveInfo directive, EnumSet<CacheFlag> flags) throws IOException;
+  void removeCacheDirective(long id) throws IOException;
+  BatchedEntries<CacheDirectiveEntry> listCacheDirectives(long prevId, CacheDirectiveInfo filter) throws IOException;
+  void addCachePool(CachePoolInfo info) throws IOException;
+  void modifyCachePool(CachePoolInfo req) throws IOException;
+  void removeCachePool(String pool) throws IOException;
+  BatchedEntries<CachePoolEntry> listCachePools(String prevPool) throws IOException;
+
+  ### Delegation Token
+  Token<DelegationTokenIdentifier> getDelegationToken(Text renewer) throws IOException;
+  long renewDelegationToken(Token<DelegationTokenIdentifier> token) throws IOException;
+  void cancelDelegationToken(Token<DelegationTokenIdentifier> token) throws IOException;
+  DataEncryptionKey getDataEncryptionKey() throws IOException;
+
+  ### Cluster / Admin / Stats
+  long[] getStats() throws IOException;
+  ReplicatedBlockStats getReplicatedBlockStats() throws IOException;
+  ECBlockGroupStats getECBlockGroupStats() throws IOException;
+  DatanodeInfo[] getDatanodeReport(HdfsConstants.DatanodeReportType type) throws IOException;
+  DatanodeStorageReport[] getDatanodeStorageReport(HdfsConstants.DatanodeReportType type) throws IOException;
+  boolean setSafeMode(HdfsConstants.SafeModeAction action, boolean isChecked) throws IOException;
+  boolean saveNamespace(long timeWindow, long txGap) throws IOException;
+  long rollEdits() throws IOException;
+  boolean restoreFailedStorage(String arg) throws IOException;
+  void refreshNodes() throws IOException;
+  void finalizeUpgrade() throws IOException;
+  boolean upgradeStatus() throws IOException;
+  RollingUpgradeInfo rollingUpgrade(RollingUpgradeAction action) throws IOException;
+  CorruptFileBlocks listCorruptFileBlocks(String path, String cookie) throws IOException;
+  void metaSave(String filename) throws IOException;
+  void setBalancerBandwidth(long bandwidth) throws IOException;
+  BatchedEntries<OpenFileEntry> listOpenFiles(long prevId) throws IOException;
+  BatchedEntries<OpenFileEntry> listOpenFiles(long prevId, EnumSet<OpenFilesType> openFilesTypes, String path) throws IOException;
+  long getCurrentEditLogTxid() throws IOException;
+  EventBatchList getEditsFromTxid(long txid) throws IOException;
+
+
+## 2. DatanodeProtocol  (datanode → namenode)
+Interface: org.apache.hadoop.hdfs.server.protocol.DatanodeProtocol
+File: hadoop-hdfs-project/hadoop-hdfs/src/main/java/org/apache/hadoop/hdfs/server/protocol/DatanodeProtocol.java
+
+  public DatanodeRegistration registerDatanode(DatanodeRegistration registration) throws IOException;
+  public HeartbeatResponse sendHeartbeat(DatanodeRegistration registration, StorageReport[] reports, long dnCacheCapacity, long dnCacheUsed, int xmitsInProgress, int xceiverCount, int failedVolumes, VolumeFailureSummary volumeFailureSummary, boolean requestFullBlockReportLease, SlowPeerReports slowPeers, SlowDiskReports slowDisks) throws IOException;
+  public DatanodeCommand blockReport(DatanodeRegistration registration, String poolId, StorageBlockReport[] reports, BlockReportContext context) throws IOException;
+  public DatanodeCommand cacheReport(DatanodeRegistration registration, String poolId, List<Long> blockIds) throws IOException;
+  public void blockReceivedAndDeleted(DatanodeRegistration registration, String poolId, StorageReceivedDeletedBlocks[] rcvdAndDeletedBlocks) throws IOException;
+  public void errorReport(DatanodeRegistration registration, int errorCode, String msg) throws IOException;
+  public NamespaceInfo versionRequest() throws IOException;
+  public void reportBadBlocks(LocatedBlock[] blocks) throws IOException;
+  public void commitBlockSynchronization(ExtendedBlock block, long newgenerationstamp, long newlength, boolean closeFile, boolean deleteblock, DatanodeID[] newtargets, String[] newtargetstorages) throws IOException;
+
+
+## 3. InterDatanodeProtocol  (datanode → datanode, block recovery)
+Interface: org.apache.hadoop.hdfs.server.protocol.InterDatanodeProtocol
+File: hadoop-hdfs-project/hadoop-hdfs/src/main/java/org/apache/hadoop/hdfs/server/protocol/InterDatanodeProtocol.java
+
+  ReplicaRecoveryInfo initReplicaRecovery(RecoveringBlock rBlock) throws IOException;
+  String updateReplicaUnderRecovery(ExtendedBlock oldBlock, long recoveryId, long newBlockId, long newLength) throws IOException;
+
+
+## 4. FsDatasetSpi  (datanode-local block storage)
+Interface: org.apache.hadoop.hdfs.server.datanode.fsdataset.FsDatasetSpi
+File: hadoop-hdfs-project/hadoop-hdfs/src/main/java/org/apache/hadoop/hdfs/server/datanode/fsdataset/FsDatasetSpi.java
+
+  ### Replica Lifecycle
+  ReplicaHandler createRbw(StorageType storageType, String storageId, ExtendedBlock b, boolean allowLazyPersist) throws IOException;
+  ReplicaHandler createTemporary(StorageType storageType, String storageId, ExtendedBlock b, boolean isTransfer) throws IOException;
+  ReplicaHandler recoverRbw(ExtendedBlock b, long newGS, long minBytesRcvd, long maxBytesRcvd) throws IOException;
+  ReplicaInPipeline convertTemporaryToRbw(final ExtendedBlock temporary) throws IOException;
+  ReplicaHandler append(ExtendedBlock b, long newGS, long expectedBlockLen) throws IOException;
+  ReplicaHandler recoverAppend(ExtendedBlock b, long newGS, long expectedBlockLen) throws IOException;
+  Replica recoverClose(ExtendedBlock b, long newGS, long expectedBlockLen) throws IOException;
+  void finalizeBlock(ExtendedBlock b, boolean fsyncDir) throws IOException;
+  void unfinalizeBlock(ExtendedBlock b) throws IOException;
+  void invalidate(String bpid, Block invalidBlks[]) throws IOException;
+
+  ### Block Recovery (mirrors InterDatanodeProtocol, local impl)
+  ReplicaRecoveryInfo initReplicaRecovery(RecoveringBlock rBlock) throws IOException;
+  Replica updateReplicaUnderRecovery(ExtendedBlock oldBlock, long recoveryId, long newBlockId, long newLength) throws IOException;
+
+  ### Block Access / Reads
+  InputStream getBlockInputStream(ExtendedBlock b, long seekOffset) throws IOException;
+  ReplicaInputStreams getTmpInputStreams(ExtendedBlock b, long blkoff, long ckoff) throws IOException;
+  LengthInputStream getMetaDataInputStream(ExtendedBlock b) throws IOException;
+  long getLength(ExtendedBlock b) throws IOException;
+  long getReplicaVisibleLength(final ExtendedBlock block) throws IOException;
+  Block getStoredBlock(String bpid, long blkid) throws IOException;
+  Replica getReplica(String bpid, long blockId);
+  boolean contains(ExtendedBlock block);
+  boolean isValidBlock(ExtendedBlock b);
+  boolean isValidRbw(ExtendedBlock b);
+
+  ### Storage / Volume
+  StorageReport[] getStorageReports(String bpid) throws IOException;
+  Map<DatanodeStorage, BlockListAsLongs> getBlockReports(String bpid);
+  List<Long> getCacheReport(String bpid);
+  FsVolumeReferences getFsVolumeReferences();
+  void addVolume(final StorageLocation location, final List<NamespaceInfo> nsInfos) throws IOException;
+  void removeVolumes(Collection<StorageLocation> volumes, boolean clearFailure);
+  DatanodeStorage getStorage(final String storageUuid);
+  VolumeFailureSummary getVolumeFailureSummary();
+  Map<String, Object> getVolumeInfoMap();
+
+  ### Cache
+  void cache(String bpid, long[] blockIds);
+  void uncache(String bpid, long[] blockIds);
+  boolean isCached(String bpid, long blockId);
+
+  ### Block Movement (storage policy / tiering)
+  ReplicaInfo moveBlockAcrossStorage(final ExtendedBlock block, StorageType targetStorageType, String storageId) throws IOException;
+  ReplicaInfo moveBlockAcrossVolumes(final ExtendedBlock block, FsVolumeSpi destination) throws IOException;
