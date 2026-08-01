@@ -51,6 +51,7 @@ import org.apache.hadoop.hdfs.protocol.datatransfer.IOStreamPair;
 import org.apache.hadoop.hdfs.protocol.datatransfer.TrustedChannelResolver;
 import org.apache.hadoop.hdfs.security.token.block.BlockTokenIdentifier;
 import org.apache.hadoop.hdfs.security.token.block.DataEncryptionKey;
+import org.apache.hadoop.ipc.CausynthRpcTrace;
 import org.apache.hadoop.security.SaslPropertiesResolver;
 import org.apache.hadoop.security.SecurityUtil;
 import org.apache.hadoop.security.UserGroupInformation;
@@ -433,6 +434,9 @@ public class SaslDataTransferClient {
       OutputStream underlyingOut, InputStream underlyingIn, String userName,
       Map<String, String> saslProps,
       CallbackHandler callbackHandler) throws IOException {
+
+    CausynthRpcTrace.emit("SEND", "SASL_HANDSHAKE", userName,
+        "SaslDataTransferClient.doSaslHandshake");
 
     DataOutputStream out = new DataOutputStream(underlyingOut);
     DataInputStream in = new DataInputStream(underlyingIn);

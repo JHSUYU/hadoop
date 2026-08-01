@@ -519,6 +519,9 @@ public class ProtobufRpcEngine implements RpcEngine {
         try {
           server.rpcDetailedMetrics.init(protocolImpl.protocolClass);
           currentCallInfo.set(new CallInfo(server, methodName));
+          CausynthRpcTrace.emitHadoopIpc("RECEIVE", Server.getClientId(),
+              Server.getCallId(), Server.getCallRetryCount(),
+              declaringClassProtoName + "." + methodName);
           result = service.callBlockingMethod(methodDescriptor, null, param);
           // Check if this needs to be a deferred response,
           // by checking the ThreadLocal callback being set

@@ -51,6 +51,7 @@ import org.apache.hadoop.hdfs.protocol.proto.DataTransferProtos.DataTransferEncr
 import org.apache.hadoop.hdfs.security.token.block.BlockPoolTokenSecretManager;
 import org.apache.hadoop.hdfs.security.token.block.BlockTokenIdentifier;
 import org.apache.hadoop.hdfs.server.datanode.DNConf;
+import org.apache.hadoop.ipc.CausynthRpcTrace;
 import org.apache.hadoop.security.SaslPropertiesResolver;
 import org.apache.hadoop.security.SecurityUtil;
 import org.apache.hadoop.security.UserGroupInformation;
@@ -258,6 +259,8 @@ public class SaslDataTransferServer {
    */
   private byte[] getEncryptionKeyFromUserName(String userName)
       throws IOException {
+    CausynthRpcTrace.emit("RECEIVE", "SASL_HANDSHAKE", userName,
+        "SaslDataTransferServer.getEncryptionKeyFromUserName");
     String[] nameComponents = userName.split(NAME_DELIMITER);
     if (nameComponents.length != 3) {
       throw new IOException("Provided name '" + userName + "' has " +

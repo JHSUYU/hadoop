@@ -1379,6 +1379,10 @@ public class Client implements AutoCloseable {
       checkAsyncCall();
       try {
         connection.sendRpcRequest(call);                 // send the rpc request
+        if (CausynthRpcTrace.isEnabled()) {
+          CausynthRpcTrace.emitHadoopIpc("SEND", clientId, call.id,
+              call.retry, call.rpcRequest.toString());
+        }
       } catch (RejectedExecutionException e) {
         throw new IOException("connection has been closed", e);
       } catch (InterruptedException e) {
