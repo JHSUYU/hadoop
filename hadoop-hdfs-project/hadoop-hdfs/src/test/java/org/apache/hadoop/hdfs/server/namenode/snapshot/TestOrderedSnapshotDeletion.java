@@ -27,6 +27,7 @@ import org.apache.hadoop.hdfs.DistributedFileSystem;
 import org.apache.hadoop.hdfs.MiniDFSCluster;
 import org.apache.hadoop.hdfs.XAttrHelper;
 import org.apache.hadoop.hdfs.server.namenode.INode;
+import org.apache.hadoop.hdfs.server.namenode.NameNodeRpcServer;
 import org.apache.hadoop.hdfs.server.namenode.XAttrFeature;
 import org.junit.After;
 import org.junit.Assert;
@@ -34,6 +35,7 @@ import org.junit.Before;
 import org.junit.Test;
 
 import java.io.IOException;
+import java.lang.reflect.Method;
 import java.util.Arrays;
 import java.util.EnumSet;
 import java.util.Map;
@@ -52,6 +54,7 @@ public class TestOrderedSnapshotDeletion {
       = new Path("/" + getClass().getSimpleName());
 
   private MiniDFSCluster cluster;
+  private long traceRequestId;
 
   @Before
   public void setUp() throws Exception {
@@ -60,10 +63,25 @@ public class TestOrderedSnapshotDeletion {
 
     cluster = new MiniDFSCluster.Builder(conf).numDataNodes(0).build();
     cluster.waitActive();
+    trace("registerSource",
+        new Class<?>[] {Object.class, String.class, String.class,
+            String.class, long.class},
+        this, "EXTERNAL_APP", "HDFS_CLIENT", "cluster0/client0", 0L);
+    bindNameNodeSource(0L);
+    Object request = trace("beginSourceRequest",
+        new Class<?>[] {Object.class, String.class}, this,
+        "snapshotDeletionWorkload");
+    traceRequestId = request instanceof Long ? (Long) request : 0L;
   }
 
   @After
   public void tearDown() throws Exception {
+    if (traceRequestId != 0L) {
+      trace("endSourceRequest",
+          new Class<?>[] {long.class, String.class}, traceRequestId,
+          "snapshotDeletionWorkload");
+      traceRequestId = 0L;
+    }
     if (cluster != null) {
       cluster.shutdown();
       cluster = null;
@@ -223,13 +241,45 @@ public class TestOrderedSnapshotDeletion {
     assertXAttrSet("s1", hdfs, null);
     cluster.getNameNode().getConf().
         setBoolean(DFS_NAMENODE_SNAPSHOT_DELETION_ORDERED, false);
+    trace("restartSource",
+        new Class<?>[] {Object.class, String.class, String.class,
+            String.class, long.class},
+        cluster, "CLUSTER_NODE", "NAMENODE", "cluster0/nn0", 1L);
     cluster.restartNameNodes();
+    bindNameNodeSource(1L);
 //    assertEquals(1, hdfs.getSnapshotListing(snapshottableDir).length);
 //    assertEquals(1,
 //        cluster.getNamesystem().getSnapshotManager().getNumSnapshots());
     hdfs.setSafeMode(SafeModeAction.ENTER);
     hdfs.saveNamespace();
     hdfs.setSafeMode(SafeModeAction.LEAVE);
+  }
+
+  private void bindNameNodeSource(long epoch) {
+    trace("registerSource",
+        new Class<?>[] {Object.class, String.class, String.class,
+            String.class, long.class},
+        cluster, "CLUSTER_NODE", "NAMENODE", "cluster0/nn0", epoch);
+    trace("registerSourceAlias", new Class<?>[] {Object.class, Object.class},
+        cluster.getNameNode(), cluster);
+    NameNodeRpcServer rpc = (NameNodeRpcServer) cluster.getNameNodeRpc();
+    trace("registerSourceAlias", new Class<?>[] {Object.class, Object.class},
+        rpc.getClientRpcServer(), cluster);
+  }
+
+  private static Object trace(String method, Class<?>[] parameterTypes,
+      Object... arguments) {
+    try {
+      Class<?> recorder = Class.forName(
+          "edu.uva.liftlab.graphchecker.runtime.CausynthTraceRecorder");
+      Method selected = recorder.getMethod(method, parameterTypes);
+      return selected.invoke(null, arguments);
+    } catch (ClassNotFoundException ignored) {
+      return null;
+    } catch (ReflectiveOperationException failure) {
+      throw new IllegalStateException("GraphChecker source trace failed",
+          failure);
+    }
   }
 
   @Test(timeout = 60000)
