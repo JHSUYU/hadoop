@@ -74,6 +74,9 @@ class BPOfferService {
   private final String nameserviceId;
   private final DataNode dn;
 
+  /** Number of key-update commands admitted by the bounded HDFS-11741 run. */
+  private int hdfs11741KeyUpdateActivations;
+
   /**
    * A reference to the BPServiceActor associated with the currently
    * ACTIVE NN. In the case that all NameNodes are in STANDBY mode,
@@ -730,9 +733,15 @@ class BPOfferService {
     case DatanodeProtocol.DNA_ACCESSKEYUPDATE:
       LOG.info("DatanodeCommand action: DNA_ACCESSKEYUPDATE");
       if (dn.isBlockTokenEnabled) {
-        dn.blockPoolTokenSecretManager.addKeys(
-            getBlockPoolId(), 
-            ((KeyUpdateCommand) cmd).getExportedKeys());
+        final int activationBound = Integer.getInteger(
+            "hdfs11741.datanode.refresh.iterations", -1);
+        if (activationBound < 0
+            || hdfs11741KeyUpdateActivations < activationBound) {
+          dn.blockPoolTokenSecretManager.addKeys(
+              getBlockPoolId(),
+              ((KeyUpdateCommand) cmd).getExportedKeys());
+          hdfs11741KeyUpdateActivations++;
+        }
       }
       break;
     case DatanodeProtocol.DNA_BALANCERBANDWIDTHUPDATE:

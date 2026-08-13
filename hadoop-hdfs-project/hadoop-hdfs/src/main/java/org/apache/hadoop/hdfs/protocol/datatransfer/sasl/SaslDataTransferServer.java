@@ -175,6 +175,8 @@ public class SaslDataTransferServer {
       new PasswordFunction() {
         @Override
         public char[] apply(String userName) throws IOException {
+          CausynthRpcTrace.emit("RECEIVE", "SASL_HANDSHAKE", "",
+              SaslDataTransferServer.this);
           return encryptionKeyToPassword(getEncryptionKeyFromUserName(userName));
         }
       });
@@ -259,8 +261,6 @@ public class SaslDataTransferServer {
    */
   private byte[] getEncryptionKeyFromUserName(String userName)
       throws IOException {
-    CausynthRpcTrace.emit("RECEIVE", "SASL_HANDSHAKE", userName,
-        "SaslDataTransferServer.getEncryptionKeyFromUserName");
     String[] nameComponents = userName.split(NAME_DELIMITER);
     if (nameComponents.length != 3) {
       throw new IOException("Provided name '" + userName + "' has " +

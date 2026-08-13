@@ -20,17 +20,37 @@ package org.apache.hadoop.hdfs.server.balancer;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.hdfs.DFSConfigKeys;
 import org.apache.hadoop.hdfs.HdfsConfiguration;
+import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 
 public class TestBalancerWithEncryptedTransfer {
   
   private final Configuration conf = new HdfsConfiguration();
+  private long traceRequestId;
   
   @Before
   public void setUpConf() {
     conf.setBoolean(DFSConfigKeys.DFS_ENCRYPT_DATA_TRANSFER_KEY, true);
     conf.setBoolean(DFSConfigKeys.DFS_BLOCK_ACCESS_TOKEN_ENABLE_KEY, true);
+    TestBalancer.trace("registerSource", new Class<?>[]{Object.class,
+        String.class, String.class, String.class, long.class}, this,
+        "EXTERNAL_APP", "HDFS_CLIENT", "cluster0/client0", 0L);
+    Object request = TestBalancer.trace("beginSourceRequest",
+        new Class<?>[]{Object.class, String.class}, this,
+        "encryptedBalancerWorkload");
+    traceRequestId = request instanceof Long ? (Long) request : 0L;
+  }
+
+  @After
+  public void closeTraceRequest() {
+    if (traceRequestId == 0L) {
+      return;
+    }
+    TestBalancer.trace("endSourceRequest",
+        new Class<?>[]{long.class, String.class}, traceRequestId,
+        "encryptedBalancerWorkload");
+    traceRequestId = 0L;
   }
   
   @Test(timeout=60000)

@@ -58,6 +58,8 @@ import java.io.File;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.io.PrintWriter;
+import java.lang.reflect.Field;
+import java.lang.reflect.Method;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.URI;
@@ -115,6 +117,7 @@ import org.apache.hadoop.hdfs.server.datanode.fsdataset.impl.LazyPersistTestCase
 import org.apache.hadoop.hdfs.server.namenode.FSNamesystem;
 import org.apache.hadoop.hdfs.server.namenode.NameNode;
 import org.apache.hadoop.hdfs.server.namenode.NameNodeAdapter;
+import org.apache.hadoop.hdfs.server.namenode.NameNodeRpcServer;
 import org.apache.hadoop.hdfs.server.protocol.BlocksWithLocations;
 import org.apache.hadoop.http.HttpConfig;
 import org.apache.hadoop.io.IOUtils;
@@ -143,7 +146,8 @@ public class TestBalancer {
     GenericTestUtils.setLogLevel(Dispatcher.LOG, Level.DEBUG);
   }
 
-  final static long CAPACITY = 5000L;
+  final static long CAPACITY =
+      Long.getLong("hdfs11741.test.capacity", 5000L);
   final static String RACK0 = "/rack0";
   final static String RACK1 = "/rack1";
   final static String RACK2 = "/rack2";
@@ -157,6 +161,8 @@ public class TestBalancer {
   private static MiniKdc kdc;
   private static File keytabFile;
   private MiniDFSCluster cluster;
+  private final Object traceNameNode = new Object();
+  private final List<Object> traceDataNodes = new ArrayList<>();
 
   @After
   public void shutdown() throws Exception {
@@ -168,7 +174,8 @@ public class TestBalancer {
 
   ClientProtocol client;
 
-  static final long TIMEOUT = 40000L; //msec
+  static final long TIMEOUT =
+      Long.getLong("hdfs11741.test.timeout.ms", 40000L); //msec
   static final double CAPACITY_ALLOWED_VARIANCE = 0.005;  // 0.5%
   static final double BALANCE_ALLOWED_VARIANCE = 0.11;    // 10%+delta
   static final int DEFAULT_BLOCK_SIZE = 100;
@@ -187,12 +194,19 @@ public class TestBalancer {
   static void initConf(Configuration conf) {
     conf.setLong(DFSConfigKeys.DFS_BLOCK_SIZE_KEY, DEFAULT_BLOCK_SIZE);
     conf.setInt(DFSConfigKeys.DFS_BYTES_PER_CHECKSUM_KEY, DEFAULT_BLOCK_SIZE);
+    conf.setLong(DFSConfigKeys.DFS_BLOCK_ACCESS_KEY_UPDATE_INTERVAL_KEY,
+        Long.getLong("hdfs11741.key.update.interval.minutes",
+            DFSConfigKeys.DFS_BLOCK_ACCESS_KEY_UPDATE_INTERVAL_DEFAULT));
     conf.setLong(DFSConfigKeys.DFS_HEARTBEAT_INTERVAL_KEY, 1L);
-    conf.setInt(DFSConfigKeys.DFS_NAMENODE_HEARTBEAT_RECHECK_INTERVAL_KEY, 500);
+    conf.setInt(DFSConfigKeys.DFS_NAMENODE_HEARTBEAT_RECHECK_INTERVAL_KEY,
+        Integer.getInteger("hdfs11741.heartbeat.recheck.ms", 500));
     conf.setLong(DFSConfigKeys.DFS_NAMENODE_REDUNDANCY_INTERVAL_SECONDS_KEY,
         1L);
     SimulatedFSDataset.setFactory(conf);
 
+    conf.setInt(DFSConfigKeys.DFS_BALANCER_DISPATCHERTHREADS_KEY,
+        Integer.getInteger("hdfs11741.balancer.dispatcher.threads",
+            DFSConfigKeys.DFS_BALANCER_DISPATCHERTHREADS_DEFAULT));
     conf.setLong(DFSConfigKeys.DFS_BALANCER_MOVEDWINWIDTH_KEY, 2000L);
     conf.setLong(DFSConfigKeys.DFS_BALANCER_GETBLOCKS_MIN_BLOCK_SIZE_KEY, 1L);
     conf.setInt(DFSConfigKeys.DFS_BALANCER_MAX_NO_MOVE_INTERVAL_KEY, 5*1000);
@@ -314,6 +328,7 @@ public class TestBalancer {
     cluster = new MiniDFSCluster.Builder(conf).numDataNodes(numNodes).build();
     try {
       cluster.waitActive();
+      bindClusterSources(0L);
       client = NameNodeProxies.createProxy(conf, cluster.getFileSystem(0).getUri(),
           ClientProtocol.class).getProxy();
 
@@ -409,6 +424,7 @@ public class TestBalancer {
                                               .simulatedCapacities(capacities)
                                               .build();
     cluster.waitActive();
+    bindClusterSources(1L);
     client = NameNodeProxies.createProxy(conf, cluster.getFileSystem(0).getUri(),
         ClientProtocol.class).getProxy();
 
@@ -418,6 +434,77 @@ public class TestBalancer {
     final long totalCapacity = sum(capacities);
     runBalancer(conf, totalUsedSpace, totalCapacity);
     cluster.shutdown();
+  }
+
+  private void bindClusterSources(long epoch) {
+    registerOrRestart(traceNameNode, "NAMENODE", "cluster0/nn0", epoch);
+    trace("registerSourceAlias", new Class<?>[]{Object.class, Object.class},
+        cluster.getNameNode(), traceNameNode);
+    NameNodeRpcServer rpc = (NameNodeRpcServer) cluster.getNameNodeRpc();
+    trace("registerSourceAlias", new Class<?>[]{Object.class, Object.class},
+        rpc.getClientRpcServer(), traceNameNode);
+
+    List<DataNode> dataNodes = cluster.getDataNodes();
+    while (traceDataNodes.size() < dataNodes.size()) {
+      traceDataNodes.add(new Object());
+    }
+    for (int index = 0; index < dataNodes.size(); index++) {
+      Object anchor = traceDataNodes.get(index);
+      registerOrRestart(anchor, "DATANODE", "cluster0/dn" + index, epoch);
+      bindDataNodeAliases(dataNodes.get(index), anchor);
+    }
+  }
+
+  private static void registerOrRestart(Object anchor, String role,
+      String sourceId, long epoch) {
+    String method = epoch == 0L ? "registerSource" : "restartSource";
+    trace(method, new Class<?>[]{Object.class, String.class, String.class,
+        String.class, long.class}, anchor, "CLUSTER_NODE", role, sourceId,
+        epoch);
+  }
+
+  @SuppressWarnings("unchecked")
+  private static void bindDataNodeAliases(DataNode dataNode, Object anchor) {
+    trace("registerSourceAlias", new Class<?>[]{Object.class, Object.class},
+        dataNode, anchor);
+    trace("registerSourceAlias", new Class<?>[]{Object.class, Object.class},
+        dataNode.getXferServer(), anchor);
+    try {
+      Field sasl = DataNode.class.getDeclaredField("saslServer");
+      sasl.setAccessible(true);
+      trace("registerSourceAlias", new Class<?>[]{Object.class, Object.class},
+          sasl.get(dataNode), anchor);
+      Method services = DataNode.class.getDeclaredMethod("getAllBpOs");
+      services.setAccessible(true);
+      for (Object service : (List<Object>) services.invoke(dataNode)) {
+        trace("registerSourceAlias",
+            new Class<?>[]{Object.class, Object.class}, service, anchor);
+        Method actors = service.getClass().getDeclaredMethod(
+            "getBPServiceActors");
+        actors.setAccessible(true);
+        for (Object actor : (List<Object>) actors.invoke(service)) {
+          trace("registerSourceAlias",
+              new Class<?>[]{Object.class, Object.class}, actor, anchor);
+        }
+      }
+    } catch (ReflectiveOperationException failure) {
+      throw new IllegalStateException("GraphChecker source binding failed",
+          failure);
+    }
+  }
+
+  static Object trace(String method, Class<?>[] parameterTypes,
+      Object... arguments) {
+    try {
+      Class<?> recorder = Class.forName(
+          "edu.uva.liftlab.graphchecker.runtime.CausynthTraceRecorder");
+      return recorder.getMethod(method, parameterTypes).invoke(null, arguments);
+    } catch (ClassNotFoundException ignored) {
+      return null;
+    } catch (ReflectiveOperationException failure) {
+      throw new IllegalStateException("GraphChecker source trace failed",
+          failure);
+    }
   }
 
   /**

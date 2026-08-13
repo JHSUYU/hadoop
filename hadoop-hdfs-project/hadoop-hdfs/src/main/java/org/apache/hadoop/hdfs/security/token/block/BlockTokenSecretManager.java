@@ -31,6 +31,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 
+import edu.uva.liftlab.graphchecker.annotation.CausynthExceptionTarget;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.classification.InterfaceAudience;
@@ -114,7 +115,10 @@ public class BlockTokenSecretManager extends
         encryptionAlgorithm, nnIndex, numNNs, useProto);
     Preconditions.checkArgument(nnIndex >= 0);
     Preconditions.checkArgument(numNNs > 0);
-    setSerialNo(new SecureRandom().nextInt());
+    final Integer replaySerialSeed = Integer.getInteger(
+        "causynth.replay.block.key.serial.seed");
+    setSerialNo(replaySerialSeed == null
+        ? new SecureRandom().nextInt() : replaySerialSeed);
     generateKeys();
   }
 
@@ -479,7 +483,8 @@ public class BlockTokenSecretManager extends
     synchronized (this) {
       key = allKeys.get(keyId);
       if (key == null) {
-        throw new InvalidEncryptionKeyException("Can't re-compute encryption key"
+        throw new @CausynthExceptionTarget("hdfs-11741")
+            InvalidEncryptionKeyException("Can't re-compute encryption key"
             + " for nonce, since the required block key (keyID=" + keyId
             + ") doesn't exist. Current key: " + currentKey.getKeyId());
       }

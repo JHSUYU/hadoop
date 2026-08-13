@@ -149,12 +149,18 @@ public class KeyManager implements Closeable, DataEncryptionKeyFactory {
 
     @Override
     public void run() {
+      final int activationBound = Integer.getInteger(
+          "hdfs11741.balancer.refresh.iterations", -1);
+      int activations = 0;
       try {
         while (shouldRun) {
-          try {
-            blockTokenSecretManager.addKeys(namenode.getBlockKeys());
-          } catch (IOException e) {
-            LOG.error("Failed to set keys", e);
+          if (activationBound < 0 || activations < activationBound) {
+            try {
+              blockTokenSecretManager.addKeys(namenode.getBlockKeys());
+            } catch (IOException e) {
+              LOG.error("Failed to set keys", e);
+            }
+            activations++;
           }
           Thread.sleep(sleepInterval);
         }

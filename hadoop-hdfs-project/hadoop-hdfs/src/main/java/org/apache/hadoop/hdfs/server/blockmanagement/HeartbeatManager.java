@@ -428,6 +428,9 @@ class HeartbeatManager implements DatanodeStatistics {
 
     @Override
     public void run() {
+      final int keyUpdateBound = Integer.getInteger(
+          "hdfs11741.nn.update.iterations", -1);
+      int keyUpdates = 0;
       while(namesystem.isRunning()) {
         restartHeartbeatStopWatch();
         try {
@@ -436,13 +439,18 @@ class HeartbeatManager implements DatanodeStatistics {
             heartbeatCheck();
             lastHeartbeatCheck = now;
           }
-          if (blockManager.shouldUpdateBlockKey(now - lastBlockKeyUpdate)) {
-            synchronized(HeartbeatManager.this) {
-              for(DatanodeDescriptor d : datanodes) {
-                d.setNeedKeyUpdate(true);
+          if (keyUpdateBound < 0 || keyUpdates < keyUpdateBound) {
+            final boolean updated = blockManager.shouldUpdateBlockKey(
+                now - lastBlockKeyUpdate);
+            keyUpdates++;
+            if (updated) {
+              synchronized(HeartbeatManager.this) {
+                for(DatanodeDescriptor d : datanodes) {
+                  d.setNeedKeyUpdate(true);
+                }
               }
+              lastBlockKeyUpdate = now;
             }
-            lastBlockKeyUpdate = now;
           }
         } catch (Exception e) {
           LOG.error("Exception while checking heartbeat", e);

@@ -21,7 +21,8 @@ import java.lang.reflect.Method;
 
 /** Optional bridge to GraphChecker's runtime tracer. */
 public final class CausynthRpcTrace {
-  private static volatile Method recorder;
+  private static volatile Method recorderWithOwner;
+  private static volatile boolean recorderResolved;
   private static volatile boolean unavailable;
 
   private CausynthRpcTrace() {
@@ -42,10 +43,15 @@ public final class CausynthRpcTrace {
   }
 
   public static void emitHadoopIpc(String direction, byte[] clientId,
-      int callId, int retryCount, String endpoint) {
+      int callId, int retryCount) {
+    emitHadoopIpc(direction, clientId, callId, retryCount, null);
+  }
+
+  public static void emitHadoopIpc(String direction, byte[] clientId,
+      int callId, int retryCount, Object localOwner) {
     if (enabled()) {
       emit(direction, "HADOOP_IPC",
-          hadoopIpcId(clientId, callId, retryCount), endpoint);
+          hadoopIpcId(clientId, callId, retryCount), localOwner);
     }
   }
 
@@ -53,28 +59,40 @@ public final class CausynthRpcTrace {
     return enabled();
   }
 
+  public static void emit(String direction, String transport, String wireId) {
+    emit(direction, transport, wireId, null);
+  }
+
   public static void emit(String direction, String transport, String wireId,
-      String endpoint) {
+      Object localOwner) {
     if (!enabled() || unavailable) {
       return;
     }
     try {
-      Method method = recorder;
-      if (method == null) {
-        method = Class.forName(
-            "edu.uva.liftlab.graphchecker.runtime.CausynthTraceRecorder")
-            .getMethod("recordRpcEndpoint", String.class, String.class,
-                String.class, String.class);
-        recorder = method;
-      }
-      method.invoke(null, direction, transport, wireId, endpoint);
+      resolveRecorder();
+      recorderWithOwner.invoke(null, direction, transport, wireId, localOwner);
     } catch (Throwable ignored) {
       unavailable = true;
     }
   }
 
+  private static synchronized void resolveRecorder() throws Exception {
+    if (recorderResolved) {
+      return;
+    }
+    Class<?> recorderClass = Class.forName(
+        "edu.uva.liftlab.graphchecker.runtime.CausynthTraceRecorder");
+    recorderWithOwner = recorderClass.getMethod("recordRpc",
+        String.class, String.class, String.class, Object.class);
+    recorderResolved = true;
+  }
+
   private static boolean enabled() {
     String output = System.getProperty("causynth.trace.output.dir");
-    return output != null && !output.trim().isEmpty();
+    if (output != null && !output.trim().isEmpty()) {
+      return true;
+    }
+    String results = System.getProperty("causynth.concolic.results");
+    return results != null && !results.trim().isEmpty();
   }
 }

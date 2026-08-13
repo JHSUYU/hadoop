@@ -435,8 +435,7 @@ public class SaslDataTransferClient {
       Map<String, String> saslProps,
       CallbackHandler callbackHandler) throws IOException {
 
-    CausynthRpcTrace.emit("SEND", "SASL_HANDSHAKE", userName,
-        "SaslDataTransferClient.doSaslHandshake");
+    CausynthRpcTrace.emit("SEND", "SASL_HANDSHAKE", "");
 
     DataOutputStream out = new DataOutputStream(underlyingOut);
     DataInputStream in = new DataInputStream(underlyingIn);
