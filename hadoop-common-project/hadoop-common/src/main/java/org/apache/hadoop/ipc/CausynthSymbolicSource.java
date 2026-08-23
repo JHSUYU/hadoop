@@ -1,0 +1,67 @@
+/**
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.apache.hadoop.ipc;
+
+import java.lang.reflect.Method;
+
+/** Optional bridge for declaring one exact application field symbolic. */
+public final class CausynthSymbolicSource {
+  private static final String RUNTIME_CLASS =
+      "edu.uva.liftlab.graphchecker.runtime.ConcolicRegionRuntime";
+  private static volatile Method symbolizer;
+  private static volatile boolean resolved;
+
+  private CausynthSymbolicSource() {
+  }
+
+  /**
+   * Symbolizes the configured field when GraphChecker is active; otherwise it
+   * is a no-op so an ordinary Hadoop process behaves identically.
+   */
+  public static boolean symbolize(String sourceId, Object owner,
+      String fieldSignature) {
+    Method method = resolve();
+    if (method == null) {
+      return false;
+    }
+    try {
+      return Boolean.TRUE.equals(method.invoke(null, sourceId, owner,
+          fieldSignature));
+    } catch (ReflectiveOperationException | RuntimeException failure) {
+      return false;
+    }
+  }
+
+  private static Method resolve() {
+    if (!resolved) {
+      synchronized (CausynthSymbolicSource.class) {
+        if (!resolved) {
+          try {
+            symbolizer = Class.forName(RUNTIME_CLASS).getMethod(
+                "symbolizeConfiguredSourceField", String.class,
+                Object.class, String.class);
+          } catch (ReflectiveOperationException | LinkageError absent) {
+            symbolizer = null;
+          }
+          resolved = true;
+        }
+      }
+    }
+    return symbolizer;
+  }
+}

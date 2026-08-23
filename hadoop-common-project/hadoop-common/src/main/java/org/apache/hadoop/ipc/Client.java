@@ -332,6 +332,7 @@ public class Client implements AutoCloseable {
     final int retry;           // retry count
     final Writable rpcRequest;  // the serialized rpc request
     Writable rpcResponse;       // null if rpc has error
+    CausynthRpcWire.WireValues responseExpressions;
     IOException error;          // exception, null if success
     final RPC.RpcKind rpcKind;      // Rpc EngineKind
     boolean done;               // true when call is done
@@ -392,14 +393,24 @@ public class Client implements AutoCloseable {
      * 
      * @param rpcResponse return value of the rpc call.
      */
-    public synchronized void setRpcResponse(Writable rpcResponse) {
+    public synchronized void setRpcResponse(Writable rpcResponse,
+        CausynthRpcWire.WireValues responseExpressions) {
       this.rpcResponse = rpcResponse;
+      this.responseExpressions = responseExpressions;
       callComplete();
     }
     
     public synchronized Writable getRpcResponse() {
       return rpcResponse;
     }
+
+    synchronized CausynthRpcWire.Handle takeResponseExpression(
+        String leafPath) {
+      return responseExpressions == null
+          ? CausynthRpcWire.Handle.missing()
+          : responseExpressions.take(leafPath);
+    }
+
   }
 
   /** Thread that reads responses and notifies callers.  Each connection owns a
@@ -1091,9 +1102,12 @@ public class Client implements AutoCloseable {
       // 2) RpcRequest
       //
       // Items '1' and '2' are prepared here. 
-      RpcRequestHeaderProto header = ProtoUtil.makeRpcRequestHeader(
+      RpcRequestHeaderProto.Builder headerBuilder =
+          ProtoUtil.makeRpcRequestHeader(
           call.rpcKind, OperationProto.RPC_FINAL_PACKET, call.id, call.retry,
-          clientId);
+          clientId).toBuilder();
+      CausynthRpcWire.appendTo(headerBuilder);
+      RpcRequestHeaderProto header = headerBuilder.build();
 
       final ResponseBuffer buf = new ResponseBuffer();
       header.writeDelimitedTo(buf);
@@ -1159,8 +1173,12 @@ public class Client implements AutoCloseable {
         RpcResponseHeaderProto header =
             packet.getValue(RpcResponseHeaderProto.getDefaultInstance());
         checkResponse(header);
+        CausynthRpcWire.WireValues responseExpressions =
+            CausynthRpcWire.values(header);
 
         int callId = header.getCallId();
+        // A response for an attempt already given up is a late arrival.
+        CausynthRpcTrace.arriveIpcResponse(clientId, callId, calls);
         if (LOG.isDebugEnabled())
           LOG.debug(getName() + " got value #" + callId);
 
@@ -1168,7 +1186,7 @@ public class Client implements AutoCloseable {
         if (status == RpcStatusProto.SUCCESS) {
           Writable value = packet.newInstance(valueClass, conf);
           final Call call = calls.remove(callId);
-          call.setRpcResponse(value);
+          call.setRpcResponse(value, responseExpressions);
         }
         // verify that packet length was correct
         if (packet.remaining() > 0) {
@@ -1371,6 +1389,9 @@ public class Client implements AutoCloseable {
   Writable call(RPC.RpcKind rpcKind, Writable rpcRequest,
       ConnectionId remoteId, int serviceClass,
       AtomicBoolean fallbackToSimpleAuth) throws IOException {
+    // One caller can issue several RPCs.  A response header belongs only to
+    // the call that just completed and must never leak into the next call.
+    CausynthRpcWire.enterClientResponse(null);
     final Call call = createCall(rpcKind, rpcRequest);
     final Connection connection = getConnection(remoteId, call, serviceClass,
         fallbackToSimpleAuth);
@@ -1378,6 +1399,9 @@ public class Client implements AutoCloseable {
     try {
       checkAsyncCall();
       try {
+        // Export before serialization: past this point the request is bytes.
+        CausynthRpcTrace.sendIpcRequest(clientId, call.id, call.retry,
+            call.rpcRequest);
         connection.sendRpcRequest(call);                 // send the rpc request
       } catch (RejectedExecutionException e) {
         throw new IOException("connection has been closed", e);
@@ -1387,6 +1411,9 @@ public class Client implements AutoCloseable {
         throw new IOException(e);
       }
     } catch(Exception e) {
+      CausynthRpcWire.discardStagedExpressions();
+      // The request never reached the connection: both halves are over.
+      CausynthRpcTrace.abortIpcRequest(clientId, call.id, call.retry, e);
       if (isAsynchronousMode()) {
         releaseAsyncCall();
       }
@@ -1401,12 +1428,18 @@ public class Client implements AutoCloseable {
             throws IOException, TimeoutException{
           boolean done = true;
           try {
-            final Writable w = getRpcResponse(call, connection, timeout, unit);
+            // Asynchronous completion: the same reply-envelope binding the
+            // synchronous return makes, so the async path reaches the same
+            // attach site instead of none.
+            final Writable w = CausynthRpcTrace.completeIpcRequest(clientId,
+                call.id, call.retry,
+                getRpcResponse(call, connection, timeout, unit));
             if (w == null) {
               done = false;
               throw new TimeoutException(call + " timed out "
                   + timeout + " " + unit);
             }
+            CausynthRpcWire.enterClientResponse(call);
             return w;
           } finally {
             if (done) {
@@ -1426,7 +1459,11 @@ public class Client implements AutoCloseable {
       ASYNC_RPC_RESPONSE.set(asyncGet);
       return null;
     } else {
-      return getRpcResponse(call, connection, -1, null);
+      Writable response = CausynthRpcTrace.completeIpcRequest(clientId,
+          call.id, call.retry,
+          getRpcResponse(call, connection, -1, null));
+      CausynthRpcWire.enterClientResponse(call);
+      return response;
     }
   }
 
@@ -1470,15 +1507,21 @@ public class Client implements AutoCloseable {
         try {
           AsyncGet.Util.wait(call, timeout, unit);
           if (timeout >= 0 && !call.done) {
+            // Expired poll, not a dead call: still in flight.
+            CausynthRpcTrace.expireIpcAttempt(clientId, call.id, call.retry,
+                timeout, unit);
             return null;
           }
         } catch (InterruptedException ie) {
           Thread.currentThread().interrupt();
+          CausynthRpcTrace.cancelIpcAttempt(clientId, call.id, call.retry);
           throw new InterruptedIOException("Call interrupted");
         }
       }
 
       if (call.error != null) {
+        CausynthRpcTrace.failIpcAttempt(clientId, call.id, call.retry,
+            call.error);
         if (call.error instanceof RemoteException) {
           call.error.fillInStackTrace();
           throw call.error;

@@ -184,6 +184,7 @@ import org.apache.hadoop.io.ReadaheadPool;
 import org.apache.hadoop.io.nativeio.NativeIO;
 import org.apache.hadoop.ipc.ProtobufRpcEngine;
 import org.apache.hadoop.ipc.RPC;
+import org.apache.hadoop.ipc.CausynthSymbolicSource;
 import org.apache.hadoop.metrics2.lib.DefaultMetricsSystem;
 import org.apache.hadoop.metrics2.util.MBeans;
 import org.apache.hadoop.net.DNS;
@@ -330,6 +331,7 @@ public class DataNode extends ReconfigurableBase
   private DNConf dnConf;
   private volatile boolean heartbeatsDisabledForTests = false;
   private volatile boolean cacheReportsDisabledForTests = false;
+  private volatile long causynthRpcValue = 0L;
   private DataStorage storage = null;
 
   private DatanodeHttpServer httpServer = null;
@@ -3179,6 +3181,25 @@ public class DataNode extends ReconfigurableBase
     long uptime = ManagementFactory.getRuntimeMXBean().getUptime()/1000;
     return new DatanodeLocalInfo(VersionInfo.getVersion(),
         confVersion, uptime);
+  }
+
+  @Override // ClientDatanodeProtocol
+  public long getCausynthValueA() throws IOException {
+    CausynthSymbolicSource.symbolize("RPC_COMPARE.DATANODE_A", this,
+        "<org.apache.hadoop.hdfs.server.datanode.DataNode: long causynthRpcValue>");
+    return causynthRpcValue;
+  }
+
+  @Override // ClientDatanodeProtocol
+  public long getCausynthValueB() throws IOException {
+    CausynthSymbolicSource.symbolize("RPC_COMPARE.DATANODE_B", this,
+        "<org.apache.hadoop.hdfs.server.datanode.DataNode: long causynthRpcValue>");
+    return causynthRpcValue;
+  }
+
+  @VisibleForTesting
+  public void setCausynthRpcValue(long value) {
+    this.causynthRpcValue = value;
   }
 
   @Override // ClientDatanodeProtocol & ReconfigurationProtocol

@@ -131,6 +131,14 @@ message GetDatanodeInfoResponseProto {
   required DatanodeLocalInfoProto localInfo = 1;
 }
 
+/** Test RPC used to read one symbolic-capable value from a DataNode. */
+message GetCausynthValueRequestProto {
+}
+
+message GetCausynthValueResponseProto {
+  required int64 value = 1;
+}
+
 message GetVolumeReportRequestProto {
 }
 
@@ -260,6 +268,12 @@ service ClientDatanodeProtocolService {
 
   rpc getDatanodeInfo(GetDatanodeInfoRequestProto)
       returns(GetDatanodeInfoResponseProto);
+
+  rpc getCausynthValueA(GetCausynthValueRequestProto)
+      returns(GetCausynthValueResponseProto);
+
+  rpc getCausynthValueB(GetCausynthValueRequestProto)
+      returns(GetCausynthValueResponseProto);
 
   rpc getVolumeReport(GetVolumeReportRequestProto)
       returns(GetVolumeReportResponseProto);

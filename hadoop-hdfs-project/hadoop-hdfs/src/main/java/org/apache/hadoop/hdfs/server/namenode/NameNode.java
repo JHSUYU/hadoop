@@ -17,6 +17,8 @@
  */
 package org.apache.hadoop.hdfs.server.namenode;
 
+import edu.uva.liftlab.graphchecker.annotation.CausynthExceptionTarget;
+
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Joiner;
 import com.google.common.base.Preconditions;
@@ -43,7 +45,9 @@ import org.apache.hadoop.hdfs.DFSUtilClient;
 import org.apache.hadoop.hdfs.HAUtil;
 import org.apache.hadoop.hdfs.HdfsConfiguration;
 import org.apache.hadoop.hdfs.client.HdfsClientConfigKeys;
+import org.apache.hadoop.hdfs.protocol.ClientDatanodeProtocol;
 import org.apache.hadoop.hdfs.protocol.ClientProtocol;
+import org.apache.hadoop.hdfs.protocol.DatanodeID;
 import org.apache.hadoop.hdfs.protocol.HdfsConstants;
 import org.apache.hadoop.hdfs.server.blockmanagement.DatanodeManager;
 import org.apache.hadoop.hdfs.server.common.HdfsServerConstants.NamenodeRole;
@@ -92,6 +96,7 @@ import org.slf4j.LoggerFactory;
 
 import javax.management.ObjectName;
 
+import java.io.Closeable;
 import java.io.IOException;
 import java.io.PrintStream;
 import java.net.InetSocketAddress;
@@ -1957,6 +1962,50 @@ public class NameNode extends ReconfigurableBase implements
    */
   boolean isStarted() {
     return this.started.get();
+  }
+
+  /** Reads one value from each DataNode and executes the target comparison. */
+  @VisibleForTesting
+  public void compareCausynthDataNodeValues(DatanodeID[] dataNodes)
+      throws IOException {
+    if (dataNodes == null || dataNodes.length != 2) {
+      throw new IOException("Causynth comparison requires exactly two DataNodes");
+    }
+    long a = readCausynthDataNodeValueA(dataNodes[0]);
+    long b = readCausynthDataNodeValueB(dataNodes[1]);
+    if (a > b) {
+      throw new @CausynthExceptionTarget("causynth-rpc-compare")
+          IOException("first DataNode value " + a
+          + " is greater than second DataNode value " + b);
+    }
+  }
+
+  private long readCausynthDataNodeValueA(DatanodeID dataNode)
+      throws IOException {
+    ClientDatanodeProtocol proxy =
+        DFSUtilClient.createClientDatanodeProtocolProxy(
+            dataNode, getConf(), 0, false);
+    try {
+      return proxy.getCausynthValueA();
+    } finally {
+      if (proxy instanceof Closeable) {
+        ((Closeable) proxy).close();
+      }
+    }
+  }
+
+  private long readCausynthDataNodeValueB(DatanodeID dataNode)
+      throws IOException {
+    ClientDatanodeProtocol proxy =
+        DFSUtilClient.createClientDatanodeProtocolProxy(
+            dataNode, getConf(), 0, false);
+    try {
+      return proxy.getCausynthValueB();
+    } finally {
+      if (proxy instanceof Closeable) {
+        ((Closeable) proxy).close();
+      }
+    }
   }
 
   /**

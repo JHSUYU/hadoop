@@ -191,6 +191,7 @@ public class MiniDFSCluster implements AutoCloseable {
     private Configuration[] dnConfOverlays;
     private boolean skipFsyncForTesting = true;
     private boolean useConfiguredTopologyMappingClass = false;
+    private boolean causynthRpcValueProbe = false;
 
     public Builder(Configuration conf) {
       this.conf = conf;
@@ -443,6 +444,12 @@ public class MiniDFSCluster implements AutoCloseable {
       return this;
     }
 
+    /** Read and compare one value from each of two real DataNodes. */
+    public Builder causynthRpcValueProbe() {
+      this.causynthRpcValueProbe = true;
+      return this;
+    }
+
     /**
      * Construct the actual MiniDFSCluster
      */
@@ -512,6 +519,21 @@ public class MiniDFSCluster implements AutoCloseable {
                        builder.dnConfOverlays,
                        builder.skipFsyncForTesting,
                        builder.useConfiguredTopologyMappingClass);
+    if (builder.causynthRpcValueProbe) {
+      try {
+        waitActive();
+        ArrayList<DataNode> nodes = getDataNodes();
+        DatanodeID[] ids = new DatanodeID[nodes.size()];
+        for (int i = 0; i < nodes.size(); i++) {
+          nodes.get(i).setCausynthRpcValue(i + 1L);
+          ids[i] = nodes.get(i).getDatanodeId();
+        }
+        getNameNode().compareCausynthDataNodeValues(ids);
+      } catch (IOException failure) {
+        shutdown();
+        throw failure;
+      }
+    }
   }
   
   public class DataNodeProperties {

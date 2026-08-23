@@ -74,6 +74,18 @@ message RPCCallerContextProto {
   optional bytes signature = 2;
 }
 
+/**
+ * One opaque GraphChecker expression handle carried by this RPC leg.
+ *
+ * The handle is meaningful only to the symbolic VM session in the process
+ * that created it.  Hadoop never interprets it and the leaf path is only the
+ * stable schema address used by the two instrumentation sites.
+ */
+message RpcSymbolicExpressionProto {
+  required string leafPath = 1;
+  required fixed64 expressionHandle = 2;
+}
+
 message RpcRequestHeaderProto { // the header for the RpcRequest
   enum OperationProto {
     RPC_FINAL_PACKET        = 0; // The final RPC Packet
@@ -90,6 +102,7 @@ message RpcRequestHeaderProto { // the header for the RpcRequest
   optional sint32 retryCount = 5 [default = -1];
   optional RPCTraceInfoProto traceInfo = 6; // tracing info
   optional RPCCallerContextProto callerContext = 7; // call context
+  repeated RpcSymbolicExpressionProto symbolicExpressions = 8;
 }
 
 
@@ -155,6 +168,7 @@ message RpcResponseHeaderProto {
   optional RpcErrorCodeProto errorDetail = 6; // in case of error
   optional bytes clientId = 7; // Globally unique client ID
   optional sint32 retryCount = 8 [default = -1];
+  repeated RpcSymbolicExpressionProto symbolicExpressions = 9;
 }
 
 message RpcSaslProto {
