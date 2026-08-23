@@ -84,6 +84,12 @@ message RPCCallerContextProto {
 message RpcSymbolicExpressionProto {
   required string leafPath = 1;
   required fixed64 expressionHandle = 2;
+  // Scheduling provenance only.  These fields never identify or reconstruct
+  // a value; the opaque handle above remains the VM broker's sole value
+  // authority.  They let a downstream proof bind that value to the exact
+  // producer execution whose Java path guard made the export reachable.
+  optional string producerTaskId = 3;
+  optional string producerOccurrenceId = 4;
 }
 
 message RpcRequestHeaderProto { // the header for the RpcRequest

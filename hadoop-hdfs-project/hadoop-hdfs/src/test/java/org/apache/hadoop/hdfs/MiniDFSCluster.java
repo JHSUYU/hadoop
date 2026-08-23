@@ -108,6 +108,7 @@ import org.apache.hadoop.hdfs.server.datanode.fsdataset.impl.FsVolumeImpl;
 import org.apache.hadoop.hdfs.server.namenode.EditLogFileOutputStream;
 import org.apache.hadoop.hdfs.server.namenode.FSNamesystem;
 import org.apache.hadoop.hdfs.server.namenode.NameNode;
+import org.apache.hadoop.ipc.CausynthTraceContext;
 import org.apache.hadoop.hdfs.server.namenode.NameNodeAdapter;
 import org.apache.hadoop.hdfs.server.protocol.DatanodeStorage;
 import org.apache.hadoop.hdfs.server.protocol.NamenodeProtocols;
@@ -524,11 +525,34 @@ public class MiniDFSCluster implements AutoCloseable {
         waitActive();
         ArrayList<DataNode> nodes = getDataNodes();
         DatanodeID[] ids = new DatanodeID[nodes.size()];
+        // Register logical node identities once.  The two operations declare
+        // the same source names; tracing, not hard-coded A/B source IDs,
+        // distinguishes the DataNodes and their dynamic occurrences.
+        NameNode nameNode = getNameNode();
+        CausynthTraceContext.registerSource(nameNode, "CLUSTER_NODE",
+            "NAMENODE", "cluster0/nn0", 0L);
         for (int i = 0; i < nodes.size(); i++) {
-          nodes.get(i).setCausynthRpcValue(i + 1L);
+          CausynthTraceContext.registerSource(nodes.get(i), "CLUSTER_NODE",
+              "DATANODE", "cluster0/dn" + i, 0L);
+        }
+
+        // The two producer relations yield baseline values 5 and 16, so
+        // startup succeeds while concolic replay explores the opposite order.
+        nodes.get(0).setCausynthRpcExpressionInputs(
+            4L, 3L, 9L, 4L, 5L, 12L, 2L, 1L);
+        nodes.get(1).setCausynthRpcExpressionInputs(
+            12L, 2L, 1L, 7L, 8L, 20L, 3L, 2L);
+        for (int i = 0; i < nodes.size(); i++) {
           ids[i] = nodes.get(i).getDatanodeId();
         }
-        getNameNode().compareCausynthDataNodeValues(ids);
+        String requestApi = "compareCausynthDataNodeValues";
+        long requestId = CausynthTraceContext.beginSourceRequest(
+            nameNode, requestApi);
+        try {
+          nameNode.compareCausynthDataNodeValues(ids);
+        } finally {
+          CausynthTraceContext.endSourceRequest(requestId, requestApi);
+        }
       } catch (IOException failure) {
         shutdown();
         throw failure;

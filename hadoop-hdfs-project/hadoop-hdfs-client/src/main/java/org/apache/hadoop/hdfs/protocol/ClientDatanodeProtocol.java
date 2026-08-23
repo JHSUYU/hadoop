@@ -136,10 +136,10 @@ public interface ClientDatanodeProtocol {
    */
   DatanodeLocalInfo getDatanodeInfo() throws IOException;
 
-  /** Return the first DataNode value used by the Causynth RPC propagation test. */
+  /** Execute the first Causynth test relation on this DataNode. */
   long getCausynthValueA() throws IOException;
 
-  /** Return the second DataNode value used by the Causynth RPC propagation test. */
+  /** Execute the second Causynth test relation on this DataNode. */
   long getCausynthValueB() throws IOException;
 
   /**

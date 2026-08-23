@@ -332,6 +332,13 @@ public class DataNode extends ReconfigurableBase
   private volatile boolean heartbeatsDisabledForTests = false;
   private volatile boolean cacheReportsDisabledForTests = false;
   private volatile long causynthRpcValue = 0L;
+  private volatile long causynthRpcAdjustment = 0L;
+  private volatile long causynthRpcGuardLeft = 0L;
+  private volatile long causynthRpcGuardRight = 0L;
+  private volatile long causynthRpcLowerBound = 0L;
+  private volatile long causynthRpcUpperBound = 0L;
+  private volatile long causynthRpcBias = 0L;
+  private volatile long causynthRpcPivot = 0L;
   private DataStorage storage = null;
 
   private DatanodeHttpServer httpServer = null;
@@ -3185,21 +3192,111 @@ public class DataNode extends ReconfigurableBase
 
   @Override // ClientDatanodeProtocol
   public long getCausynthValueA() throws IOException {
-    CausynthSymbolicSource.symbolize("RPC_COMPARE.DATANODE_A", this,
-        "<org.apache.hadoop.hdfs.server.datanode.DataNode: long causynthRpcValue>");
-    return causynthRpcValue;
+    symbolizeCausynthRpcInputs();
+
+    long candidate = causynthRpcValue + causynthRpcAdjustment
+        + causynthRpcBias - causynthRpcPivot;
+    long alternate = causynthRpcValue - causynthRpcAdjustment
+        + causynthRpcPivot - causynthRpcBias;
+    boolean primaryWindow = causynthRpcGuardLeft > causynthRpcGuardRight
+        && candidate >= causynthRpcLowerBound
+        && candidate <= causynthRpcUpperBound;
+    boolean fallbackWindow = causynthRpcGuardLeft == causynthRpcGuardRight
+        || alternate < causynthRpcLowerBound;
+    if (primaryWindow || fallbackWindow) {
+      long shifted = candidate + causynthRpcBias - causynthRpcPivot;
+      if ((shifted <= causynthRpcUpperBound
+          && causynthRpcValue + causynthRpcPivot > causynthRpcLowerBound)
+          || (shifted == causynthRpcUpperBound
+          && causynthRpcGuardLeft - causynthRpcGuardRight
+              > causynthRpcPivot)) {
+        return shifted;
+      }
+      if (alternate >= causynthRpcLowerBound
+          && alternate <= causynthRpcUpperBound) {
+        return alternate + causynthRpcBias;
+      }
+      return candidate - causynthRpcAdjustment;
+    }
+    if ((alternate > causynthRpcUpperBound
+        && causynthRpcPivot <= causynthRpcLowerBound)
+        || (alternate < causynthRpcLowerBound
+        && causynthRpcGuardRight - causynthRpcGuardLeft
+            > causynthRpcBias)) {
+      return alternate - causynthRpcPivot;
+    }
+    return alternate + causynthRpcAdjustment;
   }
 
   @Override // ClientDatanodeProtocol
   public long getCausynthValueB() throws IOException {
-    CausynthSymbolicSource.symbolize("RPC_COMPARE.DATANODE_B", this,
+    symbolizeCausynthRpcInputs();
+
+    long candidate = causynthRpcValue + causynthRpcAdjustment
+        + causynthRpcBias - causynthRpcPivot;
+    long alternate = causynthRpcValue - causynthRpcAdjustment
+        + causynthRpcPivot - causynthRpcBias;
+    boolean primaryWindow = causynthRpcGuardLeft < causynthRpcGuardRight
+        && candidate >= causynthRpcLowerBound
+        && candidate <= causynthRpcUpperBound;
+    boolean fallbackWindow = causynthRpcGuardLeft == causynthRpcGuardRight
+        || alternate > causynthRpcUpperBound;
+    if (primaryWindow || fallbackWindow) {
+      long shifted = candidate + causynthRpcBias - causynthRpcPivot;
+      if ((shifted >= causynthRpcLowerBound
+          && causynthRpcValue - causynthRpcPivot < causynthRpcUpperBound)
+          || (shifted == causynthRpcLowerBound
+          && causynthRpcGuardRight - causynthRpcGuardLeft
+              > causynthRpcBias)) {
+        return shifted;
+      }
+      if (alternate >= causynthRpcLowerBound
+          && alternate <= causynthRpcUpperBound) {
+        return alternate - causynthRpcBias;
+      }
+      return candidate + causynthRpcAdjustment;
+    }
+    if ((alternate < causynthRpcLowerBound
+        && causynthRpcPivot <= causynthRpcUpperBound)
+        || (alternate > causynthRpcUpperBound
+        && causynthRpcGuardLeft - causynthRpcGuardRight
+            > causynthRpcBias)) {
+      return alternate + causynthRpcPivot;
+    }
+    return alternate - causynthRpcAdjustment;
+  }
+
+  private void symbolizeCausynthRpcInputs() {
+    CausynthSymbolicSource.symbolize("RPC_COMPARE.VALUE", this,
         "<org.apache.hadoop.hdfs.server.datanode.DataNode: long causynthRpcValue>");
-    return causynthRpcValue;
+    CausynthSymbolicSource.symbolize("RPC_COMPARE.ADJUSTMENT", this,
+        "<org.apache.hadoop.hdfs.server.datanode.DataNode: long causynthRpcAdjustment>");
+    CausynthSymbolicSource.symbolize("RPC_COMPARE.GUARD_LEFT", this,
+        "<org.apache.hadoop.hdfs.server.datanode.DataNode: long causynthRpcGuardLeft>");
+    CausynthSymbolicSource.symbolize("RPC_COMPARE.GUARD_RIGHT", this,
+        "<org.apache.hadoop.hdfs.server.datanode.DataNode: long causynthRpcGuardRight>");
+    CausynthSymbolicSource.symbolize("RPC_COMPARE.LOWER_BOUND", this,
+        "<org.apache.hadoop.hdfs.server.datanode.DataNode: long causynthRpcLowerBound>");
+    CausynthSymbolicSource.symbolize("RPC_COMPARE.UPPER_BOUND", this,
+        "<org.apache.hadoop.hdfs.server.datanode.DataNode: long causynthRpcUpperBound>");
+    CausynthSymbolicSource.symbolize("RPC_COMPARE.BIAS", this,
+        "<org.apache.hadoop.hdfs.server.datanode.DataNode: long causynthRpcBias>");
+    CausynthSymbolicSource.symbolize("RPC_COMPARE.PIVOT", this,
+        "<org.apache.hadoop.hdfs.server.datanode.DataNode: long causynthRpcPivot>");
   }
 
   @VisibleForTesting
-  public void setCausynthRpcValue(long value) {
+  public void setCausynthRpcExpressionInputs(long value, long adjustment,
+      long guardLeft, long guardRight, long lowerBound, long upperBound,
+      long bias, long pivot) {
     this.causynthRpcValue = value;
+    this.causynthRpcAdjustment = adjustment;
+    this.causynthRpcGuardLeft = guardLeft;
+    this.causynthRpcGuardRight = guardRight;
+    this.causynthRpcLowerBound = lowerBound;
+    this.causynthRpcUpperBound = upperBound;
+    this.causynthRpcBias = bias;
+    this.causynthRpcPivot = pivot;
   }
 
   @Override // ClientDatanodeProtocol & ReconfigurationProtocol

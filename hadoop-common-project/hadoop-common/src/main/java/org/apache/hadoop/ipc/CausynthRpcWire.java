@@ -47,6 +47,7 @@ import org.apache.hadoop.ipc.protobuf.RpcHeaderProtos.RpcSymbolicExpressionProto
 public final class CausynthRpcWire {
   private static final int MAX_EXPRESSIONS = 64;
   private static final int MAX_LEAF_PATH_LENGTH = 4096;
+  private static final int MAX_PROVENANCE_LENGTH = 16384;
 
   /** Leaves exported before the next request or response header is built. */
   private static final ThreadLocal<Pending> PENDING_HEADER =
@@ -70,8 +71,24 @@ public final class CausynthRpcWire {
    * @return false for malformed input, overflow, or a duplicate leaf
    */
   public static boolean stageExpression(String leafPath, long handle) {
+    return stageExpression(leafPath, handle, "", "");
+  }
+
+  /**
+   * Stages one leaf together with the exact concolic producer execution.
+   * The provenance strings are proof metadata only; Hadoop never uses them
+   * to recover a value or to choose an RPC delivery.
+   */
+  public static boolean stageExpression(String leafPath, long handle,
+      String producerTaskId, String producerOccurrenceId) {
     String path = leafPath == null ? "" : leafPath;
+    String task = producerTaskId == null ? "" : producerTaskId;
+    String occurrence = producerOccurrenceId == null
+        ? "" : producerOccurrenceId;
     if (path.isEmpty() || path.length() > MAX_LEAF_PATH_LENGTH) {
+      return false;
+    }
+    if (!validProvenance(task, occurrence)) {
       return false;
     }
     Pending pending = PENDING_HEADER.get();
@@ -87,7 +104,7 @@ public final class CausynthRpcWire {
       pending.poisoned.add(path);
       return false;
     }
-    pending.values.put(path, Long.valueOf(handle));
+    pending.values.put(path, new Handle(true, handle, task, occurrence));
     return true;
   }
 
@@ -125,13 +142,13 @@ public final class CausynthRpcWire {
   }
 
   static void appendTo(RpcRequestHeaderProto.Builder header) {
-    for (Map.Entry<String, Long> entry : drain().entrySet()) {
+    for (Map.Entry<String, Handle> entry : drain().entrySet()) {
       header.addSymbolicExpressions(expression(entry));
     }
   }
 
   static void appendTo(RpcResponseHeaderProto.Builder header) {
-    for (Map.Entry<String, Long> entry : drain().entrySet()) {
+    for (Map.Entry<String, Handle> entry : drain().entrySet()) {
       header.addSymbolicExpressions(expression(entry));
     }
   }
@@ -149,16 +166,23 @@ public final class CausynthRpcWire {
   }
 
   private static RpcSymbolicExpressionProto expression(
-      Map.Entry<String, Long> entry) {
-    return RpcSymbolicExpressionProto.newBuilder()
+      Map.Entry<String, Handle> entry) {
+    Handle value = entry.getValue();
+    RpcSymbolicExpressionProto.Builder builder =
+        RpcSymbolicExpressionProto.newBuilder()
         .setLeafPath(entry.getKey())
-        .setExpressionHandle(entry.getValue().longValue())
-        .build();
+        .setExpressionHandle(value.handle());
+    if (!value.producerTaskId().isEmpty()) {
+      builder.setProducerTaskId(value.producerTaskId());
+      builder.setProducerOccurrenceId(value.producerOccurrenceId());
+    }
+    return builder.build();
   }
 
-  private static Map<String, Long> drain() {
+  private static Map<String, Handle> drain() {
     Pending pending = PENDING_HEADER.get();
-    Map<String, Long> result = new LinkedHashMap<String, Long>(pending.values);
+    Map<String, Handle> result =
+        new LinkedHashMap<String, Handle>(pending.values);
     PENDING_HEADER.remove();
     return result;
   }
@@ -167,28 +191,50 @@ public final class CausynthRpcWire {
     if (entries == null || entries.size() > MAX_EXPRESSIONS) {
       return WireValues.emptyValues();
     }
-    LinkedHashMap<String, Long> values = new LinkedHashMap<String, Long>();
+    LinkedHashMap<String, Handle> values =
+        new LinkedHashMap<String, Handle>();
     for (RpcSymbolicExpressionProto entry : entries) {
       String path = entry.getLeafPath();
+      String task = entry.hasProducerTaskId()
+          ? entry.getProducerTaskId() : "";
+      String occurrence = entry.hasProducerOccurrenceId()
+          ? entry.getProducerOccurrenceId() : "";
       if (path == null || path.isEmpty()
           || path.length() > MAX_LEAF_PATH_LENGTH
-          || values.containsKey(path)) {
+          || values.containsKey(path)
+          || !validProvenance(task, occurrence)) {
         return WireValues.emptyValues();
       }
-      values.put(path, Long.valueOf(entry.getExpressionHandle()));
+      values.put(path, new Handle(true, entry.getExpressionHandle(),
+          task, occurrence));
     }
     return new WireValues(values);
   }
 
+  private static boolean validProvenance(String task, String occurrence) {
+    if (task.length() > MAX_PROVENANCE_LENGTH
+        || occurrence.length() > MAX_PROVENANCE_LENGTH
+        || !task.equals(task.trim())
+        || !occurrence.equals(occurrence.trim())) {
+      return false;
+    }
+    return task.isEmpty() == occurrence.isEmpty();
+  }
+
   /** One exact result, including the distinction between absent and zero. */
   public static final class Handle {
-    private static final Handle MISSING = new Handle(false, 0L);
+    private static final Handle MISSING = new Handle(false, 0L, "", "");
     private final boolean present;
     private final long handle;
+    private final String producerTaskId;
+    private final String producerOccurrenceId;
 
-    private Handle(boolean present, long handle) {
+    private Handle(boolean present, long handle, String producerTaskId,
+        String producerOccurrenceId) {
       this.present = present;
       this.handle = handle;
+      this.producerTaskId = producerTaskId;
+      this.producerOccurrenceId = producerOccurrenceId;
     }
 
     public boolean present() {
@@ -199,6 +245,14 @@ public final class CausynthRpcWire {
       return handle;
     }
 
+    public String producerTaskId() {
+      return producerTaskId;
+    }
+
+    public String producerOccurrenceId() {
+      return producerOccurrenceId;
+    }
+
     static Handle missing() {
       return MISSING;
     }
@@ -206,28 +260,28 @@ public final class CausynthRpcWire {
 
   /** Parsed header values owned by one concrete Hadoop Call. */
   static final class WireValues {
-    private final Map<String, Long> values;
+    private final Map<String, Handle> values;
 
-    private WireValues(Map<String, Long> values) {
+    private WireValues(Map<String, Handle> values) {
       this.values = values;
     }
 
     private static WireValues emptyValues() {
-      return new WireValues(new LinkedHashMap<String, Long>());
+      return new WireValues(new LinkedHashMap<String, Handle>());
     }
 
     Handle take(String leafPath) {
       if (!values.containsKey(leafPath)) {
         return Handle.missing();
       }
-      return new Handle(true, values.remove(leafPath).longValue());
+      return values.remove(leafPath);
     }
 
   }
 
   private static final class Pending {
-    private final Map<String, Long> values =
-        new LinkedHashMap<String, Long>();
+    private final Map<String, Handle> values =
+        new LinkedHashMap<String, Handle>();
     private final Set<String> poisoned = new LinkedHashSet<String>();
   }
 }

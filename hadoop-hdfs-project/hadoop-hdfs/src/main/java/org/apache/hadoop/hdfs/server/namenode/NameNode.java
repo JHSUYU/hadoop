@@ -1971,39 +1971,29 @@ public class NameNode extends ReconfigurableBase implements
     if (dataNodes == null || dataNodes.length != 2) {
       throw new IOException("Causynth comparison requires exactly two DataNodes");
     }
-    long a = readCausynthDataNodeValueA(dataNodes[0]);
-    long b = readCausynthDataNodeValueB(dataNodes[1]);
-    if (a > b) {
-      throw new @CausynthExceptionTarget("causynth-rpc-compare")
-          IOException("first DataNode value " + a
-          + " is greater than second DataNode value " + b);
-    }
-  }
-
-  private long readCausynthDataNodeValueA(DatanodeID dataNode)
-      throws IOException {
-    ClientDatanodeProtocol proxy =
+    ClientDatanodeProtocol first =
         DFSUtilClient.createClientDatanodeProtocolProxy(
-            dataNode, getConf(), 0, false);
+            dataNodes[0], getConf(), 0, false);
+    ClientDatanodeProtocol second =
+        DFSUtilClient.createClientDatanodeProtocolProxy(
+            dataNodes[1], getConf(), 0, false);
     try {
-      return proxy.getCausynthValueA();
-    } finally {
-      if (proxy instanceof Closeable) {
-        ((Closeable) proxy).close();
+      // A and B are distinct operations and may implement different
+      // relations. Runtime source identity, not the method name, says which
+      // DataNode serves each invocation.
+      long firstValue = first.getCausynthValueA();
+      long secondValue = second.getCausynthValueB();
+      if (firstValue > secondValue) {
+        throw new @CausynthExceptionTarget("causynth-rpc-compare")
+            IOException("first DataNode value " + firstValue
+            + " is greater than second DataNode value " + secondValue);
       }
-    }
-  }
-
-  private long readCausynthDataNodeValueB(DatanodeID dataNode)
-      throws IOException {
-    ClientDatanodeProtocol proxy =
-        DFSUtilClient.createClientDatanodeProtocolProxy(
-            dataNode, getConf(), 0, false);
-    try {
-      return proxy.getCausynthValueB();
     } finally {
-      if (proxy instanceof Closeable) {
-        ((Closeable) proxy).close();
+      if (first instanceof Closeable) {
+        ((Closeable) first).close();
+      }
+      if (second instanceof Closeable) {
+        ((Closeable) second).close();
       }
     }
   }
