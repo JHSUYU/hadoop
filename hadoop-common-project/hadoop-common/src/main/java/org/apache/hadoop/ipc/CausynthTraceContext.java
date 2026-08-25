@@ -30,6 +30,11 @@ public final class CausynthTraceContext {
   private CausynthTraceContext() {
   }
 
+  /** Returns whether the optional GraphChecker trace bridge is available. */
+  public static boolean isAvailable() {
+    return resolve() != null;
+  }
+
   /** Registers one stable logical node when GraphChecker is present. */
   public static boolean registerSource(Object anchor, String kind,
       String role, String sourceId, long epoch) {
@@ -39,6 +44,35 @@ public final class CausynthTraceContext {
     }
     try {
       runtime.registerSource.invoke(null, anchor, kind, role, sourceId, epoch);
+      return true;
+    } catch (ReflectiveOperationException | RuntimeException failure) {
+      return false;
+    }
+  }
+
+  /** Advances a stable logical source to a new lifecycle epoch. */
+  public static boolean restartSource(Object anchor, String kind,
+      String role, String sourceId, long epoch) {
+    Bridge runtime = resolve();
+    if (runtime == null) {
+      return false;
+    }
+    try {
+      runtime.restartSource.invoke(null, anchor, kind, role, sourceId, epoch);
+      return true;
+    } catch (ReflectiveOperationException | RuntimeException failure) {
+      return false;
+    }
+  }
+
+  /** Binds a live service/handler object to an already registered source. */
+  public static boolean registerSourceAlias(Object alias, Object anchor) {
+    Bridge runtime = resolve();
+    if (runtime == null) {
+      return false;
+    }
+    try {
+      runtime.registerSourceAlias.invoke(null, alias, anchor);
       return true;
     } catch (ReflectiveOperationException | RuntimeException failure) {
       return false;
@@ -85,6 +119,10 @@ public final class CausynthTraceContext {
             bridge = new Bridge(
                 recorder.getMethod("registerSource", Object.class,
                     String.class, String.class, String.class, long.class),
+                recorder.getMethod("restartSource", Object.class,
+                    String.class, String.class, String.class, long.class),
+                recorder.getMethod("registerSourceAlias", Object.class,
+                    Object.class),
                 recorder.getMethod("beginSourceRequest", Object.class,
                     String.class),
                 recorder.getMethod("endSourceRequest", long.class,
@@ -101,12 +139,17 @@ public final class CausynthTraceContext {
 
   private static final class Bridge {
     private final Method registerSource;
+    private final Method restartSource;
+    private final Method registerSourceAlias;
     private final Method beginSourceRequest;
     private final Method endSourceRequest;
 
-    private Bridge(Method registerSource, Method beginSourceRequest,
+    private Bridge(Method registerSource, Method restartSource,
+        Method registerSourceAlias, Method beginSourceRequest,
         Method endSourceRequest) {
       this.registerSource = registerSource;
+      this.restartSource = restartSource;
+      this.registerSourceAlias = registerSourceAlias;
       this.beginSourceRequest = beginSourceRequest;
       this.endSourceRequest = endSourceRequest;
     }

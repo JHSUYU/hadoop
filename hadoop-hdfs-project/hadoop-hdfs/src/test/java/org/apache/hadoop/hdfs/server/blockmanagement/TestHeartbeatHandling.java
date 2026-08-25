@@ -19,6 +19,7 @@ package org.apache.hadoop.hdfs.server.blockmanagement;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
 
 import java.util.ArrayList;
@@ -72,8 +73,12 @@ public class TestHeartbeatHandling {
     try {
       cluster.waitActive();
       final FSNamesystem namesystem = cluster.getNamesystem();
-      final HeartbeatManager hm = namesystem.getBlockManager(
-          ).getDatanodeManager().getHeartbeatManager();
+      final BlockManager blockManager = namesystem.getBlockManager();
+      final HeartbeatManager hm = blockManager.getDatanodeManager()
+          .getHeartbeatManager();
+      assertSame(hm, blockManager.getHeartbeatManagerForTesting());
+      assertSame(hm.getHeartbeatMonitorForTesting(),
+          blockManager.getHeartbeatMonitorForTesting());
       final String poolId = namesystem.getBlockPoolId();
       final DatanodeRegistration nodeReg =
         InternalDataNodeTestUtils.

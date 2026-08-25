@@ -1983,11 +1983,12 @@ public class NameNode extends ReconfigurableBase implements
       // DataNode serves each invocation.
       long firstValue = first.getCausynthValueA();
       long secondValue = second.getCausynthValueB();
-      if (firstValue > secondValue) {
-        throw new @CausynthExceptionTarget("causynth-rpc-compare")
-            IOException("first DataNode value " + firstValue
-            + " is greater than second DataNode value " + secondValue);
+
+      if(firstValue>secondValue){
+          throw new @CausynthExceptionTarget("causynth-rpc-compare")
+                  IOException("Crash");
       }
+
     } finally {
       if (first instanceof Closeable) {
         ((Closeable) first).close();

@@ -31,11 +31,13 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 
+import edu.uva.liftlab.graphchecker.annotation.CausynthExceptionTarget;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.classification.InterfaceAudience;
 import org.apache.hadoop.hdfs.protocol.ExtendedBlock;
 import org.apache.hadoop.hdfs.protocol.datatransfer.InvalidEncryptionKeyException;
+import org.apache.hadoop.ipc.CausynthSymbolicSource;
 import org.apache.hadoop.io.WritableUtils;
 import org.apache.hadoop.security.UserGroupInformation;
 import org.apache.hadoop.security.token.SecretManager;
@@ -198,6 +200,7 @@ public class BlockTokenSecretManager extends
     if (isMaster || exportedKeys == null)
       return;
     LOG.info("Setting block keys");
+    symbolizeCausynthHdfs11741DataNodeExpiry();
     removeExpiredKeys();
     this.currentKey = exportedKeys.getCurrentKey();
     BlockKey[] receivedKeys = exportedKeys.getAllKeys();
@@ -227,6 +230,7 @@ public class BlockTokenSecretManager extends
       return false;
 
     LOG.info("Updating block keys");
+    symbolizeCausynthHdfs11741NameNodeExpiry();
     removeExpiredKeys();
     // set final expiry date of retiring currentKey
     allKeys.put(currentKey.getKeyId(), new BlockKey(currentKey.getKeyId(),
@@ -241,7 +245,49 @@ public class BlockTokenSecretManager extends
     nextKey = new BlockKey(serialNo, Time.now() + 3
         * keyUpdateInterval + tokenLifetime, generateSecret());
     allKeys.put(nextKey.getKeyId(), nextKey);
+    // This exact object is the key promoted on the next rotation.  Publish K
+    // only after it owns its allKeys entry, so the accepted source occurrence
+    // precedes both the next NameNode expiry pass and every later export/DN
+    // installation of the same logical key.
+    nextKey.symbolizeCausynthHdfs11741CurrentKeyId(allKeys);
     return true;
+  }
+
+  /**
+   * Resolves K through selector-only source authority, then symbolizes the
+   * expiry field on exactly {@code allKeys.get(K)}. No selector means no hook;
+   * a missing or inconsistent member is rejected rather than replaced by an
+   * iteration or runtime-type guess.
+   */
+  private void symbolizeCausynthHdfs11741NameNodeExpiry() {
+    BlockKey selected = causynthHdfs11741SelectedKey(
+        "HDFS11741.NAMENODE.SELECTED_KEY_EXPIRY");
+    if (selected != null) {
+      selected.symbolizeCausynthHdfs11741NameNodeExpiryDate();
+    }
+  }
+
+  private void symbolizeCausynthHdfs11741DataNodeExpiry() {
+    BlockKey selected = causynthHdfs11741SelectedKey(
+        "HDFS11741.DATANODE.SELECTED_KEY_EXPIRY");
+    if (selected != null) {
+      selected.symbolizeCausynthHdfs11741DataNodeExpiryDate();
+    }
+  }
+
+  private BlockKey causynthHdfs11741SelectedKey(String expirySourceId) {
+    Integer selectedKeyId = CausynthSymbolicSource.selectedIntValue(
+        "HDFS11741.NAMENODE.CURRENT_KEY_ID");
+    if (selectedKeyId == null) {
+      return null;
+    }
+    BlockKey selected = allKeys.get(selectedKeyId);
+    if (selected == null || selected.getKeyId() != selectedKeyId) {
+      CausynthSymbolicSource.reject(expirySourceId,
+          "selected keyId is absent or disagrees with the owning map");
+      return null;
+    }
+    return selected;
   }
 
   /** Generate an block token for current user */
@@ -479,7 +525,8 @@ public class BlockTokenSecretManager extends
     synchronized (this) {
       key = allKeys.get(keyId);
       if (key == null) {
-        throw new InvalidEncryptionKeyException("Can't re-compute encryption key"
+        throw new @CausynthExceptionTarget("hdfs-11741")
+            InvalidEncryptionKeyException("Can't re-compute encryption key"
             + " for nonce, since the required block key (keyID=" + keyId
             + ") doesn't exist. Current key: " + currentKey.getKeyId());
       }

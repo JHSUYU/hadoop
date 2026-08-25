@@ -105,6 +105,18 @@ public class SaslDataTransferServer {
   public IOStreamPair receive(Peer peer, OutputStream underlyingOut,
       InputStream underlyingIn, int xferPort, DatanodeID datanodeId)
       throws IOException {
+    CausynthSaslHandoff.enterServerConnection(peer);
+    try {
+      return receiveWithConnection(peer, underlyingOut, underlyingIn,
+          xferPort, datanodeId);
+    } finally {
+      CausynthSaslHandoff.leaveConnection();
+    }
+  }
+
+  private IOStreamPair receiveWithConnection(Peer peer,
+      OutputStream underlyingOut, InputStream underlyingIn, int xferPort,
+      DatanodeID datanodeId) throws IOException {
     if (dnConf.getEncryptDataTransfer()) {
       LOG.debug(
         "SASL server doing encrypted handshake for peer = {}, datanodeId = {}",
@@ -174,6 +186,8 @@ public class SaslDataTransferServer {
       new PasswordFunction() {
         @Override
         public char[] apply(String userName) throws IOException {
+          CausynthSaslHandoff.deliverUserName(
+              SaslDataTransferServer.this, userName);
           return encryptionKeyToPassword(getEncryptionKeyFromUserName(userName));
         }
       });
@@ -260,14 +274,18 @@ public class SaslDataTransferServer {
       throws IOException {
     String[] nameComponents = userName.split(NAME_DELIMITER);
     if (nameComponents.length != 3) {
+      CausynthSaslHandoff.malformedUserName(this, userName,
+          nameComponents.length);
       throw new IOException("Provided name '" + userName + "' has " +
           nameComponents.length + " components instead of the expected 3.");
     }
     int keyId = Integer.parseInt(nameComponents[0]);
     String blockPoolId = nameComponents[1];
     byte[] nonce = Base64.decodeBase64(nameComponents[2]);
-    return blockPoolTokenSecretManager.retrieveDataEncryptionKey(keyId,
-        blockPoolId, nonce);
+    CausynthSaslHandoff.Parsed parsed = CausynthSaslHandoff.receiveUserName(
+        this, userName, keyId, blockPoolId, nonce);
+    return blockPoolTokenSecretManager.retrieveDataEncryptionKey(parsed.keyId,
+        parsed.blockPoolId, parsed.nonce);
   }
 
   /**

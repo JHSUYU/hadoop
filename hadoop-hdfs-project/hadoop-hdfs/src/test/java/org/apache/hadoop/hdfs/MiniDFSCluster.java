@@ -536,12 +536,6 @@ public class MiniDFSCluster implements AutoCloseable {
               "DATANODE", "cluster0/dn" + i, 0L);
         }
 
-        // The two producer relations yield baseline values 5 and 16, so
-        // startup succeeds while concolic replay explores the opposite order.
-        nodes.get(0).setCausynthRpcExpressionInputs(
-            4L, 3L, 9L, 4L, 5L, 12L, 2L, 1L);
-        nodes.get(1).setCausynthRpcExpressionInputs(
-            12L, 2L, 1L, 7L, 8L, 20L, 3L, 2L);
         for (int i = 0; i < nodes.size(); i++) {
           ids[i] = nodes.get(i).getDatanodeId();
         }

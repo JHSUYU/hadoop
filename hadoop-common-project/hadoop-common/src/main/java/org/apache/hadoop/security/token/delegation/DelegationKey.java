@@ -22,6 +22,7 @@ import java.io.DataInput;
 import java.io.DataOutput;
 import java.io.IOException;
 import java.util.Arrays;
+import java.util.Map;
 
 import javax.crypto.SecretKey;
 
@@ -30,6 +31,7 @@ import org.apache.hadoop.classification.InterfaceAudience;
 import org.apache.hadoop.classification.InterfaceStability;
 import org.apache.hadoop.io.Writable;
 import org.apache.hadoop.io.WritableUtils;
+import org.apache.hadoop.ipc.CausynthSymbolicSource;
 
 /**
  * Key used for generating and verifying delegation tokens
@@ -66,6 +68,65 @@ public class DelegationKey implements Writable {
 
   public int getKeyId() {
     return keyId;
+  }
+
+  /**
+   * Declares the current HDFS block-key id as an exact symbolic source and
+   * preserves the owning map's key/object invariant after replay writeback.
+   * Outside a GraphChecker session the declaration is a no-op.
+   */
+  public <T extends DelegationKey> boolean
+      symbolizeCausynthHdfs11741CurrentKeyId(Map<Integer, T> keys) {
+    int previousId = keyId;
+    T indexed = keys == null ? null : keys.get(previousId);
+    if (indexed != this) {
+      return false;
+    }
+    boolean symbolized = CausynthSymbolicSource.symbolize(
+        "HDFS11741.NAMENODE.CURRENT_KEY_ID", this,
+        "<org.apache.hadoop.security.token.delegation.DelegationKey: int keyId>");
+    if (!symbolized) {
+      keyId = previousId;
+      return false;
+    }
+    if (keyId == previousId) {
+      return true;
+    }
+    T collision = keys.get(keyId);
+    if (collision != null && collision != this) {
+      keyId = previousId;
+      CausynthSymbolicSource.reject(
+          "HDFS11741.NAMENODE.CURRENT_KEY_ID",
+          "modeled keyId collides with another key");
+      return false;
+    }
+    keys.remove(previousId);
+    keys.put(keyId, indexed);
+    return true;
+  }
+
+  /** Declares the expiry of the exact NameNode map member selected by K. */
+  public boolean symbolizeCausynthHdfs11741NameNodeExpiryDate() {
+    long previousExpiry = expiryDate;
+    boolean symbolized = CausynthSymbolicSource.symbolize(
+        "HDFS11741.NAMENODE.SELECTED_KEY_EXPIRY", this,
+        "<org.apache.hadoop.security.token.delegation.DelegationKey: long expiryDate>");
+    if (!symbolized) {
+      expiryDate = previousExpiry;
+    }
+    return symbolized;
+  }
+
+  /** Declares the expiry of the exact DataNode map member selected by K. */
+  public boolean symbolizeCausynthHdfs11741DataNodeExpiryDate() {
+    long previousExpiry = expiryDate;
+    boolean symbolized = CausynthSymbolicSource.symbolize(
+        "HDFS11741.DATANODE.SELECTED_KEY_EXPIRY", this,
+        "<org.apache.hadoop.security.token.delegation.DelegationKey: long expiryDate>");
+    if (!symbolized) {
+      expiryDate = previousExpiry;
+    }
+    return symbolized;
   }
 
   public long getExpiryDate() {
