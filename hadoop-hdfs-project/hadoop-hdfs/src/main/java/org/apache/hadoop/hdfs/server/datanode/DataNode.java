@@ -3246,6 +3246,46 @@ public class DataNode extends ReconfigurableBase
       return causynthScenario19A();
     } else if (CAUSYNTH_RPC_SCENARIO == 20) {
       return causynthScenario20A();
+    } else if (CAUSYNTH_RPC_SCENARIO == 21) {
+      return causynthScenario21A();
+    } else if (CAUSYNTH_RPC_SCENARIO == 22) {
+      return causynthScenario22A();
+    } else if (CAUSYNTH_RPC_SCENARIO == 23) {
+      return causynthScenario23A();
+    } else if (CAUSYNTH_RPC_SCENARIO == 24) {
+      return causynthScenario24A();
+    } else if (CAUSYNTH_RPC_SCENARIO == 25) {
+      return causynthScenario25A();
+    } else if (CAUSYNTH_RPC_SCENARIO == 26) {
+      return causynthScenario26A();
+    } else if (CAUSYNTH_RPC_SCENARIO == 27) {
+      return causynthScenario27A();
+    } else if (CAUSYNTH_RPC_SCENARIO == 28) {
+      return causynthScenario28A();
+    } else if (CAUSYNTH_RPC_SCENARIO == 29) {
+      return causynthScenario29A();
+    } else if (CAUSYNTH_RPC_SCENARIO == 30) {
+      return causynthScenario30A();
+    } else if (CAUSYNTH_RPC_SCENARIO == 31) {
+      return causynthScenario31A();
+    } else if (CAUSYNTH_RPC_SCENARIO == 32) {
+      return causynthScenario32A();
+    } else if (CAUSYNTH_RPC_SCENARIO == 33) {
+      return causynthScenario33A();
+    } else if (CAUSYNTH_RPC_SCENARIO == 34) {
+      return causynthScenario34A();
+    } else if (CAUSYNTH_RPC_SCENARIO == 35) {
+      return causynthScenario35A();
+    } else if (CAUSYNTH_RPC_SCENARIO == 36) {
+      return causynthScenario36A();
+    } else if (CAUSYNTH_RPC_SCENARIO == 37) {
+      return causynthScenario37A();
+    } else if (CAUSYNTH_RPC_SCENARIO == 38) {
+      return causynthScenario38A();
+    } else if (CAUSYNTH_RPC_SCENARIO == 39) {
+      return causynthScenario39A();
+    } else if (CAUSYNTH_RPC_SCENARIO == 40) {
+      return causynthScenario40A();
     }
     throw new IOException("Unknown Causynth RPC scenario "
         + CAUSYNTH_RPC_SCENARIO);
@@ -3292,6 +3332,46 @@ public class DataNode extends ReconfigurableBase
       return causynthScenario19B();
     } else if (CAUSYNTH_RPC_SCENARIO == 20) {
       return causynthScenario20B();
+    } else if (CAUSYNTH_RPC_SCENARIO == 21) {
+      return causynthScenario21B();
+    } else if (CAUSYNTH_RPC_SCENARIO == 22) {
+      return causynthScenario22B();
+    } else if (CAUSYNTH_RPC_SCENARIO == 23) {
+      return causynthScenario23B();
+    } else if (CAUSYNTH_RPC_SCENARIO == 24) {
+      return causynthScenario24B();
+    } else if (CAUSYNTH_RPC_SCENARIO == 25) {
+      return causynthScenario25B();
+    } else if (CAUSYNTH_RPC_SCENARIO == 26) {
+      return causynthScenario26B();
+    } else if (CAUSYNTH_RPC_SCENARIO == 27) {
+      return causynthScenario27B();
+    } else if (CAUSYNTH_RPC_SCENARIO == 28) {
+      return causynthScenario28B();
+    } else if (CAUSYNTH_RPC_SCENARIO == 29) {
+      return causynthScenario29B();
+    } else if (CAUSYNTH_RPC_SCENARIO == 30) {
+      return causynthScenario30B();
+    } else if (CAUSYNTH_RPC_SCENARIO == 31) {
+      return causynthScenario31B();
+    } else if (CAUSYNTH_RPC_SCENARIO == 32) {
+      return causynthScenario32B();
+    } else if (CAUSYNTH_RPC_SCENARIO == 33) {
+      return causynthScenario33B();
+    } else if (CAUSYNTH_RPC_SCENARIO == 34) {
+      return causynthScenario34B();
+    } else if (CAUSYNTH_RPC_SCENARIO == 35) {
+      return causynthScenario35B();
+    } else if (CAUSYNTH_RPC_SCENARIO == 36) {
+      return causynthScenario36B();
+    } else if (CAUSYNTH_RPC_SCENARIO == 37) {
+      return causynthScenario37B();
+    } else if (CAUSYNTH_RPC_SCENARIO == 38) {
+      return causynthScenario38B();
+    } else if (CAUSYNTH_RPC_SCENARIO == 39) {
+      return causynthScenario39B();
+    } else if (CAUSYNTH_RPC_SCENARIO == 40) {
+      return causynthScenario40B();
     }
     throw new IOException("Unknown Causynth RPC scenario "
         + CAUSYNTH_RPC_SCENARIO);
@@ -3619,6 +3699,361 @@ public class DataNode extends ReconfigurableBase
       return 2L * causynthRpcC - causynthRpcA + 50L;
     }
     return causynthRpcC - causynthRpcD;
+  }
+
+  private long causynthScenario21A() {
+    if (causynthRpcA >= -32 && causynthRpcA <= 32) {
+      if (causynthRpcB != causynthRpcE) {
+        return 4L * causynthRpcA + causynthRpcC + 3L;
+      }
+      return (long) causynthRpcA - causynthRpcD - 40L;
+    }
+    return causynthRpcC - causynthRpcA;
+  }
+
+  private long causynthScenario21B() {
+    if (causynthRpcC >= -64L && causynthRpcC <= 64L
+        && (causynthRpcB || causynthRpcE)) {
+      return causynthRpcC + 2L * causynthRpcD;
+    }
+    return causynthRpcC + causynthRpcD + 20L;
+  }
+
+  private long causynthScenario22A() {
+    if (!(causynthRpcA <= 3 || causynthRpcB)) {
+      return 5L * causynthRpcA - causynthRpcD;
+    }
+    return -25L;
+  }
+
+  private long causynthScenario22B() {
+    if (!((causynthRpcC < 0L && causynthRpcE)
+        || causynthRpcD > 20)) {
+      return causynthRpcC + causynthRpcD + 15L;
+    }
+    return causynthRpcC - causynthRpcD;
+  }
+
+  private long causynthScenario23A() {
+    if (causynthRpcA >= Integer.MAX_VALUE - 2
+        && causynthRpcA <= Integer.MAX_VALUE
+        && (!causynthRpcB || causynthRpcE)) {
+      return (long) causynthRpcA - causynthRpcD;
+    }
+    return -100L;
+  }
+
+  private long causynthScenario23B() {
+    if (causynthRpcD >= Integer.MIN_VALUE
+        && causynthRpcD <= Integer.MIN_VALUE + 2
+        && causynthRpcB && !causynthRpcE) {
+      return causynthRpcC + causynthRpcD;
+    }
+    return 50L;
+  }
+
+  private long causynthScenario24A() {
+    if ((causynthRpcC >= Long.MAX_VALUE - 3L
+        || causynthRpcC <= Long.MIN_VALUE + 3L)
+        && !causynthRpcB) {
+      return causynthRpcC - causynthRpcA;
+    }
+    return -40L;
+  }
+
+  private long causynthScenario24B() {
+    if (causynthRpcC >= -100L && causynthRpcC <= 100L
+        && causynthRpcD != Integer.MIN_VALUE) {
+      return causynthRpcC + causynthRpcD + 30L;
+    }
+    return causynthRpcC - causynthRpcD;
+  }
+
+  private long causynthScenario25A() {
+    if ((causynthRpcA < causynthRpcD && causynthRpcB)
+        || (causynthRpcA > causynthRpcD && causynthRpcE)) {
+      return 3L * causynthRpcA - 2L * causynthRpcD
+          + causynthRpcC + 60L;
+    }
+    return -10L;
+  }
+
+  private long causynthScenario25B() {
+    if (causynthRpcC <= causynthRpcA && !causynthRpcB
+        && (causynthRpcD != 0 || causynthRpcE)) {
+      return causynthRpcC + causynthRpcA - causynthRpcD;
+    }
+    return 25L;
+  }
+
+  private long causynthScenario26A() {
+    if (causynthRpcA > 0) {
+      if (causynthRpcB && causynthRpcC < 100L) {
+        return causynthRpcA + causynthRpcC + 60L;
+      }
+      if (causynthRpcD < -5 || causynthRpcE) {
+        return 2L * causynthRpcA - causynthRpcD + 20L;
+      }
+    }
+    return -15L;
+  }
+
+  private long causynthScenario26B() {
+    if (causynthRpcC < 0L) {
+      if (!causynthRpcE || causynthRpcD > 5) {
+        return causynthRpcC - causynthRpcD;
+      }
+      return causynthRpcC + causynthRpcA;
+    }
+    return 25L;
+  }
+
+  private long causynthScenario27A() {
+    if ((long) causynthRpcA - causynthRpcD >= 100L
+        && (causynthRpcB || causynthRpcE)) {
+      return (long) causynthRpcA - causynthRpcD;
+    }
+    return -5L;
+  }
+
+  private long causynthScenario27B() {
+    if (causynthRpcC + causynthRpcD <= -100L
+        || (causynthRpcB && causynthRpcE)) {
+      return causynthRpcC - causynthRpcD;
+    }
+    return 30L;
+  }
+
+  private long causynthScenario28A() {
+    if ((long) causynthRpcA == (long) causynthRpcD + 7L
+        && causynthRpcB != causynthRpcE) {
+      return causynthRpcC + causynthRpcA + 100L;
+    }
+    return -20L;
+  }
+
+  private long causynthScenario28B() {
+    if (causynthRpcC == (long) causynthRpcA + causynthRpcD
+        && causynthRpcB != causynthRpcE) {
+      return causynthRpcC - causynthRpcD;
+    }
+    return 40L;
+  }
+
+  private long causynthScenario29A() {
+    if (causynthRpcC < Integer.MIN_VALUE) {
+      return causynthRpcC + causynthRpcA + 200L;
+    } else if (causynthRpcC > Integer.MAX_VALUE) {
+      return causynthRpcC - causynthRpcA;
+    } else if (causynthRpcB && causynthRpcA >= 0) {
+      return 2L * causynthRpcA + 10L;
+    }
+    return -30L;
+  }
+
+  private long causynthScenario29B() {
+    if (causynthRpcC < -1000L) {
+      return causynthRpcC - causynthRpcD;
+    } else if (causynthRpcC > 1000L && causynthRpcE) {
+      return causynthRpcC + causynthRpcD;
+    } else if (causynthRpcB && causynthRpcD < 0) {
+      return causynthRpcA - (long) causynthRpcD;
+    }
+    return 60L;
+  }
+
+  private long causynthScenario30A() {
+    if (causynthRpcA == Integer.MIN_VALUE
+        && -causynthRpcA == Integer.MIN_VALUE
+        && !causynthRpcB) {
+      return -(long) causynthRpcA;
+    }
+    return -50L;
+  }
+
+  private long causynthScenario30B() {
+    if (causynthRpcD == Integer.MAX_VALUE
+        && causynthRpcD * 2 == -2 && causynthRpcE) {
+      return causynthRpcC - causynthRpcD;
+    }
+    return 20L;
+  }
+
+  private long causynthScenario31A() {
+    if (causynthRpcC == Long.MIN_VALUE
+        && -causynthRpcC == Long.MIN_VALUE && !causynthRpcE) {
+      return -(causynthRpcC + 1L);
+    }
+    return -40L;
+  }
+
+  private long causynthScenario31B() {
+    if (causynthRpcC == Long.MAX_VALUE
+        && causynthRpcC * 2L == -2L && causynthRpcB) {
+      return causynthRpcC - causynthRpcD;
+    }
+    return 30L;
+  }
+
+  private long causynthScenario32A() {
+    if ((causynthRpcA & 3) == 2 && (causynthRpcD & 7) != 0
+        && (causynthRpcB || !causynthRpcE)) {
+      return 2L * causynthRpcA - causynthRpcD + 70L;
+    }
+    return -20L;
+  }
+
+  private long causynthScenario32B() {
+    if ((causynthRpcD & 15) == 8
+        || ((causynthRpcA & 1) == 1 && causynthRpcE)) {
+      return causynthRpcC - causynthRpcD;
+    }
+    return 40L;
+  }
+
+  private long causynthScenario33A() {
+    if ((causynthRpcA << 1) > causynthRpcD
+        && (causynthRpcB || causynthRpcE)) {
+      return (long) (causynthRpcA << 1) + causynthRpcC;
+    }
+    return -25L;
+  }
+
+  private long causynthScenario33B() {
+    if ((causynthRpcD >> 2) < causynthRpcA
+        && causynthRpcB && causynthRpcE) {
+      return causynthRpcC + (causynthRpcD >> 2);
+    }
+    return 50L;
+  }
+
+  private long causynthScenario34A() {
+    if ((causynthRpcA >>> 28) == 15 && !causynthRpcB) {
+      return (long) (causynthRpcA >>> 1) + causynthRpcC;
+    }
+    return -10L;
+  }
+
+  private long causynthScenario34B() {
+    if ((causynthRpcD >>> 30) == 3 && causynthRpcE) {
+      return causynthRpcC + (causynthRpcD >>> 1);
+    }
+    return 50L;
+  }
+
+  private long causynthScenario35A() {
+    int mixed = causynthRpcA ^ causynthRpcD;
+    if (mixed < 0 && (causynthRpcB || causynthRpcE)) {
+      return -(long) mixed;
+    }
+    return -30L;
+  }
+
+  private long causynthScenario35B() {
+    int union = causynthRpcA | causynthRpcD;
+    if (union > 100 && causynthRpcB && causynthRpcE) {
+      return causynthRpcC - union;
+    }
+    return 60L;
+  }
+
+  private long causynthScenario36A() {
+    if ((causynthRpcC >>> 60) == 15L && !causynthRpcB) {
+      return (causynthRpcC >>> 1) + causynthRpcA;
+    }
+    return -20L;
+  }
+
+  private long causynthScenario36B() {
+    if ((causynthRpcC >> 60) == -1L && causynthRpcE) {
+      return causynthRpcC - causynthRpcD;
+    }
+    return 45L;
+  }
+
+  private long causynthScenario37A() {
+    int inverted = ~causynthRpcA;
+    if (inverted < 0 && causynthRpcB) {
+      return causynthRpcC - (long) inverted + 100L;
+    }
+    return -20L;
+  }
+
+  private long causynthScenario37B() {
+    int inverted = ~causynthRpcD;
+    if (inverted > 0 && causynthRpcE) {
+      return causynthRpcC + inverted;
+    }
+    return 40L;
+  }
+
+  private long causynthScenario38A() {
+    int distance = causynthRpcD & 31;
+    int shifted = causynthRpcA << distance;
+    if (shifted > 0 && causynthRpcB) {
+      return shifted + causynthRpcC;
+    }
+    return -30L;
+  }
+
+  private long causynthScenario38B() {
+    int distance = causynthRpcA & 31;
+    int shifted = causynthRpcD >> distance;
+    if (shifted < -10 && causynthRpcE) {
+      return causynthRpcC - shifted;
+    }
+    return 50L;
+  }
+
+  private long causynthScenario39A() {
+    boolean low = causynthRpcA < -50;
+    boolean high = causynthRpcA > 50;
+    boolean gate = (low && !causynthRpcB)
+        || (high && causynthRpcE);
+    if (gate && causynthRpcC != causynthRpcD) {
+      return causynthRpcA + causynthRpcC - causynthRpcD + 80L;
+    }
+    return -25L;
+  }
+
+  private long causynthScenario39B() {
+    boolean within = causynthRpcC >= -20L && causynthRpcC <= 20L;
+    boolean sameFlags = causynthRpcB == causynthRpcE;
+    if (within && !sameFlags) {
+      return causynthRpcC + causynthRpcA - causynthRpcD;
+    }
+    return 35L;
+  }
+
+  private long causynthScenario40A() {
+    long base = causynthRpcA + causynthRpcC;
+    if ((causynthRpcB && causynthRpcA >= 0)
+        || (causynthRpcE && causynthRpcC < 0L)) {
+      if ((causynthRpcD & 3) == 1 && base > 100L) {
+        return base - causynthRpcD + 200L;
+      }
+      return base + causynthRpcD + 50L;
+    } else if (!causynthRpcB && !causynthRpcE
+        && (causynthRpcA == Integer.MIN_VALUE + 1
+        || causynthRpcC == Long.MAX_VALUE - 1L)) {
+      return causynthRpcC - causynthRpcA;
+    }
+    return -60L;
+  }
+
+  private long causynthScenario40B() {
+    if ((causynthRpcE || causynthRpcB)
+        && causynthRpcC >= causynthRpcD) {
+      if ((causynthRpcA >>> 30) == 3
+          || causynthRpcD == Integer.MAX_VALUE - 1) {
+        return causynthRpcC - causynthRpcD - 100L;
+      }
+      return causynthRpcC + causynthRpcD + 70L;
+    } else if (!causynthRpcE && !causynthRpcB
+        && (causynthRpcC < 0L || causynthRpcA > causynthRpcD)) {
+      return causynthRpcC - causynthRpcA + 40L;
+    }
+    return 80L;
   }
 
   private void symbolizeCausynthRpcInputs() {
