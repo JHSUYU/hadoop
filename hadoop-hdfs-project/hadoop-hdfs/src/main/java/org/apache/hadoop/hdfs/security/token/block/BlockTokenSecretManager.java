@@ -37,7 +37,6 @@ import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.classification.InterfaceAudience;
 import org.apache.hadoop.hdfs.protocol.ExtendedBlock;
 import org.apache.hadoop.hdfs.protocol.datatransfer.InvalidEncryptionKeyException;
-import org.apache.hadoop.ipc.CausynthSymbolicSource;
 import org.apache.hadoop.io.WritableUtils;
 import org.apache.hadoop.security.UserGroupInformation;
 import org.apache.hadoop.security.token.SecretManager;
@@ -177,6 +176,32 @@ public class BlockTokenSecretManager extends
       return null;
     if (LOG.isDebugEnabled())
       LOG.debug("Exporting access keys");
+    // K is published here, on the export path, because this is the key id the
+    // NameNode actually hands out: the Balancer's getBlockKeys reply and every
+    // DataNode's KeyUpdateCommand carry this exact object.  The export also
+    // runs on every one of those calls, so the hook is entered inside an
+    // admitted occurrence of the getBlockKeys / registerDatanode /
+    // sendHeartbeat regions rather than inside the interval-guarded, once-only
+    // rotation in updateKeys(), which a replayed cluster never reaches.
+    // currentKey always owns its own allKeys entry -- generateKeys() and
+    // updateKeys() both publish it under its own id -- so the hook's map
+    // invariant holds and a modeled id is re-keyed before the map is read
+    // into the exported array below.  The hook is entered unconditionally and
+    // refuses internally; isMaster above is a role guard, not a selector.
+    currentKey.symbolizeCausynthHdfs11741CurrentKeyId(allKeys);
+    // The NameNode's SELECTED-key expiry is published on the same export, and
+    // for the same reason K is.  The only other NameNode-side mint of this
+    // field sits in updateKeys(), the interval-guarded once-only rotation: a
+    // site there is planned from the tracing pass and then never entered by a
+    // replayed cluster, so the source materializes nothing and the model has
+    // no NameNode expiry to report.  exportKeys() runs on every getBlockKeys
+    // reply and every KeyUpdateCommand the heartbeat carries, so the hook is
+    // entered inside an admitted occurrence of those regions, and the key it
+    // mints on is exactly the key whose expiry decides whether removeExpired-
+    // Keys() drops it before the Balancer's cached DEK is redeemed.  The hook
+    // is entered unconditionally and refuses internally; a member that already
+    // carries a propagated expression keeps it.
+    currentKey.symbolizeCausynthHdfs11741ExpiryDate();
     return new ExportedBlockKeys(true, keyUpdateInterval, tokenLifetime,
         currentKey, allKeys.values().toArray(new BlockKey[0]));
   }
@@ -200,7 +225,13 @@ public class BlockTokenSecretManager extends
     if (isMaster || exportedKeys == null)
       return;
     LOG.info("Setting block keys");
-    symbolizeCausynthHdfs11741DataNodeExpiry();
+    // Mint every member that is already installed before the expiry is read.
+    // A member that already carries a propagated expression keeps it, so this
+    // loop only ever mints a key that never got a symbol, and removeExpiredKeys
+    // below already branches on a symbol minted in this same call.
+    for (BlockKey key : allKeys.values()) {
+      key.symbolizeCausynthHdfs11741ExpiryDate();
+    }
     removeExpiredKeys();
     this.currentKey = exportedKeys.getCurrentKey();
     BlockKey[] receivedKeys = exportedKeys.getAllKeys();
@@ -208,6 +239,12 @@ public class BlockTokenSecretManager extends
       if (receivedKeys[i] == null)
         continue;
       this.allKeys.put(receivedKeys[i].getKeyId(), receivedKeys[i]);
+    }
+    // Every occurrence of the declared expiry field is its own symbolic
+    // variable, so the mint is handed every installed member unconditionally.
+    // A member that already carries a propagated expression keeps it.
+    for (BlockKey key : allKeys.values()) {
+      key.symbolizeCausynthHdfs11741ExpiryDate();
     }
   }
 
@@ -230,7 +267,13 @@ public class BlockTokenSecretManager extends
       return false;
 
     LOG.info("Updating block keys");
-    symbolizeCausynthHdfs11741NameNodeExpiry();
+    // Mint every member that is already installed before the expiry is read.
+    // A member that already carries a propagated expression keeps it, so this
+    // loop only ever mints a key that never got a symbol, and removeExpiredKeys
+    // below already branches on a symbol minted in this same call.
+    for (BlockKey key : allKeys.values()) {
+      key.symbolizeCausynthHdfs11741ExpiryDate();
+    }
     removeExpiredKeys();
     // set final expiry date of retiring currentKey
     allKeys.put(currentKey.getKeyId(), new BlockKey(currentKey.getKeyId(),
@@ -245,49 +288,18 @@ public class BlockTokenSecretManager extends
     nextKey = new BlockKey(serialNo, Time.now() + 3
         * keyUpdateInterval + tokenLifetime, generateSecret());
     allKeys.put(nextKey.getKeyId(), nextKey);
-    // This exact object is the key promoted on the next rotation.  Publish K
-    // only after it owns its allKeys entry, so the accepted source occurrence
-    // precedes both the next NameNode expiry pass and every later export/DN
-    // installation of the same logical key.
-    nextKey.symbolizeCausynthHdfs11741CurrentKeyId(allKeys);
+    // K is NOT published here.  This rotation is interval-guarded and
+    // once-only: a replayed cluster never re-enters it, so a mint site here is
+    // planned but never executed and the source materializes nothing.  The
+    // exported currentKey is also the id the milestone is about, so the hook
+    // lives on the export path in exportKeys() instead.
+    // Every occurrence of the declared expiry field is its own symbolic
+    // variable, so the mint is handed every rotated member unconditionally.
+    // A member that already carries a propagated expression keeps it.
+    for (BlockKey key : allKeys.values()) {
+      key.symbolizeCausynthHdfs11741ExpiryDate();
+    }
     return true;
-  }
-
-  /**
-   * Resolves K through selector-only source authority, then symbolizes the
-   * expiry field on exactly {@code allKeys.get(K)}. No selector means no hook;
-   * a missing or inconsistent member is rejected rather than replaced by an
-   * iteration or runtime-type guess.
-   */
-  private void symbolizeCausynthHdfs11741NameNodeExpiry() {
-    BlockKey selected = causynthHdfs11741SelectedKey(
-        "HDFS11741.NAMENODE.SELECTED_KEY_EXPIRY");
-    if (selected != null) {
-      selected.symbolizeCausynthHdfs11741NameNodeExpiryDate();
-    }
-  }
-
-  private void symbolizeCausynthHdfs11741DataNodeExpiry() {
-    BlockKey selected = causynthHdfs11741SelectedKey(
-        "HDFS11741.DATANODE.SELECTED_KEY_EXPIRY");
-    if (selected != null) {
-      selected.symbolizeCausynthHdfs11741DataNodeExpiryDate();
-    }
-  }
-
-  private BlockKey causynthHdfs11741SelectedKey(String expirySourceId) {
-    Integer selectedKeyId = CausynthSymbolicSource.selectedIntValue(
-        "HDFS11741.NAMENODE.CURRENT_KEY_ID");
-    if (selectedKeyId == null) {
-      return null;
-    }
-    BlockKey selected = allKeys.get(selectedKeyId);
-    if (selected == null || selected.getKeyId() != selectedKeyId) {
-      CausynthSymbolicSource.reject(expirySourceId,
-          "selected keyId is absent or disagrees with the owning map");
-      return null;
-    }
-    return selected;
   }
 
   /** Generate an block token for current user */

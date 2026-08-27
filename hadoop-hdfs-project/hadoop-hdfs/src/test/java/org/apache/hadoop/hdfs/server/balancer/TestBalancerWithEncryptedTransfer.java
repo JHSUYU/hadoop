@@ -23,10 +23,33 @@ import org.apache.hadoop.hdfs.HdfsConfiguration;
 import org.apache.hadoop.ipc.CausynthTraceContext;
 import org.junit.After;
 import org.junit.Before;
+import org.junit.Rule;
 import org.junit.Test;
+import org.junit.rules.Timeout;
 
 public class TestBalancerWithEncryptedTransfer {
-  
+
+  /** Upstream per-method budget, for a {@link TestBalancer#TIMEOUT} of 40 s. */
+  private static final long DEFAULT_METHOD_TIMEOUT_MS = 60000L;
+
+  /**
+   * The per-method JUnit budget is the outer half of the optional timing
+   * bridge documented on {@link TestBalancer#CAUSYNTH_TEST_WAIT_PROPERTY}.
+   * The two have to move together: the smaller one is what actually fires, so
+   * raising {@link TestBalancer#TIMEOUT} alone would change nothing here.
+   * Scaling by the same factor keeps the upstream headroom the method needs
+   * for two cluster builds and several waits, and reduces to exactly the
+   * upstream 60 s when no property is set.  A rule replaces
+   * {@code @Test(timeout=...)} only because an annotation value has to be a
+   * compile-time constant.
+   */
+  private static final int TEST_TIMEOUT_MS = (int) Math.min(Integer.MAX_VALUE,
+      DEFAULT_METHOD_TIMEOUT_MS * TestBalancer.TIMEOUT
+          / TestBalancer.DEFAULT_TIMEOUT);
+
+  @Rule
+  public final Timeout methodTimeout = new Timeout(TEST_TIMEOUT_MS);
+
   private final Configuration conf = new HdfsConfiguration();
   private final Object traceClient = new Object();
   private long traceRequestId;
@@ -57,17 +80,17 @@ public class TestBalancerWithEncryptedTransfer {
     traceRequestId = 0L;
   }
   
-  @Test(timeout=60000)
+  @Test
   public void testEncryptedBalancer0() throws Exception {
     new TestBalancer().testBalancer0Internal(conf);
   }
   
-  @Test(timeout=60000)
+  @Test
   public void testEncryptedBalancer1() throws Exception {
     new TestBalancer().testBalancer1Internal(conf);
   }
   
-  @Test(timeout=60000)
+  @Test
   public void testEncryptedBalancer2() throws Exception {
     new TestBalancer().testBalancer2Internal(conf);
   }

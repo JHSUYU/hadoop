@@ -95,9 +95,6 @@ public class DelegationKey implements Writable {
     T collision = keys.get(keyId);
     if (collision != null && collision != this) {
       keyId = previousId;
-      CausynthSymbolicSource.reject(
-          "HDFS11741.NAMENODE.CURRENT_KEY_ID",
-          "modeled keyId collides with another key");
       return false;
     }
     keys.remove(previousId);
@@ -105,26 +102,23 @@ public class DelegationKey implements Writable {
     return true;
   }
 
-  /** Declares the expiry of the exact NameNode map member selected by K. */
-  public boolean symbolizeCausynthHdfs11741NameNodeExpiryDate() {
-    long previousExpiry = expiryDate;
+  /**
+   * Declares this key's own expiry as a symbolic source occurrence.
+   *
+   * <p>Every occurrence of the declared field is its own symbolic variable, so
+   * the hook is minted on whatever key it is handed rather than on a key the
+   * application asked GraphChecker to select. If this object's expiry already
+   * carries a propagated symbolic expression the runtime keeps that expression
+   * and the mint is a no-op.</p>
+   */
+  public boolean symbolizeCausynthHdfs11741ExpiryDate() {
+    DelegationKey owner = this;
+    long previousExpiry = owner.expiryDate;
     boolean symbolized = CausynthSymbolicSource.symbolize(
-        "HDFS11741.NAMENODE.SELECTED_KEY_EXPIRY", this,
+        "HDFS11741.KEY_EXPIRY", owner,
         "<org.apache.hadoop.security.token.delegation.DelegationKey: long expiryDate>");
     if (!symbolized) {
-      expiryDate = previousExpiry;
-    }
-    return symbolized;
-  }
-
-  /** Declares the expiry of the exact DataNode map member selected by K. */
-  public boolean symbolizeCausynthHdfs11741DataNodeExpiryDate() {
-    long previousExpiry = expiryDate;
-    boolean symbolized = CausynthSymbolicSource.symbolize(
-        "HDFS11741.DATANODE.SELECTED_KEY_EXPIRY", this,
-        "<org.apache.hadoop.security.token.delegation.DelegationKey: long expiryDate>");
-    if (!symbolized) {
-      expiryDate = previousExpiry;
+      owner.expiryDate = previousExpiry;
     }
     return symbolized;
   }

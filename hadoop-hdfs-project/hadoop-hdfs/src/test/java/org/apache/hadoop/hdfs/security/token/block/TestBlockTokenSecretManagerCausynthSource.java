@@ -20,6 +20,9 @@ package org.apache.hadoop.hdfs.security.token.block;
 import java.io.IOException;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.List;
 import java.util.Map;
 
 import org.apache.hadoop.io.DataInputBuffer;
@@ -38,16 +41,25 @@ import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
 
 public class TestBlockTokenSecretManagerCausynthSource {
+  private static final String EXPIRY_SIGNATURE =
+      "<org.apache.hadoop.security.token.delegation.DelegationKey: "
+          + "long expiryDate>";
+
   private static volatile Integer modeledKeyId;
-  private static volatile Integer selectedKeyId;
   private static volatile Long modeledExpiry;
   private static volatile Object symbolizedKeyIdOwner;
   private static volatile int concreteKeyIdBeforeModel;
   private static volatile int keyIdSymbolizeCalls;
-  private static volatile Object symbolizedOwner;
-  private static volatile String symbolizedSource;
-  private static volatile int symbolizeCalls;
-  private static volatile int rejectCalls;
+  /** Mints the VM actually performed, i.e. first mint of one owner+field. */
+  private static volatile int expirySymbolizeCalls;
+  /** Every entry into the hook, including a guard-suppressed repeat. */
+  private static volatile int expiryInvocations;
+  private static volatile Object lastExpiryOwner;
+  private static volatile String lastExpirySource;
+  private static volatile String lastExpiryFieldSignature;
+  private static final List<Object> EXPIRY_OWNERS = new ArrayList<>();
+  /** Models the VM guard: one symbol per (owner, field) occurrence. */
+  private static final List<Object[]> MINTED_PAIRS = new ArrayList<>();
 
   @Before
   public void installBridge() throws Exception {
@@ -56,161 +68,339 @@ public class TestBlockTokenSecretManagerCausynthSource {
     clearObservations();
   }
 
-  @Test
-  public void futureNextKeyDefinesKBeforeItsConsumersAndTarget()
-      throws Exception {
-    BlockTokenSecretManager master = master();
-    Map<Integer, BlockKey> masterKeys = allKeys(master);
-    int modeledK = 0;
-    while (masterKeys.containsKey(modeledK)) {
-      modeledK++;
-    }
-
-    // Rotation N creates the exact future key and publishes its keyId only
-    // after allKeys owns that same object.
-    modeledKeyId = modeledK;
-    assertTrue(master.updateKeys());
-    BlockKey futureKey = keyField(master, "nextKey");
-    assertEquals(1, keyIdSymbolizeCalls);
-    assertSame(futureKey, symbolizedKeyIdOwner);
-    assertEquals(modeledK, futureKey.getKeyId());
-    assertSame(futureKey, masterKeys.get(modeledK));
-    assertFalse(masterKeys.containsKey(concreteKeyIdBeforeModel));
-
-    // Export while K is still nextKey, and deserialize it so the worker owns
-    // a fresh object.  The lookup below is by the exact K map entry, not by
-    // scanning for an equal field value or a BlockKey runtime type.
-    ExportedBlockKeys beforePromotion = roundTrip(master.exportKeys());
-    BlockTokenSecretManager worker = new BlockTokenSecretManager(
-        1000L, 1000L, "bp", null, false);
-    worker.addKeys(beforePromotion);
-    BlockKey workerFutureKey = allKeys(worker).get(modeledK);
-    assertNotNull(workerFutureKey);
-    assertNotSame(futureKey, workerFutureKey);
-
-    // Rotation N+1 consumes the already-defined K for the exact NN member,
-    // then promotes it to currentKey.  Disable a new keyId model so this test
-    // continues to follow K rather than the following generation.
-    modeledKeyId = null;
-    selectedKeyId = modeledK;
-    modeledExpiry = Long.MAX_VALUE;
-    clearExpiryObservations();
-    assertTrue(master.updateKeys());
-    assertSame(futureKey, symbolizedOwner);
-    assertEquals("HDFS11741.NAMENODE.SELECTED_KEY_EXPIRY",
-        symbolizedSource);
-    assertEquals(modeledK, keyField(master, "currentKey").getKeyId());
-
-    // A wire-equivalent fresh export carries the promoted K.  DN addKeys
-    // consults its pre-existing exact K member before installing this copy,
-    // and the same K reaches the target lookup successfully.
-    ExportedBlockKeys promoted = roundTrip(master.exportKeys());
-    assertEquals(modeledK, promoted.getCurrentKey().getKeyId());
-    clearExpiryObservations();
-    worker.addKeys(promoted);
-    assertSame(workerFutureKey, symbolizedOwner);
-    assertEquals("HDFS11741.DATANODE.SELECTED_KEY_EXPIRY",
-        symbolizedSource);
-    assertNotNull(worker.retrieveDataEncryptionKey(
-        modeledK, new byte[]{1, 2, 3, 4}));
-    assertEquals(0, rejectCalls);
-  }
-
   @After
   public void removeBridge() throws Exception {
     resetBridge();
   }
 
   @Test
-  public void nameNodeExpiryHookUsesOnlyTheMapMemberSelectedByK()
+  public void bothLoopsMintEveryMasterKeyExactlyOnceInUpdateKeys()
       throws Exception {
-    BlockTokenSecretManager manager = master();
-    ExportedBlockKeys exported = manager.exportKeys();
-    BlockKey selected = exported.getCurrentKey();
-    BlockKey other = anotherKey(exported, selected.getKeyId());
-    long otherExpiry = other.getExpiryDate();
-    clearObservations();
-    selectedKeyId = selected.getKeyId();
-    modeledExpiry = Long.MIN_VALUE;
-
-    assertTrue(manager.updateKeys());
-
-    assertEquals(1, symbolizeCalls);
-    assertSame(selected, symbolizedOwner);
-    assertEquals("HDFS11741.NAMENODE.SELECTED_KEY_EXPIRY",
-        symbolizedSource);
-    assertEquals(otherExpiry, other.getExpiryDate());
-    assertEquals(0, rejectCalls);
-  }
-
-  @Test
-  public void dataNodeExpiryHookUsesTheSameExactKLookup() throws Exception {
     BlockTokenSecretManager master = master();
+    Map<Integer, BlockKey> allKeys = allKeys(master);
+    List<BlockKey> before = new ArrayList<>(allKeys.values());
+    clearObservations();
+    modeledExpiry = Long.MAX_VALUE;
+
+    assertTrue(master.updateKeys());
+
+    assertTrue("master rotated no keys", allKeys.size() >= 2);
+    assertBothLoopsMintedExactlyOnce(before, allKeys.values());
+    for (BlockKey key : allKeys.values()) {
+      assertEquals(Long.MAX_VALUE, key.getExpiryDate());
+    }
+    assertEquals("HDFS11741.KEY_EXPIRY", lastExpirySource);
+    assertEquals(EXPIRY_SIGNATURE, lastExpiryFieldSignature);
+    assertTrue(mintedExpiryOn(lastExpiryOwner));
+  }
+
+  @Test
+  public void bothLoopsMintEveryWorkerKeyExactlyOnceInAddKeys()
+      throws Exception {
+    BlockTokenSecretManager master = master();
+    ExportedBlockKeys exported = roundTrip(master.exportKeys());
+    BlockTokenSecretManager worker = worker();
+    Map<Integer, BlockKey> workerKeys = allKeys(worker);
+    List<BlockKey> before = new ArrayList<>(workerKeys.values());
+    clearObservations();
+    modeledExpiry = Long.MAX_VALUE;
+
+    worker.addKeys(exported);
+
+    assertTrue("worker installed no keys", workerKeys.size() >= 2);
+    assertBothLoopsMintedExactlyOnce(before, workerKeys.values());
+    for (BlockKey key : workerKeys.values()) {
+      assertEquals(Long.MAX_VALUE, key.getExpiryDate());
+    }
+    assertEquals("HDFS11741.KEY_EXPIRY", lastExpirySource);
+    assertEquals(EXPIRY_SIGNATURE, lastExpiryFieldSignature);
+  }
+
+  /**
+   * A member that survives the install is handed to both loops in the same
+   * call.  The VM guard makes the second hand-off a no-op, so the occurrence
+   * still owns exactly one symbol.
+   */
+  @Test
+  public void guardMakesTheSecondMintOfOneOccurrenceANoOp() throws Exception {
+    BlockTokenSecretManager master = master();
+    ExportedBlockKeys exported = roundTrip(master.exportKeys());
+    BlockTokenSecretManager worker = worker();
+    modeledExpiry = Long.MAX_VALUE;
+    worker.addKeys(exported);
+    Map<Integer, BlockKey> workerKeys = allKeys(worker);
+    assertTrue("worker installed too few keys", workerKeys.size() >= 2);
+
+    // Refresh only one installed key; the rest survive the install and are
+    // therefore reached by both loops of the same call.
+    BlockKey refreshed = exported.getAllKeys()[0];
+    BlockKey survivor = null;
+    for (BlockKey key : workerKeys.values()) {
+      if (key.getKeyId() != refreshed.getKeyId()) {
+        survivor = key;
+      }
+    }
+    assertNotNull("no surviving worker key", survivor);
+    ExportedBlockKeys partial = roundTrip(new ExportedBlockKeys(true, 1000L,
+        1000L, exported.getCurrentKey(), new BlockKey[]{refreshed}));
+    List<BlockKey> before = new ArrayList<>(workerKeys.values());
+    clearObservations();
+    modeledExpiry = Long.MAX_VALUE;
+
+    worker.addKeys(partial);
+
+    BlockKey installed = workerKeys.get(refreshed.getKeyId());
+    assertNotSame("the refreshed key was not replaced", refreshed, installed);
+    assertSame("the survivor was replaced", survivor,
+        workerKeys.get(survivor.getKeyId()));
+    int survivors = intersectionSize(before, workerKeys.values());
+    assertTrue("no member survived the install", survivors > 0);
+    // Each survivor was handed to the hook twice and the guard suppressed the
+    // repeat, so the hook entries exceed the performed mints by exactly the
+    // number of survivors.
+    assertEquals(survivors, expiryInvocations - expirySymbolizeCalls);
+    assertBothLoopsMintedExactlyOnce(before, workerKeys.values());
+  }
+
+  /**
+   * The pre-install loop runs before {@code removeExpiredKeys()}, so a member
+   * that never carried a symbol is symbolized in time for the removal branch
+   * of the very same call.  Without that loop the stale key below would
+   * survive on its concrete far-future expiry.
+   */
+  @Test
+  public void removalBranchSeesASymbolMintedInTheSameCall() throws Exception {
+    BlockTokenSecretManager master = master();
+    ExportedBlockKeys exported = roundTrip(master.exportKeys());
+    BlockTokenSecretManager worker = worker();
+    Map<Integer, BlockKey> workerKeys = allKeys(worker);
+    int staleId = 0;
+    while (containsId(exported, staleId)) {
+      staleId++;
+    }
+    workerKeys.put(staleId,
+        new BlockKey(staleId, Long.MAX_VALUE, (byte[]) null));
+    clearObservations();
+    modeledExpiry = Long.MIN_VALUE;
+
+    worker.addKeys(exported);
+
+    assertFalse("the stale key outlived a symbol minted in this call",
+        workerKeys.containsKey(staleId));
+    assertEquals(exported.getAllKeys().length, workerKeys.size());
+    // One hook entry for the stale member, then one per installed member.
+    assertEquals(1 + workerKeys.size(), expiryInvocations);
+    assertEquals(expiryInvocations, expirySymbolizeCalls);
+    assertEquals(expirySymbolizeCalls, distinctExpiryOwners());
+  }
+
+  /**
+   * K is published on the export path, on the exact key the NameNode hands
+   * out.  The owning map is re-keyed before the export reads it, so the wire
+   * image the Balancer and every DataNode receive carries the modeled id.
+   */
+  @Test
+  public void exportPublishesKOnTheKeyItHandsOut() throws Exception {
+    BlockTokenSecretManager master = master();
+    Map<Integer, BlockKey> masterKeys = allKeys(master);
+    BlockKey exportedKey = keyField(master, "currentKey");
+    int modeledK = 0;
+    while (masterKeys.containsKey(modeledK)) {
+      modeledK++;
+    }
+    int concreteId = exportedKey.getKeyId();
+    clearObservations();
+    modeledKeyId = modeledK;
+
     ExportedBlockKeys exported = master.exportKeys();
-    BlockTokenSecretManager worker = new BlockTokenSecretManager(
-        1000L, 1000L, "bp", null, false);
-    worker.addKeys(exported);
-    BlockKey selected = exported.getCurrentKey();
+
+    assertEquals(1, keyIdSymbolizeCalls);
+    assertSame(exportedKey, symbolizedKeyIdOwner);
+    assertEquals(concreteId, concreteKeyIdBeforeModel);
+    assertEquals(modeledK, exportedKey.getKeyId());
+    assertSame(exportedKey, masterKeys.get(modeledK));
+    assertFalse(masterKeys.containsKey(concreteKeyIdBeforeModel));
+    // The wire image carries the published K: the exported currentKey is this
+    // same object, and the exported array was read off the re-keyed map.
+    assertSame(exportedKey, exported.getCurrentKey());
+    assertEquals(modeledK, exported.getCurrentKey().getKeyId());
+    assertTrue(containsId(exported, modeledK));
+    assertFalse(containsId(exported, concreteId));
+
+    // A wire round trip gives the worker fresh objects; each of those is its
+    // own occurrence and gets its own expiry mint.
+    ExportedBlockKeys wire = roundTrip(exported);
+    BlockTokenSecretManager worker = worker();
+    Map<Integer, BlockKey> workerKeys = allKeys(worker);
+    List<BlockKey> workerBefore = new ArrayList<>(workerKeys.values());
     clearObservations();
-    selectedKeyId = selected.getKeyId();
-    modeledExpiry = Long.MIN_VALUE;
+    modeledExpiry = Long.MAX_VALUE;
+    worker.addKeys(wire);
 
-    worker.addKeys(exported);
+    BlockKey workerExportedKey = workerKeys.get(modeledK);
+    assertNotNull(workerExportedKey);
+    assertNotSame(exportedKey, workerExportedKey);
+    assertTrue(mintedExpiryOn(workerExportedKey));
+    assertBothLoopsMintedExactlyOnce(workerBefore, workerKeys.values());
+    assertNotNull(worker.retrieveDataEncryptionKey(
+        modeledK, new byte[]{1, 2, 3, 4}));
+  }
 
-    assertEquals(1, symbolizeCalls);
-    assertSame(selected, symbolizedOwner);
-    assertEquals("HDFS11741.DATANODE.SELECTED_KEY_EXPIRY",
-        symbolizedSource);
-    assertEquals(0, rejectCalls);
+  /**
+   * The NameNode's selected-key expiry is published on the export path too,
+   * on the same key K is published on.  Without this the only NameNode-side
+   * mint of the expiry sits in the interval-guarded once-only rotation, which
+   * a replayed cluster never re-enters, so the source materializes nothing.
+   */
+  @Test
+  public void exportPublishesTheSelectedKeyExpiry() throws Exception {
+    BlockTokenSecretManager master = master();
+    BlockKey exportedKey = keyField(master, "currentKey");
+    clearObservations();
+    modeledExpiry = 4242424242L;
+
+    ExportedBlockKeys exported = master.exportKeys();
+
+    assertEquals(1, expiryInvocations);
+    assertEquals(1, expirySymbolizeCalls);
+    assertSame(exportedKey, lastExpiryOwner);
+    assertEquals("HDFS11741.KEY_EXPIRY", lastExpirySource);
+    assertEquals(EXPIRY_SIGNATURE, lastExpiryFieldSignature);
+    assertTrue(mintedExpiryOn(exportedKey));
+    // The wire image carries the modeled expiry: the exported currentKey is
+    // this same object and the exported array was read off the same map.
+    assertSame(exportedKey, exported.getCurrentKey());
+    assertEquals(4242424242L, exported.getCurrentKey().getExpiryDate());
+    assertTrue(containsExpiry(exported, 4242424242L));
+  }
+
+  /**
+   * A second export re-enters the hook and re-mints nothing: the occurrence
+   * already carries an expression, so the guard makes the repeat a no-op.
+   */
+  @Test
+  public void aSecondExportRemintsNoExpiry() throws Exception {
+    BlockTokenSecretManager master = master();
+    BlockKey exportedKey = keyField(master, "currentKey");
+    clearObservations();
+    modeledExpiry = 4242424242L;
+
+    master.exportKeys();
+    master.exportKeys();
+
+    assertEquals(2, expiryInvocations);
+    assertEquals(1, expirySymbolizeCalls);
+    assertEquals(1, distinctExpiryOwners());
+    assertSame(exportedKey, lastExpiryOwner);
+  }
+
+  /**
+   * Worker mode exports nothing, so it enters neither hook: the role guard
+   * above both mints is not a selector on the published occurrence.
+   */
+  @Test
+  public void workerExportEntersNoHook() throws Exception {
+    BlockTokenSecretManager worker = worker();
+    clearObservations();
+    modeledExpiry = 4242424242L;
+    modeledKeyId = 7;
+
+    assertNull(worker.exportKeys());
+
+    assertEquals(0, expiryInvocations);
+    assertEquals(0, expirySymbolizeCalls);
+    assertEquals(0, keyIdSymbolizeCalls);
+  }
+
+  /**
+   * The rotation no longer publishes K.  It is interval-guarded and once-only,
+   * so a mint site there is planned from a tracing pass and then never
+   * executed by a replayed cluster.
+   */
+  @Test
+  public void rotationPublishesNoK() throws Exception {
+    BlockTokenSecretManager master = master();
+    Map<Integer, BlockKey> masterKeys = allKeys(master);
+    int modeledK = 0;
+    while (masterKeys.containsKey(modeledK)) {
+      modeledK++;
+    }
+    List<BlockKey> before = new ArrayList<>(masterKeys.values());
+    clearObservations();
+    modeledKeyId = modeledK;
+    modeledExpiry = Long.MAX_VALUE;
+
+    assertTrue(master.updateKeys());
+
+    assertEquals(0, keyIdSymbolizeCalls);
+    assertNull(symbolizedKeyIdOwner);
+    assertFalse(masterKeys.containsKey(modeledK));
+    // The expiry mints are untouched by the move.
+    assertBothLoopsMintedExactlyOnce(before, masterKeys.values());
   }
 
   @Test
-  public void absentSelectedKRejectsWithoutTryingAnotherElement()
-      throws Exception {
-    BlockTokenSecretManager manager = master();
-    Map<Integer, BlockKey> allKeys = allKeys(manager);
-    int absent = 0;
-    while (allKeys.containsKey(absent)) {
-      absent++;
+  public void managerExposesNoSelectedKeyMachinery() {
+    for (Method method
+        : BlockTokenSecretManager.class.getDeclaredMethods()) {
+      String name = method.getName();
+      assertFalse("selector survives: " + method,
+          "causynthHdfs11741SelectedKey".equals(name));
+      assertFalse("selected NN expiry hook survives: " + method,
+          "symbolizeCausynthHdfs11741NameNodeExpiry".equals(name));
+      assertFalse("selected DN expiry hook survives: " + method,
+          "symbolizeCausynthHdfs11741DataNodeExpiry".equals(name));
     }
-    clearObservations();
-    selectedKeyId = absent;
-    modeledExpiry = Long.MIN_VALUE;
-
-    assertTrue(manager.updateKeys());
-
-    assertEquals(0, symbolizeCalls);
-    assertEquals(1, rejectCalls);
-    assertNull(symbolizedOwner);
+    for (Method method : CausynthSymbolicSource.class.getDeclaredMethods()) {
+      assertFalse("selector survives on the bridge: " + method,
+          "selectedIntValue".equals(method.getName()));
+      assertFalse("reject survives on the bridge: " + method,
+          "reject".equals(method.getName()));
+    }
   }
 
-  @Test
-  public void inconsistentMapEntryRejectsInsteadOfGuessingByType()
-      throws Exception {
-    BlockTokenSecretManager manager = master();
-    Map<Integer, BlockKey> allKeys = allKeys(manager);
-    int selected = 0;
-    while (allKeys.containsKey(selected)
-        || allKeys.containsKey(selected + 1)) {
-      selected += 2;
+  /**
+   * Both loops covered the whole map at their own moment, and no occurrence
+   * owns more than one symbol.
+   */
+  private static void assertBothLoopsMintedExactlyOnce(
+      List<BlockKey> before, Collection<BlockKey> after) {
+    assertEquals("both loops must walk the whole map",
+        before.size() + after.size(), expiryInvocations);
+    List<Object> union = new ArrayList<>();
+    for (BlockKey key : before) {
+      addDistinct(union, key);
     }
-    allKeys.put(selected, new BlockKey(selected + 1, Long.MAX_VALUE,
-        (byte[]) null));
-    clearObservations();
-    selectedKeyId = selected;
-    modeledExpiry = Long.MIN_VALUE;
+    for (BlockKey key : after) {
+      addDistinct(union, key);
+    }
+    assertEquals("one mint per distinct occurrence",
+        union.size(), expirySymbolizeCalls);
+    assertEquals("one mint per distinct occurrence",
+        union.size(), distinctExpiryOwners());
+    for (Object owner : union) {
+      assertTrue("no expiry mint for " + owner, mintedExpiryOn(owner));
+    }
+  }
 
-    assertTrue(manager.updateKeys());
-
-    assertEquals(0, symbolizeCalls);
-    assertEquals(1, rejectCalls);
+  private static int intersectionSize(
+      List<BlockKey> before, Collection<BlockKey> after) {
+    List<Object> shared = new ArrayList<>();
+    for (BlockKey key : before) {
+      for (BlockKey other : after) {
+        if (key == other) {
+          addDistinct(shared, key);
+        }
+      }
+    }
+    return shared.size();
   }
 
   public static boolean symbolizeForTest(String sourceId, Object owner,
       String fieldSignature) {
     try {
       if (fieldSignature.endsWith(" int keyId>")) {
-        if (modeledKeyId == null) {
+        if (modeledKeyId == null || alreadyMinted(owner, fieldSignature)) {
           return false;
         }
         Field keyId = owner.getClass().getSuperclass()
@@ -220,17 +410,29 @@ public class TestBlockTokenSecretManagerCausynthSource {
         keyId.setInt(owner, modeledKeyId);
         keyIdSymbolizeCalls++;
         symbolizedKeyIdOwner = owner;
+        MINTED_PAIRS.add(new Object[]{owner, fieldSignature});
         return true;
       }
-      if (fieldSignature.endsWith(" long expiryDate>")
-          && modeledExpiry != null) {
+      if (fieldSignature.endsWith(" long expiryDate>")) {
+        expiryInvocations++;
+        lastExpiryOwner = owner;
+        lastExpirySource = sourceId;
+        lastExpiryFieldSignature = fieldSignature;
+        // The VM keeps a propagated expression, so a repeat is a no-op that
+        // still reports success to the application hook.
+        if (alreadyMinted(owner, fieldSignature)) {
+          return true;
+        }
+        if (modeledExpiry == null) {
+          return false;
+        }
         Field expiry = owner.getClass().getSuperclass()
             .getDeclaredField("expiryDate");
         expiry.setAccessible(true);
         expiry.setLong(owner, modeledExpiry);
-        symbolizeCalls++;
-        symbolizedOwner = owner;
-        symbolizedSource = sourceId;
+        expirySymbolizeCalls++;
+        EXPIRY_OWNERS.add(owner);
+        MINTED_PAIRS.add(new Object[]{owner, fieldSignature});
         return true;
       }
       return false;
@@ -239,12 +441,60 @@ public class TestBlockTokenSecretManagerCausynthSource {
     }
   }
 
-  public static Integer selectIntForTest(String sourceId) {
-    return selectedKeyId;
+  private static boolean alreadyMinted(Object owner, String fieldSignature) {
+    for (Object[] pair : MINTED_PAIRS) {
+      if (pair[0] == owner && fieldSignature.equals(pair[1])) {
+        return true;
+      }
+    }
+    return false;
   }
 
-  public static void rejectForTest(String sourceId, String detail) {
-    rejectCalls++;
+  private static boolean containsExpiry(ExportedBlockKeys keys,
+      long expiryDate) {
+    for (BlockKey key : keys.getAllKeys()) {
+      if (key != null && key.getExpiryDate() == expiryDate) {
+        return true;
+      }
+    }
+    return keys.getCurrentKey() != null
+        && keys.getCurrentKey().getExpiryDate() == expiryDate;
+  }
+
+  private static boolean containsId(ExportedBlockKeys keys, int keyId) {
+    for (BlockKey key : keys.getAllKeys()) {
+      if (key != null && key.getKeyId() == keyId) {
+        return true;
+      }
+    }
+    return keys.getCurrentKey() != null
+        && keys.getCurrentKey().getKeyId() == keyId;
+  }
+
+  private static boolean mintedExpiryOn(Object owner) {
+    for (Object seen : EXPIRY_OWNERS) {
+      if (seen == owner) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  private static void addDistinct(List<Object> distinct, Object candidate) {
+    for (Object known : distinct) {
+      if (known == candidate) {
+        return;
+      }
+    }
+    distinct.add(candidate);
+  }
+
+  private static int distinctExpiryOwners() {
+    List<Object> distinct = new ArrayList<>();
+    for (Object seen : EXPIRY_OWNERS) {
+      addDistinct(distinct, seen);
+    }
+    return distinct.size();
   }
 
   private static BlockTokenSecretManager master() {
@@ -252,13 +502,8 @@ public class TestBlockTokenSecretManagerCausynthSource {
         false);
   }
 
-  private static BlockKey anotherKey(ExportedBlockKeys keys, int selected) {
-    for (BlockKey key : keys.getAllKeys()) {
-      if (key != null && key.getKeyId() != selected) {
-        return key;
-      }
-    }
-    throw new AssertionError("master exported no second key");
+  private static BlockTokenSecretManager worker() {
+    return new BlockTokenSecretManager(1000L, 1000L, "bp", null, false);
   }
 
   private static BlockKey keyField(BlockTokenSecretManager manager,
@@ -289,50 +534,37 @@ public class TestBlockTokenSecretManagerCausynthSource {
 
   private static void clearObservations() {
     modeledKeyId = null;
-    selectedKeyId = null;
     modeledExpiry = null;
     symbolizedKeyIdOwner = null;
     concreteKeyIdBeforeModel = 0;
     keyIdSymbolizeCalls = 0;
-    clearExpiryObservations();
-    rejectCalls = 0;
-  }
-
-  private static void clearExpiryObservations() {
-    symbolizedOwner = null;
-    symbolizedSource = null;
-    symbolizeCalls = 0;
+    expirySymbolizeCalls = 0;
+    expiryInvocations = 0;
+    lastExpiryOwner = null;
+    lastExpirySource = null;
+    lastExpiryFieldSignature = null;
+    EXPIRY_OWNERS.clear();
+    MINTED_PAIRS.clear();
   }
 
   private static void installTestBridge() throws Exception {
-    setBridgeMethod("symbolizer", "symbolizeForTest", String.class,
-        Object.class, String.class);
-    setBridgeMethod("rejecter", "rejectForTest", String.class,
-        String.class);
-    setBridgeMethod("intSelector", "selectIntForTest", String.class);
+    Method method = TestBlockTokenSecretManagerCausynthSource.class
+        .getDeclaredMethod("symbolizeForTest", String.class, Object.class,
+            String.class);
+    Field field = CausynthSymbolicSource.class.getDeclaredField("symbolizer");
+    field.setAccessible(true);
+    field.set(null, method);
     Field resolved = CausynthSymbolicSource.class.getDeclaredField("resolved");
     resolved.setAccessible(true);
     resolved.setBoolean(null, true);
   }
 
-  private static void setBridgeMethod(String fieldName, String methodName,
-      Class<?>... parameters) throws Exception {
-    Method method = TestBlockTokenSecretManagerCausynthSource.class
-        .getDeclaredMethod(methodName, parameters);
-    Field field = CausynthSymbolicSource.class.getDeclaredField(fieldName);
-    field.setAccessible(true);
-    field.set(null, method);
-  }
-
   private static void resetBridge() throws Exception {
-    for (String fieldName : new String[]{"symbolizer", "rejecter",
-        "intSelector"}) {
-      Field field = CausynthSymbolicSource.class.getDeclaredField(fieldName);
-      field.setAccessible(true);
-      field.set(null, null);
-    }
+    Field field = CausynthSymbolicSource.class.getDeclaredField("symbolizer");
+    field.setAccessible(true);
+    field.set(null, null);
     Field resolved = CausynthSymbolicSource.class.getDeclaredField("resolved");
     resolved.setAccessible(true);
-    resolved.setBoolean(null, false);
+    resolved.setBoolean(null, true);
   }
 }

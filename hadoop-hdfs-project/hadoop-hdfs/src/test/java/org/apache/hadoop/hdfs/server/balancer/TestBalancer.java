@@ -104,6 +104,7 @@ import org.apache.hadoop.hdfs.protocol.HdfsConstants;
 import org.apache.hadoop.hdfs.protocol.HdfsConstants.DatanodeReportType;
 import org.apache.hadoop.hdfs.protocol.LocatedBlock;
 import org.apache.hadoop.hdfs.protocol.LocatedBlocks;
+import org.apache.hadoop.hdfs.security.token.block.BlockTokenSecretManager;
 import org.apache.hadoop.hdfs.server.balancer.Balancer.Cli;
 import org.apache.hadoop.hdfs.server.balancer.Balancer.Result;
 import org.apache.hadoop.hdfs.server.blockmanagement.BlockManager;
@@ -175,7 +176,37 @@ public class TestBalancer {
 
   ClientProtocol client;
 
-  static final long TIMEOUT = 40000L; //msec
+  /**
+   * Optional test-only timing bridge for GraphChecker concolic replay.
+   *
+   * <p>Replay executes the selected production methods interpretively, so a
+   * single NameNode pause can be orders of magnitude longer than in an
+   * ordinary JVM.  Two upstream budgets are then too tight and make the run
+   * fail for a reason that has nothing to do with HDFS-11741: the DataNode
+   * expiry budget {@link DatanodeManager} derives from {@link #initConf}
+   * (11 s) removes a healthy DataNode, and {@link #TIMEOUT} (40 s) expires
+   * while the cluster is still catching up.  The launcher therefore passes
+   * these budgets as system properties.  They cannot travel through a
+   * configuration overlay, because a value this test assigns programmatically
+   * wins over any supplied resource, and the expiry budget has no
+   * configuration key at all.
+   *
+   * <p>All three are optional.  They are absent for an ordinary
+   * {@code mvn test} run and for the uninstrumented discovery pass, and every
+   * value below is then exactly the upstream one.  This is a timing budget
+   * only: it does not change heartbeat polling, RPC traffic, or the selected
+   * causal state.
+   */
+  static final String CAUSYNTH_HEARTBEAT_EXPIRE_PROPERTY =
+      "causynth.hdfs.heartbeat.expire.interval.ms";
+  static final String CAUSYNTH_KEY_UPDATE_PROPERTY =
+      "causynth.hdfs.key.update.interval.ms";
+  static final String CAUSYNTH_TEST_WAIT_PROPERTY =
+      "causynth.hdfs.test.wait.timeout.ms";
+
+  static final long DEFAULT_TIMEOUT = 40000L; //msec
+  static final long TIMEOUT =
+      causynthTimingMillis(CAUSYNTH_TEST_WAIT_PROPERTY, DEFAULT_TIMEOUT);
   static final double CAPACITY_ALLOWED_VARIANCE = 0.005;  // 0.5%
   static final double BALANCE_ALLOWED_VARIANCE = 0.11;    // 10%+delta
   static final int DEFAULT_BLOCK_SIZE = 100;
@@ -189,6 +220,41 @@ public class TestBalancer {
   public static void initTestSetup() {
     // do not create id file since it occupies the disk space
     NameNodeConnector.setWrite2IdFile(false);
+  }
+
+  /**
+   * Reads one optional millisecond budget of the timing bridge described on
+   * {@link #CAUSYNTH_TEST_WAIT_PROPERTY}.  An absent property yields
+   * {@code defaultMillis}, so an ordinary run keeps upstream behaviour; a
+   * property that is present but is not a positive number of milliseconds
+   * fails the test instead of silently falling back to a surprising budget.
+   */
+  static long causynthTimingMillis(String property, long defaultMillis) {
+    final String raw = System.getProperty(property);
+    if (raw == null) {
+      return defaultMillis;
+    }
+    long millis;
+    try {
+      millis = Long.parseLong(raw.trim());
+    } catch (NumberFormatException malformed) {
+      throw new IllegalArgumentException("Invalid -D" + property + "=\"" + raw
+          + "\": expected a positive number of milliseconds", malformed);
+    }
+    if (millis <= 0L) {
+      throw new IllegalArgumentException("Invalid -D" + property + "=\"" + raw
+          + "\": expected a positive number of milliseconds");
+    }
+    return millis;
+  }
+
+  /**
+   * @return the budget requested by {@code property}, or {@code -1} when the
+   *         property is absent.  A present value is always positive, so
+   *         {@code -1} is unambiguous.
+   */
+  static long causynthOptionalTimingMillis(String property) {
+    return causynthTimingMillis(property, -1L);
   }
 
   static void initConf(Configuration conf) {
@@ -435,6 +501,7 @@ public class TestBalancer {
    * no-op and does not change the Hadoop test.
    */
   private void bindClusterSources(long epoch) {
+    applyCausynthClusterTimings();
     if (!CausynthTraceContext.isAvailable()) {
       return;
     }
@@ -454,6 +521,52 @@ public class TestBalancer {
       Object anchor = traceDataNodes.get(index);
       registerOrRestart(anchor, "DATANODE", "cluster0/dn" + index, epoch);
       bindDataNodeAliases(dataNodes.get(index), anchor);
+    }
+  }
+
+  /**
+   * Applies the optional replay timing budget described on
+   * {@link #CAUSYNTH_TEST_WAIT_PROPERTY} to the live cluster.  Both values
+   * live on objects that are rebuilt with the cluster, so this runs from
+   * {@link #bindClusterSources(long)}, i.e. after every construction and
+   * restart.  With neither property set it is a no-op and the cluster keeps
+   * its upstream timing.
+   */
+  private void applyCausynthClusterTimings() {
+    final long expireMs =
+        causynthOptionalTimingMillis(CAUSYNTH_HEARTBEAT_EXPIRE_PROPERTY);
+    final long keyUpdateMs =
+        causynthOptionalTimingMillis(CAUSYNTH_KEY_UPDATE_PROPERTY);
+    if (expireMs < 0L && keyUpdateMs < 0L) {
+      return;
+    }
+    LOG.info("GraphChecker test timing: wait budget is " + TIMEOUT + " ms (-D"
+        + CAUSYNTH_TEST_WAIT_PROPERTY + ")");
+    final BlockManager blockManager =
+        cluster.getNameNode().getNamesystem().getBlockManager();
+    if (expireMs >= 0L) {
+      // There is no configuration key for the expiry budget: DatanodeManager
+      // derives it from the recheck and heartbeat intervals, so the live
+      // object is the only place it can be overridden.
+      blockManager.getDatanodeManager().setHeartbeatExpireInterval(expireMs);
+      LOG.info("GraphChecker test timing: DataNode expiry budget set to "
+          + expireMs + " ms (-D" + CAUSYNTH_HEARTBEAT_EXPIRE_PROPERTY + ")");
+    }
+    if (keyUpdateMs >= 0L) {
+      final BlockTokenSecretManager secretManager =
+          blockManager.getBlockTokenSecretManager();
+      if (secretManager == null) {
+        LOG.info("GraphChecker test timing: block access tokens are disabled,"
+            + " -D" + CAUSYNTH_KEY_UPDATE_PROPERTY + " not applicable");
+      } else {
+        // The two configuration keys for this budget are in minutes; only the
+        // live setter takes milliseconds without rounding.
+        secretManager.setKeyUpdateIntervalForTesting(keyUpdateMs);
+        LOG.info("GraphChecker test timing: block key update interval set to "
+            + keyUpdateMs + " ms (-D" + CAUSYNTH_KEY_UPDATE_PROPERTY
+            + "), exported as "
+            + blockManager.getBlockKeys().getKeyUpdateInterval() + " ms");
+      }
     }
   }
 

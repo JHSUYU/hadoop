@@ -33,12 +33,14 @@ import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
 
 public class TestDelegationKeyCausynthSource {
+  private static final String EXPIRY_SIGNATURE =
+      "<org.apache.hadoop.security.token.delegation.DelegationKey: "
+          + "long expiryDate>";
+
   private static volatile Integer modeledKeyId;
   private static volatile Long modeledExpiryDate;
-  private static volatile Integer selectedIntValue;
   private static volatile boolean runtimeResult;
   private static volatile int calls;
-  private static volatile int rejectCalls;
   private static volatile String lastSourceId;
   private static volatile String lastFieldSignature;
   private static volatile Object lastOwner;
@@ -48,10 +50,8 @@ public class TestDelegationKeyCausynthSource {
     resetCausynthSymbolizer();
     modeledKeyId = null;
     modeledExpiryDate = null;
-    selectedIntValue = null;
     runtimeResult = true;
     calls = 0;
-    rejectCalls = 0;
     lastSourceId = null;
     lastFieldSignature = null;
     lastOwner = null;
@@ -62,7 +62,6 @@ public class TestDelegationKeyCausynthSource {
   public void clearBridge() throws Exception {
     modeledKeyId = null;
     modeledExpiryDate = null;
-    selectedIntValue = null;
     resetCausynthSymbolizer();
   }
 
@@ -93,7 +92,7 @@ public class TestDelegationKeyCausynthSource {
   }
 
   @Test
-  public void occupiedModeledIdRefusesWithoutOverwritingEitherEntry() {
+  public void occupiedModeledIdRestoresSilentlyWithoutARejectCall() {
     DelegationKey key = new DelegationKey(7, 100L, (byte[]) null);
     DelegationKey occupied = new DelegationKey(9, 100L, (byte[]) null);
     Map<Integer, DelegationKey> keys = new HashMap<>();
@@ -105,7 +104,7 @@ public class TestDelegationKeyCausynthSource {
     assertEquals(7, key.getKeyId());
     assertSame(key, keys.get(7));
     assertSame(occupied, keys.get(9));
-    assertEquals(1, rejectCalls);
+    assertEquals(1, calls);
   }
 
   @Test
@@ -123,49 +122,81 @@ public class TestDelegationKeyCausynthSource {
   }
 
   @Test
-  public void nameNodeExpiryUsesTheExactInstanceAndDeclaredSource() {
-    DelegationKey selected = new DelegationKey(7, 100L, (byte[]) null);
+  public void expiryMintsOnThisAndDeclaresTheExactField() {
+    DelegationKey key = new DelegationKey(7, 100L, (byte[]) null);
     DelegationKey other = new DelegationKey(8, 200L, (byte[]) null);
     modeledExpiryDate = 55L;
 
-    assertTrue(selected.symbolizeCausynthHdfs11741NameNodeExpiryDate());
-    assertEquals(55L, selected.getExpiryDate());
+    assertTrue(key.symbolizeCausynthHdfs11741ExpiryDate());
+
+    assertEquals(1, calls);
+    assertEquals(55L, key.getExpiryDate());
     assertEquals(200L, other.getExpiryDate());
-    assertSame(selected, lastOwner);
-    assertEquals("HDFS11741.NAMENODE.SELECTED_KEY_EXPIRY", lastSourceId);
-    assertEquals(
-        "<org.apache.hadoop.security.token.delegation.DelegationKey: long expiryDate>",
-        lastFieldSignature);
+    assertSame(key, lastOwner);
+    assertEquals("HDFS11741.KEY_EXPIRY", lastSourceId);
+    assertEquals(EXPIRY_SIGNATURE, lastFieldSignature);
   }
 
   @Test
-  public void dataNodeExpiryHasAnIndependentSourceIdentity() {
-    DelegationKey selected = new DelegationKey(7, 100L, (byte[]) null);
-    modeledExpiryDate = 66L;
+  public void everyOccurrenceOfTheFieldIsItsOwnMint() {
+    DelegationKey first = new DelegationKey(7, 100L, (byte[]) null);
+    DelegationKey second = new DelegationKey(8, 200L, (byte[]) null);
+    modeledExpiryDate = 55L;
 
-    assertTrue(selected.symbolizeCausynthHdfs11741DataNodeExpiryDate());
-    assertEquals(66L, selected.getExpiryDate());
-    assertEquals("HDFS11741.DATANODE.SELECTED_KEY_EXPIRY", lastSourceId);
+    assertTrue(first.symbolizeCausynthHdfs11741ExpiryDate());
+    assertSame(first, lastOwner);
+    assertTrue(second.symbolizeCausynthHdfs11741ExpiryDate());
+    assertSame(second, lastOwner);
+
+    assertEquals(2, calls);
+    assertEquals(55L, first.getExpiryDate());
+    assertEquals(55L, second.getExpiryDate());
   }
 
   @Test
   public void failedExpiryRuntimeRestoresTheConcreteField() {
-    DelegationKey selected = new DelegationKey(7, 100L, (byte[]) null);
+    DelegationKey key = new DelegationKey(7, 100L, (byte[]) null);
     modeledExpiryDate = 55L;
     runtimeResult = false;
 
-    assertFalse(selected.symbolizeCausynthHdfs11741NameNodeExpiryDate());
-    assertEquals(100L, selected.getExpiryDate());
+    assertFalse(key.symbolizeCausynthHdfs11741ExpiryDate());
+
+    assertEquals(1, calls);
+    assertEquals(100L, key.getExpiryDate());
   }
 
   @Test
-  public void selectorOnlyBridgeReturnsExactIntegerOrNull() {
-    selectedIntValue = 17;
-    assertEquals(Integer.valueOf(17), CausynthSymbolicSource.selectedIntValue(
-        "HDFS11741.NAMENODE.CURRENT_KEY_ID"));
-    selectedIntValue = null;
-    assertEquals(null, CausynthSymbolicSource.selectedIntValue(
-        "HDFS11741.NAMENODE.CURRENT_KEY_ID"));
+  public void absentBridgeLeavesTheFieldConcreteAndFailsClosed()
+      throws Exception {
+    resetCausynthSymbolizer();
+    DelegationKey key = new DelegationKey(7, 100L, (byte[]) null);
+
+    assertFalse(key.symbolizeCausynthHdfs11741ExpiryDate());
+
+    assertEquals(0, calls);
+    assertEquals(100L, key.getExpiryDate());
+  }
+
+  @Test
+  public void bridgeExposesNoSelectorOrRejectEntryPoint() {
+    for (Method method : CausynthSymbolicSource.class.getDeclaredMethods()) {
+      assertFalse("selector survives on the bridge: " + method,
+          "selectedIntValue".equals(method.getName()));
+      assertFalse("reject survives on the bridge: " + method,
+          "reject".equals(method.getName()));
+    }
+    for (Field field : CausynthSymbolicSource.class.getDeclaredFields()) {
+      assertFalse("selector field survives: " + field,
+          "intSelector".equals(field.getName()));
+      assertFalse("rejecter field survives: " + field,
+          "rejecter".equals(field.getName()));
+    }
+    for (Method method : DelegationKey.class.getDeclaredMethods()) {
+      assertFalse("selected-key expiry hook survives: " + method,
+          method.getName().contains("NameNodeExpiryDate"));
+      assertFalse("selected-key expiry hook survives: " + method,
+          method.getName().contains("DataNodeExpiryDate"));
+    }
   }
 
   public static boolean symbolizeForTest(String sourceId, Object owner,
@@ -198,14 +229,6 @@ public class TestDelegationKeyCausynthSource {
     }
   }
 
-  public static Integer selectIntForTest(String sourceId) {
-    return selectedIntValue;
-  }
-
-  public static void rejectForTest(String sourceId, String detail) {
-    rejectCalls++;
-  }
-
   private static void installTestSymbolizer() throws Exception {
     Method method = TestDelegationKeyCausynthSource.class.getDeclaredMethod(
         "symbolizeForTest", String.class, Object.class, String.class);
@@ -213,36 +236,18 @@ public class TestDelegationKeyCausynthSource {
         "symbolizer");
     symbolizer.setAccessible(true);
     symbolizer.set(null, method);
-    Method reject = TestDelegationKeyCausynthSource.class.getDeclaredMethod(
-        "rejectForTest", String.class, String.class);
-    Field rejecter = CausynthSymbolicSource.class.getDeclaredField("rejecter");
-    rejecter.setAccessible(true);
-    rejecter.set(null, reject);
-    Method select = TestDelegationKeyCausynthSource.class.getDeclaredMethod(
-        "selectIntForTest", String.class);
-    Field selector = CausynthSymbolicSource.class.getDeclaredField(
-        "intSelector");
-    selector.setAccessible(true);
-    selector.set(null, select);
     Field resolved = CausynthSymbolicSource.class.getDeclaredField("resolved");
     resolved.setAccessible(true);
     resolved.setBoolean(null, true);
   }
 
   private static void resetCausynthSymbolizer() throws Exception {
-    Field resolved = CausynthSymbolicSource.class.getDeclaredField("resolved");
-    resolved.setAccessible(true);
-    resolved.setBoolean(null, false);
     Field symbolizer = CausynthSymbolicSource.class.getDeclaredField(
         "symbolizer");
     symbolizer.setAccessible(true);
     symbolizer.set(null, null);
-    Field rejecter = CausynthSymbolicSource.class.getDeclaredField("rejecter");
-    rejecter.setAccessible(true);
-    rejecter.set(null, null);
-    Field selector = CausynthSymbolicSource.class.getDeclaredField(
-        "intSelector");
-    selector.setAccessible(true);
-    selector.set(null, null);
+    Field resolved = CausynthSymbolicSource.class.getDeclaredField("resolved");
+    resolved.setAccessible(true);
+    resolved.setBoolean(null, true);
   }
 }
