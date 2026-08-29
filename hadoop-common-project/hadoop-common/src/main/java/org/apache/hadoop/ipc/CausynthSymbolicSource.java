@@ -24,6 +24,7 @@ public final class CausynthSymbolicSource {
   private static final String RUNTIME_CLASS =
       "edu.uva.liftlab.graphchecker.runtime.ConcolicRegionRuntime";
   private static volatile Method symbolizer;
+  private static volatile Method resumer;
   private static volatile boolean resolved;
 
   private CausynthSymbolicSource() {
@@ -54,17 +55,43 @@ public final class CausynthSymbolicSource {
     }
   }
 
+  /**
+   * Reuses an expression propagated onto an exact field without minting a
+   * replacement root when that field is concrete.
+   */
+  public static boolean resume(Object owner, String fieldSignature) {
+    resolve();
+    Method method = resumer;
+    if (method == null) {
+      return false;
+    }
+    try {
+      return Boolean.TRUE.equals(method.invoke(null, owner, fieldSignature));
+    } catch (ReflectiveOperationException | RuntimeException failure) {
+      return false;
+    }
+  }
+
   private static Method resolve() {
     if (!resolved) {
       synchronized (CausynthSymbolicSource.class) {
         if (!resolved) {
+          Class<?> runtime = null;
           try {
-            Class<?> runtime = Class.forName(RUNTIME_CLASS);
+            runtime = Class.forName(RUNTIME_CLASS);
             symbolizer = runtime.getMethod(
                 "symbolizeConfiguredSourceField", String.class,
                 Object.class, String.class);
           } catch (ReflectiveOperationException | LinkageError absent) {
             symbolizer = null;
+          }
+          try {
+            if (runtime != null) {
+              resumer = runtime.getMethod(
+                  "resumePropagatedField", Object.class, String.class);
+            }
+          } catch (ReflectiveOperationException | LinkageError absent) {
+            resumer = null;
           }
           resolved = true;
         }

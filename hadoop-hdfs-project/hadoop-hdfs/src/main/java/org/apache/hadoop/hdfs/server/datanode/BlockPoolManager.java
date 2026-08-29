@@ -44,6 +44,10 @@ import org.slf4j.Logger;
 @InterfaceAudience.Private
 class BlockPoolManager {
   private static final Logger LOG = DataNode.LOG;
+
+  /** MiniDFSCluster-only gate for binding trace identities before registration. */
+  private static final String DEFER_INITIAL_SERVICE_START_FOR_TESTING =
+      "dfs.datanode.bp-service.defer-initial-start-for-testing";
   
   private final Map<String, BPOfferService> bpByNameserviceId =
     Maps.newHashMap();
@@ -51,6 +55,7 @@ class BlockPoolManager {
     Maps.newHashMap();
   private final List<BPOfferService> offerServices =
       new CopyOnWriteArrayList<>();
+  private boolean servicesStarted;
 
   private final DataNode dn;
 
@@ -131,6 +136,7 @@ class BlockPoolManager {
               return null;
             }
           });
+      servicesStarted = true;
     } catch (InterruptedException ex) {
       IOException ioe = new IOException();
       ioe.initCause(ex.getCause());
@@ -216,7 +222,13 @@ class BlockPoolManager {
           offerServices.add(bpos);
         }
       }
-      startAll();
+      // DataNode.runDatanodeDaemon() starts these services immediately after
+      // MiniDFSCluster finishes constructing the DataNode. The optional test
+      // gate leaves that short gap available for binding receiver identities.
+      if (servicesStarted || !dn.getConf().getBoolean(
+          DEFER_INITIAL_SERVICE_START_FOR_TESTING, false)) {
+        startAll();
+      }
     }
 
     // Step 4. Shut down old nameservices. This happens outside

@@ -133,7 +133,7 @@ public class TestDelegationKeyCausynthSource {
     assertEquals(55L, key.getExpiryDate());
     assertEquals(200L, other.getExpiryDate());
     assertSame(key, lastOwner);
-    assertEquals("HDFS11741.KEY_EXPIRY", lastSourceId);
+    assertEquals("HDFS11741.NAMENODE.KEY_EXPIRY", lastSourceId);
     assertEquals(EXPIRY_SIGNATURE, lastFieldSignature);
   }
 
@@ -236,6 +236,9 @@ public class TestDelegationKeyCausynthSource {
         "symbolizer");
     symbolizer.setAccessible(true);
     symbolizer.set(null, method);
+    Field resumer = CausynthSymbolicSource.class.getDeclaredField("resumer");
+    resumer.setAccessible(true);
+    resumer.set(null, null);
     Field resolved = CausynthSymbolicSource.class.getDeclaredField("resolved");
     resolved.setAccessible(true);
     resolved.setBoolean(null, true);
@@ -246,6 +249,9 @@ public class TestDelegationKeyCausynthSource {
         "symbolizer");
     symbolizer.setAccessible(true);
     symbolizer.set(null, null);
+    Field resumer = CausynthSymbolicSource.class.getDeclaredField("resumer");
+    resumer.setAccessible(true);
+    resumer.set(null, null);
     Field resolved = CausynthSymbolicSource.class.getDeclaredField("resolved");
     resolved.setAccessible(true);
     resolved.setBoolean(null, true);

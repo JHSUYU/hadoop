@@ -103,24 +103,28 @@ public class DelegationKey implements Writable {
   }
 
   /**
-   * Declares this key's own expiry as a symbolic source occurrence.
+   * Declares one NameNode-owned block-key expiry as a symbolic source.
    *
-   * <p>Every occurrence of the declared field is its own symbolic variable, so
-   * the hook is minted on whatever key it is handed rather than on a key the
-   * application asked GraphChecker to select. If this object's expiry already
-   * carries a propagated symbolic expression the runtime keeps that expression
-   * and the mint is a no-op.</p>
+   * <p>The HDFS-11741 call sites are restricted to the master-side export and
+   * rotation paths. Balancer and DataNode copies must receive this expression
+   * through the real RPC handoff; they must never mint a replacement root.</p>
    */
   public boolean symbolizeCausynthHdfs11741ExpiryDate() {
     DelegationKey owner = this;
     long previousExpiry = owner.expiryDate;
     boolean symbolized = CausynthSymbolicSource.symbolize(
-        "HDFS11741.KEY_EXPIRY", owner,
+        "HDFS11741.NAMENODE.KEY_EXPIRY", owner,
         "<org.apache.hadoop.security.token.delegation.DelegationKey: long expiryDate>");
     if (!symbolized) {
       owner.expiryDate = previousExpiry;
     }
     return symbolized;
+  }
+
+  /** Reuses a NameNode expiry expression propagated from an earlier turn. */
+  public boolean resumeCausynthHdfs11741ExpiryDate() {
+    return CausynthSymbolicSource.resume(this,
+        "<org.apache.hadoop.security.token.delegation.DelegationKey: long expiryDate>");
   }
 
   public long getExpiryDate() {

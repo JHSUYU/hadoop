@@ -191,11 +191,10 @@ public class TestBalancer {
    * wins over any supplied resource, and the expiry budget has no
    * configuration key at all.
    *
-   * <p>All three are optional.  They are absent for an ordinary
-   * {@code mvn test} run and for the uninstrumented discovery pass, and every
-   * value below is then exactly the upstream one.  This is a timing budget
-   * only: it does not change heartbeat polling, RPC traffic, or the selected
-   * causal state.
+   * <p>All three are optional and absent for an ordinary {@code mvn test} run.
+   * GraphChecker supplies the same values to discovery and concolic replay.
+   * In particular the key-update interval changes rotation and map-version
+   * semantics, so using one value in both passes is part of the frozen plan.
    */
   static final String CAUSYNTH_HEARTBEAT_EXPIRE_PROPERTY =
       "causynth.hdfs.heartbeat.expire.interval.ms";
@@ -203,6 +202,8 @@ public class TestBalancer {
       "causynth.hdfs.key.update.interval.ms";
   static final String CAUSYNTH_TEST_WAIT_PROPERTY =
       "causynth.hdfs.test.wait.timeout.ms";
+  static final String CAUSYNTH_BALANCER_MAX_IDLE_ITERATIONS_PROPERTY =
+      "causynth.hdfs.balancer.max.idle.iterations";
 
   static final long DEFAULT_TIMEOUT = 40000L; //msec
   static final long TIMEOUT =
@@ -255,6 +256,36 @@ public class TestBalancer {
    */
   static long causynthOptionalTimingMillis(String property) {
     return causynthTimingMillis(property, -1L);
+  }
+
+  /**
+   * Keeps ordinary tests on Hadoop's default while allowing the concolic
+   * workload to stop after its first complete no-progress iteration.  The
+   * selected propagation and target events have already occurred by then;
+   * repeating the same failed block set only adds wall-clock backoff.
+   */
+  static BalancerParameters causynthBalancerParameters() {
+    final String raw = System.getProperty(
+        CAUSYNTH_BALANCER_MAX_IDLE_ITERATIONS_PROPERTY);
+    if (raw == null) {
+      return BalancerParameters.DEFAULT;
+    }
+    final int iterations;
+    try {
+      iterations = Integer.parseInt(raw.trim());
+    } catch (NumberFormatException malformed) {
+      throw new IllegalArgumentException("Invalid -D"
+          + CAUSYNTH_BALANCER_MAX_IDLE_ITERATIONS_PROPERTY + "=\"" + raw
+          + "\": expected a positive iteration count", malformed);
+    }
+    if (iterations <= 0) {
+      throw new IllegalArgumentException("Invalid -D"
+          + CAUSYNTH_BALANCER_MAX_IDLE_ITERATIONS_PROPERTY + "=\"" + raw
+          + "\": expected a positive iteration count");
+    }
+    return new BalancerParameters.Builder()
+        .setMaxIdleIteration(iterations)
+        .build();
   }
 
   static void initConf(Configuration conf) {
@@ -384,10 +415,11 @@ public class TestBalancer {
    */
   private ExtendedBlock[] generateBlocks(Configuration conf, long size,
       short numNodes) throws IOException, InterruptedException, TimeoutException {
-    cluster = new MiniDFSCluster.Builder(conf).numDataNodes(numNodes).build();
+    cluster = withCausynthSources(
+        new MiniDFSCluster.Builder(conf).numDataNodes(numNodes), 0L).build();
     try {
       cluster.waitActive();
-      bindClusterSources(0L);
+      applyCausynthClusterTimings();
       client = NameNodeProxies.createProxy(conf, cluster.getFileSystem(0).getUri(),
           ClientProtocol.class).getProxy();
 
@@ -477,13 +509,13 @@ public class TestBalancer {
 
     // restart the cluster: do NOT format the cluster
     conf.set(DFSConfigKeys.DFS_NAMENODE_SAFEMODE_THRESHOLD_PCT_KEY, "0.0f");
-    cluster = new MiniDFSCluster.Builder(conf).numDataNodes(numDatanodes)
-                                              .format(false)
-                                              .racks(racks)
-                                              .simulatedCapacities(capacities)
-                                              .build();
+    cluster = withCausynthSources(
+        new MiniDFSCluster.Builder(conf).numDataNodes(numDatanodes)
+            .format(false)
+            .racks(racks)
+            .simulatedCapacities(capacities), 1L).build();
     cluster.waitActive();
-    bindClusterSources(1L);
+    applyCausynthClusterTimings();
     client = NameNodeProxies.createProxy(conf, cluster.getFileSystem(0).getUri(),
         ClientProtocol.class).getProxy();
 
@@ -500,37 +532,49 @@ public class TestBalancer {
    * service objects to that identity. With GraphChecker absent this is a
    * no-op and does not change the Hadoop test.
    */
-  private void bindClusterSources(long epoch) {
-    applyCausynthClusterTimings();
+  private MiniDFSCluster.Builder withCausynthSources(
+      MiniDFSCluster.Builder builder, final long epoch) {
     if (!CausynthTraceContext.isAvailable()) {
-      return;
+      return builder;
     }
-    registerOrRestart(traceNameNode, "NAMENODE", "cluster0/nn0", epoch);
-    bindNameNodeAliases(cluster.getNameNode(), traceNameNode);
-    NameNodeRpcServer rpc = (NameNodeRpcServer) cluster.getNameNodeRpc();
-    requireTrace(CausynthTraceContext.registerSourceAlias(
-        rpc, traceNameNode), "NameNode RPC server alias");
-    requireTrace(CausynthTraceContext.registerSourceAlias(
-        rpc.getClientRpcServer(), traceNameNode), "NameNode RPC alias");
+    return builder.causynthSourceBinder(
+        new MiniDFSCluster.CausynthSourceBinder() {
+          @Override
+          public void bindNameNode(NameNode nameNode, int index) {
+            if (index != 0) {
+              throw new IllegalStateException(
+                  "HDFS-11741 workload expects one NameNode");
+            }
+            registerOrRestart(traceNameNode,
+                "NAMENODE", "cluster0/nn0", epoch);
+            bindNameNodeAliases(nameNode, traceNameNode);
+            NameNodeRpcServer rpc =
+                (NameNodeRpcServer) nameNode.getRpcServer();
+            requireTrace(CausynthTraceContext.registerSourceAlias(
+                rpc, traceNameNode), "NameNode RPC server alias");
+            requireTrace(CausynthTraceContext.registerSourceAlias(
+                rpc.getClientRpcServer(), traceNameNode), "NameNode RPC alias");
+          }
 
-    List<DataNode> dataNodes = cluster.getDataNodes();
-    while (traceDataNodes.size() < dataNodes.size()) {
-      traceDataNodes.add(new Object());
-    }
-    for (int index = 0; index < dataNodes.size(); index++) {
-      Object anchor = traceDataNodes.get(index);
-      registerOrRestart(anchor, "DATANODE", "cluster0/dn" + index, epoch);
-      bindDataNodeAliases(dataNodes.get(index), anchor);
-    }
+          @Override
+          public void bindDataNode(DataNode dataNode, int index) {
+            while (traceDataNodes.size() <= index) {
+              traceDataNodes.add(new Object());
+            }
+            Object anchor = traceDataNodes.get(index);
+            registerOrRestart(anchor,
+                "DATANODE", "cluster0/dn" + index, epoch);
+            bindDataNodeAliases(dataNode, anchor);
+          }
+        });
   }
 
   /**
    * Applies the optional replay timing budget described on
    * {@link #CAUSYNTH_TEST_WAIT_PROPERTY} to the live cluster.  Both values
-   * live on objects that are rebuilt with the cluster, so this runs from
-   * {@link #bindClusterSources(long)}, i.e. after every construction and
-   * restart.  With neither property set it is a no-op and the cluster keeps
-   * its upstream timing.
+   * live on objects that are rebuilt with the cluster, so this runs after every
+   * construction and restart. With neither property set it is a no-op and the
+   * cluster keeps its upstream timing.
    */
   private void applyCausynthClusterTimings() {
     final long expireMs =
@@ -1156,7 +1200,7 @@ public class TestBalancer {
   private void runBalancer(Configuration conf, long totalUsedSpace,
       long totalCapacity) throws Exception {
     runBalancer(conf, totalUsedSpace, totalCapacity,
-        BalancerParameters.DEFAULT, 0);
+        causynthBalancerParameters(), 0);
   }
 
   private void runBalancer(Configuration conf, long totalUsedSpace,
@@ -1199,7 +1243,7 @@ public class TestBalancer {
     try {
       connectors = NameNodeConnector.newNameNodeConnectors(namenodes,
           Balancer.class.getSimpleName(), Balancer.BALANCER_ID_PATH, conf,
-              BalancerParameters.DEFAULT.getMaxIdleIteration());
+              p.getMaxIdleIteration());
 
       boolean done = false;
       for(int iteration = 0; !done; iteration++) {

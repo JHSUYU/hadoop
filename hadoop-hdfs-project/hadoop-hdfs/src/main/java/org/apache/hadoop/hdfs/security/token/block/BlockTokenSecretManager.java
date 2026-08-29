@@ -189,19 +189,6 @@ public class BlockTokenSecretManager extends
     // into the exported array below.  The hook is entered unconditionally and
     // refuses internally; isMaster above is a role guard, not a selector.
     currentKey.symbolizeCausynthHdfs11741CurrentKeyId(allKeys);
-    // The NameNode's SELECTED-key expiry is published on the same export, and
-    // for the same reason K is.  The only other NameNode-side mint of this
-    // field sits in updateKeys(), the interval-guarded once-only rotation: a
-    // site there is planned from the tracing pass and then never entered by a
-    // replayed cluster, so the source materializes nothing and the model has
-    // no NameNode expiry to report.  exportKeys() runs on every getBlockKeys
-    // reply and every KeyUpdateCommand the heartbeat carries, so the hook is
-    // entered inside an admitted occurrence of those regions, and the key it
-    // mints on is exactly the key whose expiry decides whether removeExpired-
-    // Keys() drops it before the Balancer's cached DEK is redeemed.  The hook
-    // is entered unconditionally and refuses internally; a member that already
-    // carries a propagated expression keeps it.
-    currentKey.symbolizeCausynthHdfs11741ExpiryDate();
     return new ExportedBlockKeys(true, keyUpdateInterval, tokenLifetime,
         currentKey, allKeys.values().toArray(new BlockKey[0]));
   }
@@ -211,6 +198,10 @@ public class BlockTokenSecretManager extends
     for (Iterator<Map.Entry<Integer, BlockKey>> it = allKeys.entrySet()
         .iterator(); it.hasNext();) {
       Map.Entry<Integer, BlockKey> e = it.next();
+      // Re-enter an expiry expression that was minted by the NameNode and
+      // propagated with this exact key.  Concrete initialization keys do not
+      // mint here: resume succeeds only for an existing VM field version.
+      e.getValue().resumeCausynthHdfs11741ExpiryDate();
       if (e.getValue().getExpiryDate() < now) {
         it.remove();
       }
@@ -225,13 +216,9 @@ public class BlockTokenSecretManager extends
     if (isMaster || exportedKeys == null)
       return;
     LOG.info("Setting block keys");
-    // Mint every member that is already installed before the expiry is read.
-    // A member that already carries a propagated expression keeps it, so this
-    // loop only ever mints a key that never got a symbol, and removeExpiredKeys
-    // below already branches on a symbol minted in this same call.
-    for (BlockKey key : allKeys.values()) {
-      key.symbolizeCausynthHdfs11741ExpiryDate();
-    }
+    // Worker-side expiry values are not symbolic roots.  K and its expiry must
+    // arrive from the NameNode through register/heartbeat handoff, and the
+    // branch below consumes that propagated expression directly.
     removeExpiredKeys();
     this.currentKey = exportedKeys.getCurrentKey();
     BlockKey[] receivedKeys = exportedKeys.getAllKeys();
@@ -239,12 +226,6 @@ public class BlockTokenSecretManager extends
       if (receivedKeys[i] == null)
         continue;
       this.allKeys.put(receivedKeys[i].getKeyId(), receivedKeys[i]);
-    }
-    // Every occurrence of the declared expiry field is its own symbolic
-    // variable, so the mint is handed every installed member unconditionally.
-    // A member that already carries a propagated expression keeps it.
-    for (BlockKey key : allKeys.values()) {
-      key.symbolizeCausynthHdfs11741ExpiryDate();
     }
   }
 
@@ -267,18 +248,15 @@ public class BlockTokenSecretManager extends
       return false;
 
     LOG.info("Updating block keys");
-    // Mint every member that is already installed before the expiry is read.
-    // A member that already carries a propagated expression keeps it, so this
-    // loop only ever mints a key that never got a symbol, and removeExpiredKeys
-    // below already branches on a symbol minted in this same call.
-    for (BlockKey key : allKeys.values()) {
-      key.symbolizeCausynthHdfs11741ExpiryDate();
-    }
     removeExpiredKeys();
-    // set final expiry date of retiring currentKey
-    allKeys.put(currentKey.getKeyId(), new BlockKey(currentKey.getKeyId(),
-        Time.now() + keyUpdateInterval + tokenLifetime,
-        currentKey.getKey()));
+    // E_ret belongs to exactly this NameNode-created retiring version.  K is
+    // copied from the previously exported currentKey; the expiry is the one
+    // fresh symbolic root whose propagated copies are later consumed by the
+    // DataNode removeExpiredKeys branch.
+    BlockKey retiringKey = new BlockKey(currentKey.getKeyId(),
+        Time.now() + keyUpdateInterval + tokenLifetime, currentKey.getKey());
+    retiringKey.symbolizeCausynthHdfs11741ExpiryDate();
+    allKeys.put(retiringKey.getKeyId(), retiringKey);
     // update the estimated expiry date of new currentKey
     currentKey = new BlockKey(nextKey.getKeyId(), Time.now()
         + 2 * keyUpdateInterval + tokenLifetime, nextKey.getKey());
@@ -293,12 +271,6 @@ public class BlockTokenSecretManager extends
     // planned but never executed and the source materializes nothing.  The
     // exported currentKey is also the id the milestone is about, so the hook
     // lives on the export path in exportKeys() instead.
-    // Every occurrence of the declared expiry field is its own symbolic
-    // variable, so the mint is handed every rotated member unconditionally.
-    // A member that already carries a propagated expression keeps it.
-    for (BlockKey key : allKeys.values()) {
-      key.symbolizeCausynthHdfs11741ExpiryDate();
-    }
     return true;
   }
 
