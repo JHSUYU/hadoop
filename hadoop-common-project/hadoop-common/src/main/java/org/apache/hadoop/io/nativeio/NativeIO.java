@@ -898,10 +898,9 @@ public class NativeIO {
    */
   static long getOperatingSystemPageSize() {
     try {
-      Field f = Unsafe.class.getDeclaredField("theUnsafe");
-      f.setAccessible(true);
-      Unsafe unsafe = (Unsafe)f.get(null);
-      return unsafe.pageSize();
+      Field field = Unsafe.class.getDeclaredField("theUnsafe");
+      field.setAccessible(true);
+      return ((Unsafe) field.get(null)).pageSize();
     } catch (Throwable e) {
       LOG.warn("Unable to get operating system page size.  Guessing 4096.", e);
       return 4096;
