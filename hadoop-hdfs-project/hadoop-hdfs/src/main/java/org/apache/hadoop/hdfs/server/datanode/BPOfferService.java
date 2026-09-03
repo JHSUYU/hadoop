@@ -17,6 +17,7 @@
  */
 package org.apache.hadoop.hdfs.server.datanode;
 
+import edu.uva.liftlab.graphchecker.annotation.Debug;
 import org.apache.hadoop.classification.VisibleForTesting;
 import org.apache.hadoop.util.Preconditions;
 
@@ -28,6 +29,7 @@ import org.apache.hadoop.hdfs.protocol.DatanodeInfo;
 import org.apache.hadoop.hdfs.protocol.ExtendedBlock;
 import org.apache.hadoop.hdfs.protocol.RollingUpgradeStatus;
 import org.apache.hadoop.hdfs.protocolPB.DatanodeProtocolClientSideTranslatorPB;
+import org.apache.hadoop.hdfs.security.token.block.BlockTokenSecretManager;
 import org.apache.hadoop.hdfs.server.protocol.*;
 import org.apache.hadoop.hdfs.server.protocol.BlockECReconstructionCommand.BlockECReconstructionInfo;
 import org.apache.hadoop.hdfs.server.protocol.ReceivedDeletedBlockInfo.BlockStatus;
@@ -820,6 +822,26 @@ class BPOfferService {
       dn.blockPoolTokenSecretManager.addKeys(getBlockPoolId(),
           command.getExportedKeys(), true);
     }
+  }
+
+  @VisibleForTesting
+  void refreshBlockKeysForTesting(NamenodeProtocol namenode) {
+    BlockTokenSecretManager manager =
+        dn.blockPoolTokenSecretManager.get(getBlockPoolId());
+    int retainedKeyId = manager.getCurrentKeyId();
+    int refreshedKeyId = retainedKeyId;
+    boolean failed = Debug.makeSymbolicBoolean("rpcFails");
+    try {
+      if (failed) {
+        throw new IOException("symbolic RPC failure");
+      }
+      refreshedKeyId =
+          manager.addKeysAndGetCurrentKeyId(namenode.getBlockKeys());
+    } catch (IOException e) {
+      failed = true;
+      LOG.error("Failed to set keys; retaining key {}", retainedKeyId, e);
+    }
+    manager.finishKeyRefresh(failed, retainedKeyId, refreshedKeyId);
   }
  
   /**

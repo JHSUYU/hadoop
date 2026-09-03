@@ -17,10 +17,8 @@
  */
 package org.apache.hadoop.hdfs.server.datanode;
 
-import java.io.IOException;
 import java.util.List;
 
-import edu.uva.liftlab.graphchecker.annotation.Debug;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FSDataOutputStream;
 import org.apache.hadoop.fs.Path;
@@ -35,11 +33,9 @@ import org.apache.hadoop.hdfs.protocol.DatanodeInfo;
 import org.apache.hadoop.hdfs.protocol.DatanodeInfo.DatanodeInfoBuilder;
 import org.apache.hadoop.hdfs.protocol.ExtendedBlock;
 import org.apache.hadoop.hdfs.protocol.LocatedBlock;
-import org.apache.hadoop.hdfs.security.token.block.BlockKey;
 import org.apache.hadoop.hdfs.security.token.block.BlockTokenSecretManager;
 import org.apache.hadoop.hdfs.security.token.block.ExportedBlockKeys;
 import org.apache.hadoop.hdfs.server.namenode.NameNodeRpcServer;
-import org.apache.hadoop.hdfs.server.protocol.KeyUpdateCommand;
 import org.apache.hadoop.hdfs.server.protocol.NamenodeProtocol;
 import org.apache.hadoop.ipc.CausynthMessagePropagation;
 import org.apache.hadoop.test.GenericTestUtils;
@@ -76,33 +72,27 @@ public class TestCausynthDataTransferRpcFailure {
 
       BlockTokenSecretManager master = cluster.getNamesystem()
           .getBlockManager().getBlockTokenSecretManager();
+      CausynthMessagePropagation.registerSourceAlias(master,
+          ((NameNodeRpcServer) cluster.getNameNodeRpc()).getClientRpcServer());
+      CausynthMessagePropagation.registerSourceAlias(
+          target.getBlockPoolTokenSecretManager().get(block.getBlockPoolId()),
+          target.getDatanodeId());
+      master.generateKeys();
       ExportedBlockKeys stale = master.exportKeys();
-      master.setKeyUpdateIntervalForTesting(0);
-      master.updateKeys(1);
-      master.updateKeys(1);
+      master.updateKeys(Long.MAX_VALUE);
+      master.updateKeys(Long.MAX_VALUE);
       ExportedBlockKeys fresh = master.exportKeys();
-      installOnlyCurrentKey(source, block.getBlockPoolId(), stale);
-      installOnlyCurrentKey(target, block.getBlockPoolId(), fresh);
+      source.getBlockPoolTokenSecretManager().get(block.getBlockPoolId())
+          .setOnlyKeyForTesting(stale.getCurrentKey());
+      target.getBlockPoolTokenSecretManager().get(block.getBlockPoolId())
+          .setOnlyKeyForTesting(fresh.getCurrentKey());
 
       long request = CausynthMessagePropagation.beginRequest(
           source.getDatanodeId(), "replicate-block");
       try {
         NamenodeProtocol namenode = NameNodeProxies.createProxy(conf,
             fs.getUri(), NamenodeProtocol.class).getProxy();
-        ExportedBlockKeys refreshed = null;
-        boolean rpcFails = Debug.makeSymbolicBoolean("rpcFails");
-        try {
-          if (rpcFails) {
-            throw new IOException("symbolic RPC failure");
-          }
-          refreshed = namenode.getBlockKeys();
-        } catch (IOException expected) {
-          // A failed refresh deliberately retains the source DataNode's S0.
-        }
-        if (refreshed != null) {
-          source.getAllBpOs().get(0).applyKeyUpdateCommand(
-              new KeyUpdateCommand(refreshed));
-        }
+        source.getAllBpOs().get(0).refreshBlockKeysForTesting(namenode);
 
         source.transferBlock(block,
             new DatanodeInfo[]{new DatanodeInfoBuilder()
@@ -121,17 +111,6 @@ public class TestCausynthDataTransferRpcFailure {
     return nodes.stream().filter(node -> node.getDatanodeUuid()
         .equals(location.getDatanodeUuid())).findFirst()
         .orElseThrow(IllegalStateException::new);
-  }
-
-  private static void installOnlyCurrentKey(DataNode target, String blockPool,
-      ExportedBlockKeys keys) throws IOException {
-    BlockKey current = keys.getCurrentKey();
-    ExportedBlockKeys currentOnly = new ExportedBlockKeys(true,
-        keys.getKeyUpdateInterval(), keys.getTokenLifetime(), current,
-        new BlockKey[]{current});
-    target.getBlockPoolTokenSecretManager().clearAllKeysForTesting();
-    target.getBlockPoolTokenSecretManager().addKeys(
-        blockPool, currentOnly, true);
   }
 
   private static void registerSources(MiniDFSCluster cluster,
