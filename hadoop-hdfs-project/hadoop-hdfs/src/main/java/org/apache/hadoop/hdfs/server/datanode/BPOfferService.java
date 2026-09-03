@@ -787,11 +787,7 @@ class BPOfferService {
       break;
     case DatanodeProtocol.DNA_ACCESSKEYUPDATE:
       LOG.info("DatanodeCommand action from active NN {}: DNA_ACCESSKEYUPDATE", nnSocketAddress);
-      if (dn.isBlockTokenEnabled) {
-        dn.blockPoolTokenSecretManager.addKeys(
-            getBlockPoolId(), 
-            ((KeyUpdateCommand) cmd).getExportedKeys(), true);
-      }
+      applyKeyUpdateCommand((KeyUpdateCommand) cmd);
       break;
     case DatanodeProtocol.DNA_BALANCERBANDWIDTHUPDATE:
       LOG.info("DatanodeCommand action: DNA_BALANCERBANDWIDTHUPDATE");
@@ -816,6 +812,14 @@ class BPOfferService {
       LOG.warn("Unknown DatanodeCommand action: " + cmd.getAction());
     }
     return true;
+  }
+
+  @VisibleForTesting
+  void applyKeyUpdateCommand(KeyUpdateCommand command) throws IOException {
+    if (dn.isBlockTokenEnabled) {
+      dn.blockPoolTokenSecretManager.addKeys(getBlockPoolId(),
+          command.getExportedKeys(), true);
+    }
   }
  
   /**
