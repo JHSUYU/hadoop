@@ -116,7 +116,8 @@ public class TestCausynthDataTransferRpcFailure {
 
   private static DataNode find(List<DataNode> nodes, DatanodeInfo location) {
     return nodes.stream().filter(node -> node.getDatanodeUuid()
-        .equals(location.getDatanodeUuid())).findFirst().orElseThrow();
+        .equals(location.getDatanodeUuid())).findFirst()
+        .orElseThrow(IllegalStateException::new);
   }
 
   private static void installOnlyCurrentKey(DataNode target, String blockPool,

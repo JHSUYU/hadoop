@@ -47,12 +47,9 @@
         <configuration combine.self="override">
           <source>${javac.version}</source>
           <target>${javac.version}</target>
-          <compilerArgs>
-            <arg>--add-modules</arg>
-            <arg>jdk.javadoc</arg>
-            <arg>--add-exports</arg>
-            <arg>jdk.javadoc/jdk.javadoc.internal.tool=ALL-UNNAMED</arg>
-          </compilerArgs>
+          <excludes>
+            <exclude>org/apache/hadoop/classification/tools/**</exclude>
+          </excludes>
         </configuration>
       </plugin>
     </plugins>

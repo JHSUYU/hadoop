@@ -18,6 +18,7 @@
 
 package org.apache.hadoop.hdfs.security.token.block;
 
+import edu.uva.liftlab.graphchecker.annotation.CausynthExceptionTarget;
 import java.io.ByteArrayInputStream;
 import java.io.DataInputStream;
 import java.io.IOException;
@@ -556,7 +557,8 @@ public class BlockTokenSecretManager extends
     synchronized (this) {
       key = allKeys.get(keyId);
       if (key == null) {
-        throw new InvalidEncryptionKeyException("Can't re-compute encryption key"
+        throw new @CausynthExceptionTarget("hdfs-17899")
+            InvalidEncryptionKeyException("Can't re-compute encryption key"
             + " for nonce, since the required block key (keyID=" + keyId
             + ") doesn't exist. Current key: " + currentKey.getKeyId());
       }
