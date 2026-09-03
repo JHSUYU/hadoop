@@ -110,10 +110,7 @@ import javax.management.MBeanServer;
 import javax.management.ObjectName;
 import java.util.function.Supplier;
 
-import edu.uva.liftlab.graphchecker.annotation.Debug;
-import org.apache.hadoop.hdfs.security.token.block.BlockKey;
 import org.apache.hadoop.hdfs.security.token.block.BlockTokenSecretManager;
-import org.apache.hadoop.hdfs.security.token.block.ExportedBlockKeys;
 import org.apache.hadoop.hdfs.server.namenode.NameNodeRpcServer;
 import org.apache.hadoop.ipc.CausynthMessagePropagation;
 
@@ -1098,25 +1095,22 @@ public class TestExternalStoragePolicySatisfier {
 
       BlockTokenSecretManager master = hdfsCluster.getNamesystem()
           .getBlockManager().getBlockTokenSecretManager();
-      master.setKeyUpdateIntervalForTesting(0);
-      master.updateKeys(1);
-      master.updateKeys(1);
-      installOnlyCurrentKey(target, master.exportKeys());
+      CausynthMessagePropagation.registerSourceAlias(master,
+          ((NameNodeRpcServer) hdfsCluster.getNameNodeRpc())
+              .getClientRpcServer());
+      master.generateKeys();
+      master.updateKeys(Long.MAX_VALUE);
+      master.updateKeys(Long.MAX_VALUE);
+      target.getBlockPoolTokenSecretManager().get(
+          hdfsCluster.getNamesystem().getBlockPoolId())
+          .setOnlyKeyForTesting(master.getCurrentKey());
 
       dfs.setStoragePolicy(new Path(FILE), ONE_SSD);
       dfs.satisfyStoragePolicy(new Path(FILE));
       long request = CausynthMessagePropagation.beginRequest(
           nnc, "satisfy-storage-policy");
       try {
-        boolean rpcFails = Debug.makeSymbolicBoolean("rpcFails");
-        try {
-          if (rpcFails) {
-            throw new IOException("symbolic RPC failure");
-          }
-          nnc.getKeyManager().updateBlockKeys();
-        } catch (IOException expected) {
-          // A failed refresh deliberately retains the SPS client's S0.
-        }
+        nnc.getKeyManager().updateBlockKeys();
         startExternalSps();
         hdfsCluster.triggerHeartbeats();
         DFSTestUtil.waitExpectedStorageType(
@@ -1130,17 +1124,6 @@ public class TestExternalStoragePolicySatisfier {
     }
   }
 
-  private void installOnlyCurrentKey(DataNode target, ExportedBlockKeys keys)
-      throws IOException {
-    BlockKey current = keys.getCurrentKey();
-    ExportedBlockKeys currentOnly = new ExportedBlockKeys(true,
-        keys.getKeyUpdateInterval(), keys.getTokenLifetime(), current,
-        new BlockKey[]{current});
-    target.getBlockPoolTokenSecretManager().clearAllKeysForTesting();
-    target.getBlockPoolTokenSecretManager().addKeys(
-        hdfsCluster.getNamesystem().getBlockPoolId(), currentOnly, true);
-  }
-
   private void registerCausynthSources(DataNode target) {
     NameNodeRpcServer namenode =
         (NameNodeRpcServer) hdfsCluster.getNameNodeRpc();
@@ -1152,6 +1135,11 @@ public class TestExternalStoragePolicySatisfier {
     CausynthMessagePropagation.registerSource(
         target.getDatanodeId(), "CLUSTER_NODE", "DATANODE",
         "hdfs-17899/target-dn", 0);
+    CausynthMessagePropagation.registerSourceAlias(nnc.getKeyManager(), nnc);
+    CausynthMessagePropagation.registerSourceAlias(
+        target.getBlockPoolTokenSecretManager().get(
+            hdfsCluster.getNamesystem().getBlockPoolId()),
+        target.getDatanodeId());
   }
 
   /**
