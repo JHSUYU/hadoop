@@ -17,8 +17,6 @@
  */
 package org.apache.hadoop.hdfs.server.namenode;
 
-import edu.uva.liftlab.graphchecker.annotation.CausynthExceptionTarget;
-
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Joiner;
 import com.google.common.base.Preconditions;
@@ -45,9 +43,7 @@ import org.apache.hadoop.hdfs.DFSUtilClient;
 import org.apache.hadoop.hdfs.HAUtil;
 import org.apache.hadoop.hdfs.HdfsConfiguration;
 import org.apache.hadoop.hdfs.client.HdfsClientConfigKeys;
-import org.apache.hadoop.hdfs.protocol.ClientDatanodeProtocol;
 import org.apache.hadoop.hdfs.protocol.ClientProtocol;
-import org.apache.hadoop.hdfs.protocol.DatanodeID;
 import org.apache.hadoop.hdfs.protocol.HdfsConstants;
 import org.apache.hadoop.hdfs.server.blockmanagement.DatanodeManager;
 import org.apache.hadoop.hdfs.server.common.HdfsServerConstants.NamenodeRole;
@@ -96,7 +92,6 @@ import org.slf4j.LoggerFactory;
 
 import javax.management.ObjectName;
 
-import java.io.Closeable;
 import java.io.IOException;
 import java.io.PrintStream;
 import java.net.InetSocketAddress;
@@ -1962,41 +1957,6 @@ public class NameNode extends ReconfigurableBase implements
    */
   boolean isStarted() {
     return this.started.get();
-  }
-
-  /** Reads one value from each DataNode and executes the target comparison. */
-  @VisibleForTesting
-  public void compareCausynthDataNodeValues(DatanodeID[] dataNodes)
-      throws IOException {
-    if (dataNodes == null || dataNodes.length != 2) {
-      throw new IOException("Causynth comparison requires exactly two DataNodes");
-    }
-    ClientDatanodeProtocol first =
-        DFSUtilClient.createClientDatanodeProtocolProxy(
-            dataNodes[0], getConf(), 0, false);
-    ClientDatanodeProtocol second =
-        DFSUtilClient.createClientDatanodeProtocolProxy(
-            dataNodes[1], getConf(), 0, false);
-    try {
-      // A and B are distinct operations and may implement different
-      // relations. Runtime source identity, not the method name, says which
-      // DataNode serves each invocation.
-      long firstValue = first.getCausynthValueA();
-      long secondValue = second.getCausynthValueB();
-
-      if(firstValue>secondValue){
-          throw new @CausynthExceptionTarget("causynth-rpc-compare")
-                  IOException("Crash");
-      }
-
-    } finally {
-      if (first instanceof Closeable) {
-        ((Closeable) first).close();
-      }
-      if (second instanceof Closeable) {
-        ((Closeable) second).close();
-      }
-    }
   }
 
   /**

@@ -599,18 +599,6 @@ public class BlockManager implements BlockStatsMXBean {
     return blockTokenSecretManager;
   }
 
-  /** Return the exact heartbeat-manager owner for test instrumentation. */
-  @VisibleForTesting
-  public Object getHeartbeatManagerForTesting() {
-    return heartbeatManager;
-  }
-
-  /** Return the exact receiver run by the heartbeat monitor daemon. */
-  @VisibleForTesting
-  public Runnable getHeartbeatMonitorForTesting() {
-    return heartbeatManager.getHeartbeatMonitorForTesting();
-  }
-
   /** Allow silent termination of redundancy monitor for testing. */
   @VisibleForTesting
   void enableRMTerminationForTesting() {

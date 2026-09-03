@@ -46,8 +46,6 @@ import org.apache.hadoop.hdfs.protocol.proto.ClientDatanodeProtocolProtos.GetBlo
 import org.apache.hadoop.hdfs.protocol.proto.ClientDatanodeProtocolProtos.GetBlockLocalPathInfoResponseProto;
 import org.apache.hadoop.hdfs.protocol.proto.ClientDatanodeProtocolProtos.GetDatanodeInfoRequestProto;
 import org.apache.hadoop.hdfs.protocol.proto.ClientDatanodeProtocolProtos.GetDatanodeInfoResponseProto;
-import org.apache.hadoop.hdfs.protocol.proto.ClientDatanodeProtocolProtos.GetCausynthValueRequestProto;
-import org.apache.hadoop.hdfs.protocol.proto.ClientDatanodeProtocolProtos.GetCausynthValueResponseProto;
 import org.apache.hadoop.hdfs.protocol.proto.ClientDatanodeProtocolProtos.GetReplicaVisibleLengthRequestProto;
 import org.apache.hadoop.hdfs.protocol.proto.ClientDatanodeProtocolProtos.GetVolumeReportRequestProto;
 import org.apache.hadoop.hdfs.protocol.proto.ClientDatanodeProtocolProtos.GetVolumeReportResponseProto;
@@ -104,8 +102,6 @@ public class ClientDatanodeProtocolTranslatorPB implements
       RefreshNamenodesRequestProto.newBuilder().build();
   private final static GetDatanodeInfoRequestProto VOID_GET_DATANODE_INFO =
       GetDatanodeInfoRequestProto.newBuilder().build();
-  private final static GetCausynthValueRequestProto VOID_GET_CAUSYNTH_VALUE =
-      GetCausynthValueRequestProto.newBuilder().build();
   private final static GetVolumeReportRequestProto
       VOID_GET_DATANODE_STORAGE_INFO =
       GetVolumeReportRequestProto.newBuilder().build();
@@ -283,28 +279,6 @@ public class ClientDatanodeProtocolTranslatorPB implements
       response = rpcProxy.getDatanodeInfo(NULL_CONTROLLER,
           VOID_GET_DATANODE_INFO);
       return PBHelperClient.convert(response.getLocalInfo());
-    } catch (ServiceException e) {
-      throw ProtobufHelper.getRemoteException(e);
-    }
-  }
-
-  @Override
-  public long getCausynthValueA() throws IOException {
-    try {
-      GetCausynthValueResponseProto response = rpcProxy.getCausynthValueA(
-          NULL_CONTROLLER, VOID_GET_CAUSYNTH_VALUE);
-      return response.getValue();
-    } catch (ServiceException e) {
-      throw ProtobufHelper.getRemoteException(e);
-    }
-  }
-
-  @Override
-  public long getCausynthValueB() throws IOException {
-    try {
-      GetCausynthValueResponseProto response = rpcProxy.getCausynthValueB(
-          NULL_CONTROLLER, VOID_GET_CAUSYNTH_VALUE);
-      return response.getValue();
     } catch (ServiceException e) {
       throw ProtobufHelper.getRemoteException(e);
     }

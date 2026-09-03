@@ -291,9 +291,6 @@ public class ProtobufRpcEngine implements RpcEngine {
       } catch (Throwable e) {
         throw new ServiceException(e);
       }
-      // Client return: attach the server's response expression to the value
-      // the caller is about to compute with.
-      CausynthRpcTrace.receiveIpcResponse(buf, returnMessage);
       return returnMessage;
     }
 
@@ -381,8 +378,6 @@ public class ProtobufRpcEngine implements RpcEngine {
       @Override
       public void setResponse(Message message) {
         long processingTime = Time.now() - setupTime;
-        // The deferred export site: still an object graph, still this call.
-        CausynthRpcTrace.resumeIpcResponse(call, message, server);
         call.setDeferredResponse(RpcWritable.wrap(message));
         server.updateDeferredMetrics(methodName, processingTime);
       }
@@ -392,7 +387,6 @@ public class ProtobufRpcEngine implements RpcEngine {
         long processingTime = Time.now() - setupTime;
         String detailedMetricsName = t.getClass().getSimpleName();
         server.updateDeferredMetrics(detailedMetricsName, processingTime);
-        CausynthRpcTrace.abortIpcResponse(call, t, server);
         call.setDeferredError(t);
       }
     }
@@ -525,10 +519,6 @@ public class ProtobufRpcEngine implements RpcEngine {
         try {
           server.rpcDetailedMetrics.init(protocolImpl.protocolClass);
           currentCallInfo.set(new CallInfo(server, methodName));
-          // Handler entry: the arguments have just been deserialized, so this
-          // is where the caller's expressions can reach them.
-          CausynthRpcTrace.receiveIpcRequest(Server.getClientId(),
-              Server.getCallId(), Server.getCallRetryCount(), param, server);
           result = service.callBlockingMethod(methodDescriptor, null, param);
           // Check if this needs to be a deferred response,
           // by checking the ThreadLocal callback being set
@@ -536,15 +526,8 @@ public class ProtobufRpcEngine implements RpcEngine {
             Server.getCurCall().get().deferResponse();
             isDeferred = true;
             currentCallback.set(null);
-            // Open, not failed: the callback exports this response later.
-            CausynthRpcTrace.deferIpcResponse(Server.getClientId(),
-                Server.getCallId(), Server.getCallRetryCount(), server);
             return null;
           }
-          // The response the server derived from this request, still an
-          // object graph.
-          CausynthRpcTrace.sendIpcResponse(Server.getClientId(),
-              Server.getCallId(), Server.getCallRetryCount(), result, server);
         } catch (ServiceException e) {
           exception = (Exception) e.getCause();
           throw (Exception) e.getCause();
@@ -588,14 +571,6 @@ public class ProtobufRpcEngine implements RpcEngine {
     RpcProtobufRequest(RequestHeaderProto header, Message payload) {
       this.requestHeader = header;
       this.payload = payload;
-    }
-
-    /**
-     * The protocol payload still in object form, before this envelope is
-     * serialized.  Null on the receiving side, where only bytes exist.
-     */
-    Message getCausynthPayload() {
-      return payload;
     }
 
     RequestHeaderProto getRequestHeader() throws IOException {

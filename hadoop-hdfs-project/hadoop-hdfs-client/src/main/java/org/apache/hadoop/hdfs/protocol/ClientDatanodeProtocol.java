@@ -136,12 +136,6 @@ public interface ClientDatanodeProtocol {
    */
   DatanodeLocalInfo getDatanodeInfo() throws IOException;
 
-  /** Execute the first Causynth test relation on this DataNode. */
-  long getCausynthValueA() throws IOException;
-
-  /** Execute the second Causynth test relation on this DataNode. */
-  long getCausynthValueB() throws IOException;
-
   /**
    * Asynchronously reload configuration on disk and apply changes.
    */

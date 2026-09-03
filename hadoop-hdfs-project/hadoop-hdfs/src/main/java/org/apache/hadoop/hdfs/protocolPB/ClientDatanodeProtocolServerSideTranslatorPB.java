@@ -35,8 +35,6 @@ import org.apache.hadoop.hdfs.protocol.proto.ClientDatanodeProtocolProtos.GetBlo
 import org.apache.hadoop.hdfs.protocol.proto.ClientDatanodeProtocolProtos.GetBlockLocalPathInfoResponseProto;
 import org.apache.hadoop.hdfs.protocol.proto.ClientDatanodeProtocolProtos.GetDatanodeInfoRequestProto;
 import org.apache.hadoop.hdfs.protocol.proto.ClientDatanodeProtocolProtos.GetDatanodeInfoResponseProto;
-import org.apache.hadoop.hdfs.protocol.proto.ClientDatanodeProtocolProtos.GetCausynthValueRequestProto;
-import org.apache.hadoop.hdfs.protocol.proto.ClientDatanodeProtocolProtos.GetCausynthValueResponseProto;
 import org.apache.hadoop.hdfs.protocol.proto.ReconfigurationProtocolProtos.GetReconfigurationStatusRequestProto;
 import org.apache.hadoop.hdfs.protocol.proto.ReconfigurationProtocolProtos.GetReconfigurationStatusResponseProto;
 import org.apache.hadoop.hdfs.protocol.proto.ClientDatanodeProtocolProtos.GetReplicaVisibleLengthRequestProto;
@@ -183,30 +181,6 @@ public class ClientDatanodeProtocolServerSideTranslatorPB implements
       throw new ServiceException(e);
     }
     return res;
-  }
-
-  @Override
-  public GetCausynthValueResponseProto getCausynthValueA(
-      RpcController unused, GetCausynthValueRequestProto request)
-      throws ServiceException {
-    try {
-      return GetCausynthValueResponseProto.newBuilder()
-          .setValue(impl.getCausynthValueA()).build();
-    } catch (IOException e) {
-      throw new ServiceException(e);
-    }
-  }
-
-  @Override
-  public GetCausynthValueResponseProto getCausynthValueB(
-      RpcController unused, GetCausynthValueRequestProto request)
-      throws ServiceException {
-    try {
-      return GetCausynthValueResponseProto.newBuilder()
-          .setValue(impl.getCausynthValueB()).build();
-    } catch (IOException e) {
-      throw new ServiceException(e);
-    }
   }
 
   @Override

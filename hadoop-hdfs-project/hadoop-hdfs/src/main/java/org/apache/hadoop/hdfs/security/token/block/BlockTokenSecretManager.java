@@ -31,7 +31,6 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 
-import edu.uva.liftlab.graphchecker.annotation.CausynthExceptionTarget;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.classification.InterfaceAudience;
@@ -176,19 +175,6 @@ public class BlockTokenSecretManager extends
       return null;
     if (LOG.isDebugEnabled())
       LOG.debug("Exporting access keys");
-    // K is published here, on the export path, because this is the key id the
-    // NameNode actually hands out: the Balancer's getBlockKeys reply and every
-    // DataNode's KeyUpdateCommand carry this exact object.  The export also
-    // runs on every one of those calls, so the hook is entered inside an
-    // admitted occurrence of the getBlockKeys / registerDatanode /
-    // sendHeartbeat regions rather than inside the interval-guarded, once-only
-    // rotation in updateKeys(), which a replayed cluster never reaches.
-    // currentKey always owns its own allKeys entry -- generateKeys() and
-    // updateKeys() both publish it under its own id -- so the hook's map
-    // invariant holds and a modeled id is re-keyed before the map is read
-    // into the exported array below.  The hook is entered unconditionally and
-    // refuses internally; isMaster above is a role guard, not a selector.
-    currentKey.symbolizeCausynthHdfs11741CurrentKeyId(allKeys);
     return new ExportedBlockKeys(true, keyUpdateInterval, tokenLifetime,
         currentKey, allKeys.values().toArray(new BlockKey[0]));
   }
@@ -198,10 +184,6 @@ public class BlockTokenSecretManager extends
     for (Iterator<Map.Entry<Integer, BlockKey>> it = allKeys.entrySet()
         .iterator(); it.hasNext();) {
       Map.Entry<Integer, BlockKey> e = it.next();
-      // Re-enter an expiry expression that was minted by the NameNode and
-      // propagated with this exact key.  Concrete initialization keys do not
-      // mint here: resume succeeds only for an existing VM field version.
-      e.getValue().resumeCausynthHdfs11741ExpiryDate();
       if (e.getValue().getExpiryDate() < now) {
         it.remove();
       }
@@ -216,9 +198,6 @@ public class BlockTokenSecretManager extends
     if (isMaster || exportedKeys == null)
       return;
     LOG.info("Setting block keys");
-    // Worker-side expiry values are not symbolic roots.  K and its expiry must
-    // arrive from the NameNode through register/heartbeat handoff, and the
-    // branch below consumes that propagated expression directly.
     removeExpiredKeys();
     this.currentKey = exportedKeys.getCurrentKey();
     BlockKey[] receivedKeys = exportedKeys.getAllKeys();
@@ -249,14 +228,10 @@ public class BlockTokenSecretManager extends
 
     LOG.info("Updating block keys");
     removeExpiredKeys();
-    // E_ret belongs to exactly this NameNode-created retiring version.  K is
-    // copied from the previously exported currentKey; the expiry is the one
-    // fresh symbolic root whose propagated copies are later consumed by the
-    // DataNode removeExpiredKeys branch.
-    BlockKey retiringKey = new BlockKey(currentKey.getKeyId(),
-        Time.now() + keyUpdateInterval + tokenLifetime, currentKey.getKey());
-    retiringKey.symbolizeCausynthHdfs11741ExpiryDate();
-    allKeys.put(retiringKey.getKeyId(), retiringKey);
+    // set final expiry date of retiring currentKey
+    allKeys.put(currentKey.getKeyId(), new BlockKey(currentKey.getKeyId(),
+        Time.now() + keyUpdateInterval + tokenLifetime,
+        currentKey.getKey()));
     // update the estimated expiry date of new currentKey
     currentKey = new BlockKey(nextKey.getKeyId(), Time.now()
         + 2 * keyUpdateInterval + tokenLifetime, nextKey.getKey());
@@ -266,11 +241,6 @@ public class BlockTokenSecretManager extends
     nextKey = new BlockKey(serialNo, Time.now() + 3
         * keyUpdateInterval + tokenLifetime, generateSecret());
     allKeys.put(nextKey.getKeyId(), nextKey);
-    // K is NOT published here.  This rotation is interval-guarded and
-    // once-only: a replayed cluster never re-enters it, so a mint site here is
-    // planned but never executed and the source materializes nothing.  The
-    // exported currentKey is also the id the milestone is about, so the hook
-    // lives on the export path in exportKeys() instead.
     return true;
   }
 
@@ -509,8 +479,7 @@ public class BlockTokenSecretManager extends
     synchronized (this) {
       key = allKeys.get(keyId);
       if (key == null) {
-        throw new @CausynthExceptionTarget("hdfs-11741")
-            InvalidEncryptionKeyException("Can't re-compute encryption key"
+        throw new InvalidEncryptionKeyException("Can't re-compute encryption key"
             + " for nonce, since the required block key (keyID=" + keyId
             + ") doesn't exist. Current key: " + currentKey.getKeyId());
       }

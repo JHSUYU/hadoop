@@ -108,7 +108,6 @@ import org.apache.hadoop.hdfs.server.datanode.fsdataset.impl.FsVolumeImpl;
 import org.apache.hadoop.hdfs.server.namenode.EditLogFileOutputStream;
 import org.apache.hadoop.hdfs.server.namenode.FSNamesystem;
 import org.apache.hadoop.hdfs.server.namenode.NameNode;
-import org.apache.hadoop.ipc.CausynthTraceContext;
 import org.apache.hadoop.hdfs.server.namenode.NameNodeAdapter;
 import org.apache.hadoop.hdfs.server.protocol.DatanodeStorage;
 import org.apache.hadoop.hdfs.server.protocol.NamenodeProtocols;
@@ -192,8 +191,6 @@ public class MiniDFSCluster implements AutoCloseable {
     private Configuration[] dnConfOverlays;
     private boolean skipFsyncForTesting = true;
     private boolean useConfiguredTopologyMappingClass = false;
-    private boolean causynthRpcValueProbe = false;
-    private CausynthSourceBinder causynthSourceBinder;
 
     public Builder(Configuration conf) {
       this.conf = conf;
@@ -446,31 +443,12 @@ public class MiniDFSCluster implements AutoCloseable {
       return this;
     }
 
-    /** Read and compare one value from each of two real DataNodes. */
-    public Builder causynthRpcValueProbe() {
-      this.causynthRpcValueProbe = true;
-      return this;
-    }
-
-    /** Bind optional trace identities before DataNode registration starts. */
-    public Builder causynthSourceBinder(CausynthSourceBinder binder) {
-      this.causynthSourceBinder = binder;
-      return this;
-    }
-
     /**
      * Construct the actual MiniDFSCluster
      */
     public MiniDFSCluster build() throws IOException {
       return new MiniDFSCluster(this);
     }
-  }
-
-  /** Test-only startup callback; absent from ordinary MiniDFSCluster builds. */
-  public interface CausynthSourceBinder {
-    void bindNameNode(NameNode nameNode, int index);
-
-    void bindDataNode(DataNode dataNode, int index);
   }
   
   /**
@@ -489,11 +467,6 @@ public class MiniDFSCluster implements AutoCloseable {
         + ", numDataNodes=" + builder.numDataNodes);
 
     this.storagesPerDatanode = builder.storagesPerDatanode;
-    this.causynthSourceBinder = builder.causynthSourceBinder;
-    if (causynthSourceBinder != null) {
-      builder.conf.setBoolean(
-          "dfs.datanode.bp-service.defer-initial-start-for-testing", true);
-    }
 
     // Duplicate the storageType setting for each DN.
     if (builder.storageTypes == null && builder.storageTypes1D != null) {
@@ -539,38 +512,6 @@ public class MiniDFSCluster implements AutoCloseable {
                        builder.dnConfOverlays,
                        builder.skipFsyncForTesting,
                        builder.useConfiguredTopologyMappingClass);
-    if (builder.causynthRpcValueProbe) {
-      try {
-        waitActive();
-        ArrayList<DataNode> nodes = getDataNodes();
-        DatanodeID[] ids = new DatanodeID[nodes.size()];
-        // Register logical node identities once.  The two operations declare
-        // the same source names; tracing, not hard-coded A/B source IDs,
-        // distinguishes the DataNodes and their dynamic occurrences.
-        NameNode nameNode = getNameNode();
-        CausynthTraceContext.registerSource(nameNode, "CLUSTER_NODE",
-            "NAMENODE", "cluster0/nn0", 0L);
-        for (int i = 0; i < nodes.size(); i++) {
-          CausynthTraceContext.registerSource(nodes.get(i), "CLUSTER_NODE",
-              "DATANODE", "cluster0/dn" + i, 0L);
-        }
-
-        for (int i = 0; i < nodes.size(); i++) {
-          ids[i] = nodes.get(i).getDatanodeId();
-        }
-        String requestApi = "compareCausynthDataNodeValues";
-        long requestId = CausynthTraceContext.beginSourceRequest(
-            nameNode, requestApi);
-        try {
-          nameNode.compareCausynthDataNodeValues(ids);
-        } finally {
-          CausynthTraceContext.endSourceRequest(requestId, requestApi);
-        }
-      } catch (IOException failure) {
-        shutdown();
-        throw failure;
-      }
-    }
   }
   
   public class DataNodeProperties {
@@ -604,7 +545,6 @@ public class MiniDFSCluster implements AutoCloseable {
   private boolean waitSafeMode = true;
   private boolean federation;
   private boolean checkExitOnShutdown = true;
-  private CausynthSourceBinder causynthSourceBinder;
   protected final int storagesPerDatanode;
   private Set<FileSystem> fileSystems = Sets.newHashSet();
 
@@ -908,13 +848,6 @@ public class MiniDFSCluster implements AutoCloseable {
             nnTopology, manageNameDfsDirs, manageNameDfsSharedDirs,
             enableManagedDfsDirsRedundancy,
             format, startOpt, clusterId);
-        if (causynthSourceBinder != null) {
-          int nameNodeIndex = 0;
-          for (NameNodeInfo info : namenodes.values()) {
-            causynthSourceBinder.bindNameNode(
-                info.nameNode, nameNodeIndex++);
-          }
-        }
       } catch (IOException ioe) {
         LOG.error("IOE creating namenodes. Permissions dump:\n" +
             createPermissionsDiagnosisString(data_dir), ioe);
@@ -1709,9 +1642,6 @@ public class MiniDFSCluster implements AutoCloseable {
       if(dn == null)
         throw new IOException("Cannot start DataNode in "
             + dnConf.get(DFS_DATANODE_DATA_DIR_KEY));
-      if (causynthSourceBinder != null) {
-        causynthSourceBinder.bindDataNode(dn, i);
-      }
       //since the HDFS does things based on host|ip:port, we need to add the
       //mapping for the service to rackId
       String service =

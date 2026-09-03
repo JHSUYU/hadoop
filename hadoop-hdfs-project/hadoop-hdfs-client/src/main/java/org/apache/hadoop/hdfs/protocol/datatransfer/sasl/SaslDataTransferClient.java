@@ -136,17 +136,12 @@ public class SaslDataTransferClient {
       InputStream underlyingIn, DataEncryptionKeyFactory encryptionKeyFactory,
       Token<BlockTokenIdentifier> accessToken, DatanodeID datanodeId)
       throws IOException {
-    CausynthSaslHandoff.enterClientConnection(socket);
-    try {
-      // The encryption key factory only returns a key if encryption is enabled.
-      DataEncryptionKey encryptionKey = !trustedChannelResolver.isTrusted() ?
-          encryptionKeyFactory.newDataEncryptionKey() : null;
-      IOStreamPair ios = send(socket.getInetAddress(), underlyingOut,
-          underlyingIn, encryptionKey, accessToken, datanodeId);
-      return ios != null ? ios : new IOStreamPair(underlyingIn, underlyingOut);
-    } finally {
-      CausynthSaslHandoff.leaveConnection();
-    }
+    // The encryption key factory only returns a key if encryption is enabled.
+    DataEncryptionKey encryptionKey = !trustedChannelResolver.isTrusted() ?
+        encryptionKeyFactory.newDataEncryptionKey() : null;
+    IOStreamPair ios = send(socket.getInetAddress(), underlyingOut,
+        underlyingIn, encryptionKey, accessToken, datanodeId);
+    return ios != null ? ios : new IOStreamPair(underlyingIn, underlyingOut);
   }
 
   /**
@@ -162,16 +157,11 @@ public class SaslDataTransferClient {
   public Peer peerSend(Peer peer, DataEncryptionKeyFactory encryptionKeyFactory,
       Token<BlockTokenIdentifier> accessToken, DatanodeID datanodeId)
       throws IOException {
-    CausynthSaslHandoff.enterClientConnection(peer);
-    try {
-      IOStreamPair ios = checkTrustAndSend(getPeerAddress(peer),
-          peer.getOutputStream(), peer.getInputStream(), encryptionKeyFactory,
-          accessToken, datanodeId);
-      // TODO: Consider renaming EncryptedPeer to SaslPeer.
-      return ios != null ? new EncryptedPeer(peer, ios) : peer;
-    } finally {
-      CausynthSaslHandoff.leaveConnection();
-    }
+    IOStreamPair ios = checkTrustAndSend(getPeerAddress(peer),
+        peer.getOutputStream(), peer.getInputStream(), encryptionKeyFactory,
+        accessToken, datanodeId);
+    // TODO: Consider renaming EncryptedPeer to SaslPeer.
+    return ios != null ? new EncryptedPeer(peer, ios) : peer;
   }
 
   /**
@@ -190,14 +180,9 @@ public class SaslDataTransferClient {
       InputStream underlyingIn, DataEncryptionKeyFactory encryptionKeyFactory,
       Token<BlockTokenIdentifier> accessToken, DatanodeID datanodeId)
       throws IOException {
-    CausynthSaslHandoff.enterClientConnection(socket);
-    try {
-      IOStreamPair ios = checkTrustAndSend(socket.getInetAddress(), underlyingOut,
-          underlyingIn, encryptionKeyFactory, accessToken, datanodeId);
-      return ios != null ? ios : new IOStreamPair(underlyingIn, underlyingOut);
-    } finally {
-      CausynthSaslHandoff.leaveConnection();
-    }
+    IOStreamPair ios = checkTrustAndSend(socket.getInetAddress(), underlyingOut,
+        underlyingIn, encryptionKeyFactory, accessToken, datanodeId);
+    return ios != null ? ios : new IOStreamPair(underlyingIn, underlyingOut);
   }
 
   /**
@@ -308,9 +293,6 @@ public class SaslDataTransferClient {
         encryptionKey.encryptionAlgorithm);
 
     String userName = getUserNameFromEncryptionKey(encryptionKey);
-    CausynthSaslHandoff.Attempt handoff =
-        CausynthSaslHandoff.exportEncryptionKey(this, encryptionKey);
-    handoff.registerUserName(userName);
     char[] password = encryptionKeyToPassword(encryptionKey.encryptionKey);
     CallbackHandler callbackHandler = new SaslClientCallbackHandler(userName,
         password);
@@ -451,8 +433,6 @@ public class SaslDataTransferClient {
       OutputStream underlyingOut, InputStream underlyingIn, String userName,
       Map<String, String> saslProps,
       CallbackHandler callbackHandler) throws IOException {
-
-    CausynthSaslHandoff.sendHandshake();
 
     DataOutputStream out = new DataOutputStream(underlyingOut);
     DataInputStream in = new DataInputStream(underlyingIn);

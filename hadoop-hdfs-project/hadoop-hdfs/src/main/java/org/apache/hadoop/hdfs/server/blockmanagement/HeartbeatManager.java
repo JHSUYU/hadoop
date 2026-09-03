@@ -102,18 +102,6 @@ class HeartbeatManager implements DatanodeStatistics {
     } catch (InterruptedException ignored) {
     }
   }
-
-  /**
-   * Return the exact long-lived monitor receiver for test instrumentation.
-   *
-   * <p>The daemon delegates to this object; exposing the stored runnable
-   * avoids identifying the monitor from a thread name or implementation
-   * class.</p>
-   */
-  @VisibleForTesting
-  Runnable getHeartbeatMonitorForTesting() {
-    return heartbeatThread.getRunnable();
-  }
   
   synchronized int getLiveDatanodeCount() {
     return datanodes.size();

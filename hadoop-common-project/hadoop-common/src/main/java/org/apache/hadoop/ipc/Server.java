@@ -682,7 +682,6 @@ public abstract class Server {
     final byte[] clientId;
     private final TraceScope traceScope; // the HTrace scope on the server side
     private final CallerContext callerContext; // the call context
-    CausynthRpcWire.WireValues requestExpressions;
     private boolean deferredResponse = false;
     private int priorityLevel;
     // the priority level assigned by scheduler, 0 by default
@@ -695,7 +694,6 @@ public abstract class Server {
     Call(Call call) {
       this(call.callId, call.retryCount, call.rpcKind, call.clientId,
           call.traceScope, call.callerContext);
-      this.requestExpressions = call.requestExpressions;
     }
 
     Call(int id, int retryCount, RPC.RpcKind kind, byte[] clientId) {
@@ -809,12 +807,6 @@ public abstract class Server {
 
     public void setDeferredError(Throwable t) {
     }
-
-    CausynthRpcWire.Handle takeRequestExpression(String leafPath) {
-      return requestExpressions == null
-          ? CausynthRpcWire.Handle.missing()
-          : requestExpressions.take(leafPath);
-    }
   }
 
   /** A RPC extended call queued for handling. */
@@ -872,7 +864,6 @@ public abstract class Server {
       ResponseParams responseParams = new ResponseParams();
 
       try {
-        CausynthRpcWire.beginServerCall();
         value = call(
             rpcKind, connection.protocolName, rpcRequest, timestamp);
       } catch (Throwable e) {
@@ -2481,7 +2472,6 @@ public abstract class Server {
           header.getRetryCount(), rpcRequest,
           ProtoUtil.convert(header.getRpcKind()),
           header.getClientId().toByteArray(), traceScope, callerContext);
-      call.requestExpressions = CausynthRpcWire.values(header);
 
       // Save the priority level assignment by the scheduler
       call.setPriorityLevel(callQueue.getPriorityLevel(call));
@@ -2902,7 +2892,6 @@ public abstract class Server {
     headerBuilder.setServerIpcVersionNum(CURRENT_VERSION);
 
     if (status == RpcStatusProto.SUCCESS) {
-      CausynthRpcWire.appendTo(headerBuilder);
       RpcResponseHeaderProto header = headerBuilder.build();
       try {
         setupResponse(call, header, rv);
@@ -2918,7 +2907,6 @@ public abstract class Server {
         return;
       }
     } else { // Rpc Failure
-      CausynthRpcWire.discardStagedExpressions();
       headerBuilder.setExceptionClassName(errorClass);
       headerBuilder.setErrorMsg(error);
       headerBuilder.setErrorDetail(erCode);
