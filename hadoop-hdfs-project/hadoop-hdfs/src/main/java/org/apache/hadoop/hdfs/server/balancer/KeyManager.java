@@ -46,6 +46,13 @@ import org.slf4j.LoggerFactory;
 public class KeyManager implements Closeable, DataEncryptionKeyFactory {
   private static final Logger LOG = LoggerFactory.getLogger(KeyManager.class);
 
+  @FunctionalInterface
+  interface TestHook {
+    void run(KeyManager keyManager) throws IOException;
+  }
+
+  static TestHook testWait = ignored -> { };
+
   private final NamenodeProtocol namenode;
 
   private final boolean isBlockTokenEnabled;
@@ -88,6 +95,7 @@ public class KeyManager implements Closeable, DataEncryptionKeyFactory {
       // sync block keys with NN more frequently than NN updates its block keys
       this.blockKeyUpdater = new BlockKeyUpdater(updateInterval / 4);
       this.shouldRun = true;
+      testWait.run(this);
     } else {
       this.blockTokenSecretManager = null;
       this.blockKeyUpdater = null;
@@ -98,6 +106,10 @@ public class KeyManager implements Closeable, DataEncryptionKeyFactory {
     if (blockKeyUpdater != null) {
       blockKeyUpdater.daemon.start();
     }
+  }
+
+  public void updateBlockKeys() throws IOException {
+    blockTokenSecretManager.addKeys(namenode.getBlockKeys());
   }
 
   /** Get an access token for a block. */
@@ -177,7 +189,7 @@ public class KeyManager implements Closeable, DataEncryptionKeyFactory {
       try {
         while (shouldRun) {
           try {
-            blockTokenSecretManager.addKeys(namenode.getBlockKeys());
+            updateBlockKeys();
           } catch (IOException e) {
             LOG.error("Failed to set keys", e);
           }
