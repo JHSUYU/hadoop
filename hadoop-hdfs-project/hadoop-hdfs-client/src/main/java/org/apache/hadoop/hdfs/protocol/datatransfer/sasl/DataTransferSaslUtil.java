@@ -51,6 +51,7 @@ import org.apache.hadoop.hdfs.protocol.datatransfer.IOStreamPair;
 import org.apache.hadoop.hdfs.protocol.datatransfer.InvalidEncryptionKeyException;
 import org.apache.hadoop.hdfs.protocol.proto.DataTransferProtos.DataTransferEncryptorMessageProto;
 import org.apache.hadoop.hdfs.protocol.proto.DataTransferProtos.DataTransferEncryptorMessageProto.DataTransferEncryptorStatus;
+import org.apache.hadoop.ipc.CausynthMessagePropagation;
 import org.apache.hadoop.hdfs.protocol.proto.DataTransferProtos.HandshakeSecretProto;
 import org.apache.hadoop.hdfs.protocol.proto.HdfsProtos.CipherOptionProto;
 import org.apache.hadoop.hdfs.protocolPB.PBHelperClient;
@@ -215,6 +216,11 @@ public final class DataTransferSaslUtil {
       Function<DataTransferEncryptorMessageProto, ? extends T> handler) throws IOException {
     DataTransferEncryptorMessageProto proto =
         DataTransferEncryptorMessageProto.parseFrom(vintPrefixed(in));
+    CausynthMessagePropagation.inboundSasl(
+        proto.hasCausynthTrace() ? proto.getCausynthTrace() : "",
+        proto.hasCausynthSymbolic() ? proto.getCausynthSymbolic() : "",
+        proto.hasCausynthCorrelation() ? proto.getCausynthCorrelation() : "",
+        proto.hasCausynthAttempt() ? proto.getCausynthAttempt() : "");
     switch (proto.getStatus()) {
     case ERROR_UNKNOWN_KEY:
       throw new InvalidEncryptionKeyException(proto.getMessage());
@@ -371,9 +377,7 @@ public final class DataTransferSaslUtil {
       builder.addCipherOption(PBHelperClient.convert(option));
     }
 
-    DataTransferEncryptorMessageProto proto = builder.build();
-    proto.writeDelimitedTo(out);
-    out.flush();
+    writeSaslMessage(out, builder);
   }
 
   /**
@@ -458,9 +462,7 @@ public final class DataTransferSaslUtil {
       builder.addAllCipherOption(PBHelperClient.convertCipherOptions(options));
     }
 
-    DataTransferEncryptorMessageProto proto = builder.build();
-    proto.writeDelimitedTo(out);
-    out.flush();
+    writeSaslMessage(out, builder);
   }
 
   /**
@@ -583,8 +585,22 @@ public final class DataTransferSaslUtil {
       builder.setAccessTokenError(true);
     }
 
-    DataTransferEncryptorMessageProto proto = builder.build();
-    proto.writeDelimitedTo(out);
+    writeSaslMessage(out, builder);
+  }
+
+  private static void writeSaslMessage(OutputStream out,
+      DataTransferEncryptorMessageProto.Builder builder) throws IOException {
+    CausynthMessagePropagation.Outbound causynth =
+        CausynthMessagePropagation.outboundSasl();
+    if (causynth.active()) {
+      builder.setCausynthCorrelation(causynth.correlationId)
+          .setCausynthAttempt(causynth.attemptId)
+          .setCausynthTrace(causynth.trace);
+      if (!causynth.symbolic.isEmpty()) {
+        builder.setCausynthSymbolic(causynth.symbolic);
+      }
+    }
+    builder.build().writeDelimitedTo(out);
     out.flush();
   }
 

@@ -1228,6 +1228,8 @@ public abstract class Server {
     final Connection connection;  // connection to client
     final Writable rpcRequest;    // Serialized Rpc request from client
     ByteBuffer rpcResponse;       // the response for this call
+    String causynthTrace = "";
+    String causynthSymbolic = "";
 
     private ResponseParams responseParams; // the response params
     private Writable rv;                   // the byte response
@@ -1238,6 +1240,8 @@ public abstract class Server {
       this.rpcRequest = call.rpcRequest;
       this.rv = call.rv;
       this.responseParams = call.responseParams;
+      this.causynthTrace = call.causynthTrace;
+      this.causynthSymbolic = call.causynthSymbolic;
     }
 
     RpcCall(Connection connection, int id) {
@@ -1307,28 +1311,37 @@ public abstract class Server {
       this.setStartHandleTimestampNanos(startNanos);
       Writable value = null;
       ResponseParams responseParams = new ResponseParams();
+      CausynthMessagePropagation.Inbound causynth =
+          CausynthMessagePropagation.inbound(causynthTrace,
+              causynthSymbolic, CausynthMessagePropagation.IPC,
+              CausynthMessagePropagation.rpcCorrelation(clientId, callId),
+              Integer.toString(retryCount), "REQUEST", Server.this);
 
       try {
-        value = call(
-            rpcKind, connection.protocolName, rpcRequest, getTimestampNanos());
-      } catch (Throwable e) {
-        populateResponseParamsOnError(e, responseParams);
-      }
-      if (!isResponseDeferred()) {
-        long deltaNanos = Time.monotonicNowNanos() - startNanos;
-        ProcessingDetails details = getProcessingDetails();
+        try {
+          value = call(rpcKind, connection.protocolName, rpcRequest,
+              getTimestampNanos());
+        } catch (Throwable e) {
+          populateResponseParamsOnError(e, responseParams);
+        }
+        if (!isResponseDeferred()) {
+          long deltaNanos = Time.monotonicNowNanos() - startNanos;
+          ProcessingDetails details = getProcessingDetails();
 
-        details.set(Timing.PROCESSING, deltaNanos, TimeUnit.NANOSECONDS);
-        deltaNanos -= details.get(Timing.LOCKWAIT, TimeUnit.NANOSECONDS);
-        deltaNanos -= details.get(Timing.LOCKSHARED, TimeUnit.NANOSECONDS);
-        deltaNanos -= details.get(Timing.LOCKEXCLUSIVE, TimeUnit.NANOSECONDS);
-        details.set(Timing.LOCKFREE, deltaNanos, TimeUnit.NANOSECONDS);
+          details.set(Timing.PROCESSING, deltaNanos, TimeUnit.NANOSECONDS);
+          deltaNanos -= details.get(Timing.LOCKWAIT, TimeUnit.NANOSECONDS);
+          deltaNanos -= details.get(Timing.LOCKSHARED, TimeUnit.NANOSECONDS);
+          deltaNanos -= details.get(Timing.LOCKEXCLUSIVE, TimeUnit.NANOSECONDS);
+          details.set(Timing.LOCKFREE, deltaNanos, TimeUnit.NANOSECONDS);
 
-        setResponseFields(value, responseParams);
-        sendResponse();
-        details.setReturnStatus(responseParams.returnStatus);
-      } else {
-        LOG.debug("Deferring response for callId: {}", this.callId);
+          setResponseFields(value, responseParams);
+          sendResponse();
+          details.setReturnStatus(responseParams.returnStatus);
+        } else {
+          LOG.debug("Deferring response for callId: {}", this.callId);
+        }
+      } finally {
+        CausynthMessagePropagation.endInbound(causynth);
       }
       return null;
     }
@@ -3022,6 +3035,10 @@ public abstract class Server {
             header.getRetryCount(), rpcRequest,
             ProtoUtil.convert(header.getRpcKind()),
             header.getClientId().toByteArray(), span, callerContext, authHeader);
+        call.causynthTrace = header.hasCausynthTrace()
+            ? header.getCausynthTrace() : "";
+        call.causynthSymbolic = header.hasCausynthSymbolic()
+            ? header.getCausynthSymbolic() : "";
 
         // Save the priority level assignment by the scheduler
         call.setPriorityLevel(callQueue.getPriorityLevel(call));
@@ -3619,6 +3636,17 @@ public abstract class Server {
     headerBuilder.setRetryCount(call.retryCount);
     headerBuilder.setStatus(status);
     headerBuilder.setServerIpcVersionNum(CURRENT_VERSION);
+    CausynthMessagePropagation.Outbound causynth =
+        CausynthMessagePropagation.outbound(CausynthMessagePropagation.IPC,
+            CausynthMessagePropagation.rpcCorrelation(call.clientId,
+                call.callId), Integer.toString(call.retryCount),
+            "RESPONSE", this);
+    if (causynth.active()) {
+      headerBuilder.setCausynthTrace(causynth.trace);
+      if (!causynth.symbolic.isEmpty()) {
+        headerBuilder.setCausynthSymbolic(causynth.symbolic);
+      }
+    }
     if (alignmentContext != null) {
       alignmentContext.updateResponseState(headerBuilder);
     }

@@ -45,6 +45,10 @@ message DataTransferEncryptorMessageProto {
   repeated CipherOptionProto cipherOption = 4;
   optional HandshakeSecretProto handshakeSecret = 5;
   optional bool accessTokenError = 6;
+  optional string causynthCorrelation = 7;
+  optional string causynthAttempt = 8;
+  optional string causynthTrace = 9;
+  optional string causynthSymbolic = 10;
 }
 
 message HandshakeSecretProto {
