@@ -57,6 +57,7 @@ import org.apache.hadoop.hdfs.protocol.datatransfer.IOStreamPair;
 import org.apache.hadoop.hdfs.protocol.datatransfer.TrustedChannelResolver;
 import org.apache.hadoop.hdfs.security.token.block.BlockTokenIdentifier;
 import org.apache.hadoop.hdfs.security.token.block.DataEncryptionKey;
+import org.apache.hadoop.ipc.CausynthMessagePropagation;
 import org.apache.hadoop.security.SaslPropertiesResolver;
 import org.apache.hadoop.security.SecurityUtil;
 import org.apache.hadoop.security.UserGroupInformation;
@@ -200,10 +201,15 @@ public class SaslDataTransferClient {
       Token<BlockTokenIdentifier> accessToken, DatanodeID datanodeId,
       SecretKey secretKey)
       throws IOException {
-    IOStreamPair ios = checkTrustAndSend(socket.getInetAddress(), underlyingOut,
-        underlyingIn, encryptionKeyFactory, accessToken, datanodeId,
-        secretKey);
-    return ios != null ? ios : new IOStreamPair(underlyingIn, underlyingOut);
+    CausynthMessagePropagation.beginSasl();
+    try {
+      IOStreamPair ios = checkTrustAndSend(socket.getInetAddress(),
+          underlyingOut, underlyingIn, encryptionKeyFactory, accessToken,
+          datanodeId, secretKey);
+      return ios != null ? ios : new IOStreamPair(underlyingIn, underlyingOut);
+    } finally {
+      CausynthMessagePropagation.endSasl();
+    }
   }
 
   /**
