@@ -1195,10 +1195,14 @@ public class TestBalancer {
   }
 
   void testBalancer1Internal(Configuration conf) throws Exception {
+    testBalancer1Internal(conf, CAPACITY);
+  }
+
+  void testBalancer1Internal(Configuration conf, long capacity) throws Exception {
     initConf(conf);
     testUnevenDistribution(conf,
-        new long[]{50 * CAPACITY / 100, 10 * CAPACITY / 100},
-        new long[]{CAPACITY, CAPACITY},
+        new long[]{50 * capacity / 100, 10 * capacity / 100},
+        new long[]{capacity, capacity},
         new String[]{RACK0, RACK1});
   }
 

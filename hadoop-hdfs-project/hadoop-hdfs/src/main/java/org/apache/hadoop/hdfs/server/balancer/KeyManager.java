@@ -17,6 +17,7 @@
  */
 package org.apache.hadoop.hdfs.server.balancer;
 
+import edu.uva.liftlab.graphchecker.annotation.Debug;
 import java.io.Closeable;
 import java.io.IOException;
 import java.util.EnumSet;
@@ -35,7 +36,6 @@ import org.apache.hadoop.hdfs.server.protocol.NamenodeProtocol;
 import org.apache.hadoop.security.token.Token;
 import org.apache.hadoop.util.Daemon;
 import org.apache.hadoop.util.StringUtils;
-import org.apache.hadoop.util.Timer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -56,23 +56,14 @@ public class KeyManager implements Closeable, DataEncryptionKeyFactory {
   private final NamenodeProtocol namenode;
 
   private final boolean isBlockTokenEnabled;
-  private final boolean encryptDataTransfer;
   private boolean shouldRun;
 
   private final BlockTokenSecretManager blockTokenSecretManager;
   private final BlockKeyUpdater blockKeyUpdater;
-  private DataEncryptionKey encryptionKey;
-  /**
-   * Timer object for querying the current time. Separated out for
-   * unit testing.
-   */
-  private Timer timer;
 
   public KeyManager(String blockpoolID, NamenodeProtocol namenode,
       boolean encryptDataTransfer, Configuration conf) throws IOException {
     this.namenode = namenode;
-    this.encryptDataTransfer = encryptDataTransfer;
-    this.timer = new Timer();
 
     final ExportedBlockKeys keys = namenode.getBlockKeys();
     this.isBlockTokenEnabled = keys.isBlockTokenEnabled();
@@ -108,8 +99,22 @@ public class KeyManager implements Closeable, DataEncryptionKeyFactory {
     }
   }
 
-  public void updateBlockKeys() throws IOException {
-    blockTokenSecretManager.addKeys(namenode.getBlockKeys());
+  public void updateBlockKeys() {
+    int retainedKeyId = blockTokenSecretManager.getCurrentKeyId();
+    int refreshedKeyId = retainedKeyId;
+    boolean failed = Debug.makeSymbolicBoolean("rpcFails");
+    try {
+      if (failed) {
+        throw new IOException("symbolic RPC failure");
+      }
+      refreshedKeyId = blockTokenSecretManager.addKeysAndGetCurrentKeyId(
+          namenode.getBlockKeys());
+    } catch (IOException e) {
+      failed = true;
+      LOG.error("Failed to set keys; retaining key {}", retainedKeyId, e);
+    }
+    blockTokenSecretManager.finishKeyRefresh(
+        failed, retainedKeyId, refreshedKeyId);
   }
 
   /** Get an access token for a block. */
@@ -130,34 +135,7 @@ public class KeyManager implements Closeable, DataEncryptionKeyFactory {
 
   @Override
   public DataEncryptionKey newDataEncryptionKey() {
-    if (encryptDataTransfer) {
-      synchronized (this) {
-        if (encryptionKey == null ||
-            encryptionKey.expiryDate < timer.now()) {
-          // Encryption Key (EK) is generated from Block Key (BK).
-          // Check if EK is expired, and generate a new one using the current BK
-          // if so, otherwise continue to use the previously generated EK.
-          //
-          // It's important to make sure that when EK is not expired, the BK
-          // used to generate the EK is not expired and removed, because
-          // the same BK will be used to re-generate the EK
-          // by BlockTokenSecretManager.
-          //
-          // The current implementation ensures that when an EK is not expired
-          // (within tokenLifetime), the BK that's used to generate it
-          // still has at least "keyUpdateInterval" of life time before
-          // the BK gets expired and removed.
-          // See BlockTokenSecretManager for details.
-          LOG.debug("Generating new data encryption key because current key "
-              + (encryptionKey == null ?
-              "is null." : "expired on " + encryptionKey.expiryDate));
-          encryptionKey = blockTokenSecretManager.generateDataEncryptionKey();
-        }
-        return encryptionKey;
-      }
-    } else {
-      return null;
-    }
+    return blockTokenSecretManager.generateDataEncryptionKey();
   }
 
   @Override
@@ -188,11 +166,7 @@ public class KeyManager implements Closeable, DataEncryptionKeyFactory {
     public void run() {
       try {
         while (shouldRun) {
-          try {
-            updateBlockKeys();
-          } catch (IOException e) {
-            LOG.error("Failed to set keys", e);
-          }
+          updateBlockKeys();
           Thread.sleep(sleepInterval);
         }
       } catch (InterruptedException e) {
