@@ -344,7 +344,8 @@ public class SaslDataTransferClient {
    */
   private static String getUserNameFromEncryptionKey(
       DataEncryptionKey encryptionKey) {
-    return encryptionKey.keyId + NAME_DELIMITER +
+    String keyId = Integer.toString(encryptionKey.keyId);
+    return keyId + NAME_DELIMITER +
         encryptionKey.blockPoolId + NAME_DELIMITER +
         new String(Base64.encodeBase64(encryptionKey.nonce, false),
             StandardCharsets.UTF_8);
