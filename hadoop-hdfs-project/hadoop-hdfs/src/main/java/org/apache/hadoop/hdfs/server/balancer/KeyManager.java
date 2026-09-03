@@ -100,6 +100,10 @@ public class KeyManager implements Closeable, DataEncryptionKeyFactory {
     }
   }
 
+  public void updateBlockKeys() throws IOException {
+    blockTokenSecretManager.addKeys(namenode.getBlockKeys());
+  }
+
   /** Get an access token for a block. */
   public Token<BlockTokenIdentifier> getAccessToken(ExtendedBlock eb,
       StorageType[] storageTypes, String[] storageIds) throws IOException {
@@ -177,7 +181,7 @@ public class KeyManager implements Closeable, DataEncryptionKeyFactory {
       try {
         while (shouldRun) {
           try {
-            blockTokenSecretManager.addKeys(namenode.getBlockKeys());
+            updateBlockKeys();
           } catch (IOException e) {
             LOG.error("Failed to set keys", e);
           }

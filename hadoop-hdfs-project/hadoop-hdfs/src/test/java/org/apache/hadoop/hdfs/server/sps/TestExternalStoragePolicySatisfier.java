@@ -110,6 +110,13 @@ import javax.management.MBeanServer;
 import javax.management.ObjectName;
 import java.util.function.Supplier;
 
+import edu.uva.liftlab.graphchecker.annotation.Debug;
+import org.apache.hadoop.hdfs.security.token.block.BlockKey;
+import org.apache.hadoop.hdfs.security.token.block.BlockTokenSecretManager;
+import org.apache.hadoop.hdfs.security.token.block.ExportedBlockKeys;
+import org.apache.hadoop.hdfs.server.namenode.NameNodeRpcServer;
+import org.apache.hadoop.ipc.CausynthMessagePropagation;
+
 /**
  * Tests the external sps service plugins.
  */
@@ -1066,6 +1073,85 @@ public class TestExternalStoragePolicySatisfier {
     } finally {
       shutdownCluster();
     }
+  }
+
+  @Test
+  @Timeout(value = 120)
+  public void testCausynthSpsKeyRefreshRpcFailure() throws Exception {
+    StorageType[][] diskTypes =
+        new StorageType[][]{{StorageType.DISK, StorageType.SSD}};
+    config.setBoolean(DFSConfigKeys.DFS_ENCRYPT_DATA_TRANSFER_KEY, true);
+    config.setBoolean(DFS_BLOCK_ACCESS_TOKEN_ENABLE_KEY, true);
+    config.setInt(
+        DFSConfigKeys.DFS_STORAGE_POLICY_SATISFIER_MOVE_TASK_MAX_RETRY_ATTEMPTS_KEY,
+        0);
+    config.setLong("dfs.block.size", DEFAULT_BLOCK_SIZE);
+    try {
+      hdfsCluster = startCluster(config, diskTypes, 1, 2, CAPACITY,
+          true, false);
+      dfs = hdfsCluster.getFileSystem();
+      writeContent(FILE, (short) 1);
+      nnc = DFSTestUtil.getNameNodeConnector(config,
+          HdfsServerConstants.MOVER_ID_PATH, 1, true);
+      DataNode target = hdfsCluster.getDataNodes().get(0);
+      registerCausynthSources(target);
+
+      BlockTokenSecretManager master = hdfsCluster.getNamesystem()
+          .getBlockManager().getBlockTokenSecretManager();
+      master.setKeyUpdateIntervalForTesting(0);
+      master.updateKeys(1);
+      master.updateKeys(1);
+      installOnlyCurrentKey(target, master.exportKeys());
+
+      dfs.setStoragePolicy(new Path(FILE), ONE_SSD);
+      dfs.satisfyStoragePolicy(new Path(FILE));
+      long request = CausynthMessagePropagation.beginRequest(
+          nnc, "satisfy-storage-policy");
+      try {
+        boolean rpcFails = Debug.makeSymbolicBoolean("rpcFails");
+        try {
+          if (rpcFails) {
+            throw new IOException("symbolic RPC failure");
+          }
+          nnc.getKeyManager().updateBlockKeys();
+        } catch (IOException expected) {
+          // A failed refresh deliberately retains the SPS client's S0.
+        }
+        startExternalSps();
+        hdfsCluster.triggerHeartbeats();
+        DFSTestUtil.waitExpectedStorageType(
+            FILE, StorageType.SSD, 1, 30000, dfs);
+      } finally {
+        CausynthMessagePropagation.endRequest(
+            request, "satisfy-storage-policy");
+      }
+    } finally {
+      shutdownCluster();
+    }
+  }
+
+  private void installOnlyCurrentKey(DataNode target, ExportedBlockKeys keys)
+      throws IOException {
+    BlockKey current = keys.getCurrentKey();
+    ExportedBlockKeys currentOnly = new ExportedBlockKeys(true,
+        keys.getKeyUpdateInterval(), keys.getTokenLifetime(), current,
+        new BlockKey[]{current});
+    target.getBlockPoolTokenSecretManager().clearAllKeysForTesting();
+    target.getBlockPoolTokenSecretManager().addKeys(
+        hdfsCluster.getNamesystem().getBlockPoolId(), currentOnly, true);
+  }
+
+  private void registerCausynthSources(DataNode target) {
+    NameNodeRpcServer namenode =
+        (NameNodeRpcServer) hdfsCluster.getNameNodeRpc();
+    CausynthMessagePropagation.registerSource(
+        namenode.getClientRpcServer(), "CLUSTER_NODE", "NAMENODE",
+        "hdfs-17899/nn0", 0);
+    CausynthMessagePropagation.registerSource(
+        nnc, "EXTERNAL_APP", "SPS", "hdfs-17899/sps", 0);
+    CausynthMessagePropagation.registerSource(
+        target.getDatanodeId(), "CLUSTER_NODE", "DATANODE",
+        "hdfs-17899/target-dn", 0);
   }
 
   /**
