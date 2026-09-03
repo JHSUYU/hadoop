@@ -24,7 +24,6 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.function.ToIntFunction;
 import java.util.zip.CRC32;
-import java.util.zip.CRC32C;
 import java.util.zip.Checksum;
 
 import org.apache.hadoop.classification.InterfaceAudience;
@@ -87,7 +86,7 @@ public class DataChecksum implements Checksum {
   }
 
   static Checksum newCrc32C() {
-    return new CRC32C();
+    return new PureJavaCrc32C();
   }
 
   /**
