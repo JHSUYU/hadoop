@@ -57,6 +57,7 @@ public class TestCausynthDataTransferRpcFailure {
     Configuration conf = new HdfsConfiguration();
     conf.setBoolean(DFSConfigKeys.DFS_ENCRYPT_DATA_TRANSFER_KEY, true);
     conf.setBoolean(DFSConfigKeys.DFS_BLOCK_ACCESS_TOKEN_ENABLE_KEY, true);
+    conf.setLong(DFSConfigKeys.DFS_HEARTBEAT_INTERVAL_KEY, 3600);
     try (MiniDFSCluster cluster = new MiniDFSCluster.Builder(conf)
         .numDataNodes(2).build();
          DistributedFileSystem fs = cluster.getFileSystem()) {
@@ -75,10 +76,12 @@ public class TestCausynthDataTransferRpcFailure {
 
       BlockTokenSecretManager master = cluster.getNamesystem()
           .getBlockManager().getBlockTokenSecretManager();
+      ExportedBlockKeys stale = master.exportKeys();
       master.setKeyUpdateIntervalForTesting(0);
       master.updateKeys(1);
       master.updateKeys(1);
       ExportedBlockKeys fresh = master.exportKeys();
+      installOnlyCurrentKey(source, block.getBlockPoolId(), stale);
       installOnlyCurrentKey(target, block.getBlockPoolId(), fresh);
 
       long request = CausynthMessagePropagation.beginRequest(
