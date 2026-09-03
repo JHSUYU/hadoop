@@ -52,8 +52,17 @@ public final class CausynthMessagePropagation {
   public static Inbound inbound(String trace, String symbolic,
       String transport, String correlationId, String attemptId, String half,
       Object localOwner) {
-    endInbound();
-    SymbolicMessageEnvelope.clearInbound();
+    return inbound(trace, symbolic, transport, correlationId, attemptId,
+        half, localOwner, false);
+  }
+
+  private static Inbound inbound(String trace, String symbolic,
+      String transport, String correlationId, String attemptId, String half,
+      Object localOwner, boolean preserveSymbolic) {
+    endInbound(!preserveSymbolic);
+    if (!preserveSymbolic) {
+      SymbolicMessageEnvelope.clearInbound();
+    }
     if (trace == null || trace.isEmpty()) {
       return Inbound.EMPTY;
     }
@@ -78,16 +87,35 @@ public final class CausynthMessagePropagation {
   }
 
   public static void endInbound() {
+    endInbound(true);
+  }
+
+  private static void endInbound(boolean clearSymbolic) {
     Inbound scope = CURRENT.get();
     if (scope == null) {
       return;
     }
     CURRENT.remove();
-    SymbolicMessageEnvelope.clearInbound();
+    if (clearSymbolic) {
+      SymbolicMessageEnvelope.clearInbound();
+    }
     CausynthTraceRecorder.endInboundExchange(scope.token);
   }
 
-  /** Emits the next alternating SASL request or response message. */
+  /** Starts one multi-message SASL exchange on the client thread. */
+  public static void beginSasl() {
+    if (PENDING_SASL.get() != null) {
+      throw new IllegalStateException("nested SASL exchange");
+    }
+    PENDING_SASL.set("hdfs-sasl-" + UUID.randomUUID());
+  }
+
+  public static void endSasl() {
+    PENDING_SASL.remove();
+    endInbound();
+  }
+
+  /** Emits the next message of the current SASL exchange. */
   public static Outbound outboundSasl() {
     Inbound current = CURRENT.get();
     if (current != null && "REQUEST".equals(current.half)) {
@@ -95,21 +123,21 @@ public final class CausynthMessagePropagation {
           "RESPONSE", LOCAL_OWNER.get());
     }
     endInbound();
-    String correlationId = "hdfs-sasl-" + UUID.randomUUID();
-    PENDING_SASL.set(correlationId);
+    String correlationId = PENDING_SASL.get();
+    if (correlationId == null) {
+      return Outbound.EMPTY;
+    }
     return outbound(SASL, correlationId, "1", "REQUEST", LOCAL_OWNER.get());
   }
 
-  /** Installs one received SASL message and infers its alternating half. */
+  /** Installs one message without discarding values carried earlier in the
+   * same multi-message SASL exchange. */
   public static Inbound inboundSasl(String trace, String symbolic,
       String correlationId, String attemptId) {
     boolean response = correlationId != null
         && correlationId.equals(PENDING_SASL.get());
-    if (response) {
-      PENDING_SASL.remove();
-    }
     return inbound(trace, symbolic, SASL, correlationId, attemptId,
-        response ? "RESPONSE" : "REQUEST", LOCAL_OWNER.get());
+        response ? "RESPONSE" : "REQUEST", LOCAL_OWNER.get(), true);
   }
 
   public static void setLocalOwner(Object owner) {
