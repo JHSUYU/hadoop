@@ -18,6 +18,7 @@
 
 package org.apache.hadoop.hdfs.security.token.block;
 
+import edu.uva.liftlab.graphchecker.annotation.CausynthExceptionTarget;
 import java.io.ByteArrayInputStream;
 import java.io.DataInputStream;
 import java.io.IOException;
@@ -204,7 +205,11 @@ public class BlockTokenSecretManager extends
     }
     LOG.debug("Exporting access keys");
     return new ExportedBlockKeys(true, keyUpdateInterval, tokenLifetime,
-        currentKey, allKeys.values().toArray(new BlockKey[0]));
+        currentKey, exportAllKeys());
+  }
+
+  private BlockKey[] exportAllKeys() {
+    return allKeys.values().toArray(new BlockKey[0]);
   }
 
   private synchronized void removeExpiredKeys() {
@@ -556,7 +561,8 @@ public class BlockTokenSecretManager extends
     synchronized (this) {
       key = allKeys.get(keyId);
       if (key == null) {
-        throw new InvalidEncryptionKeyException("Can't re-compute encryption key"
+        throw new @CausynthExceptionTarget("hdfs-17897")
+            InvalidEncryptionKeyException("Can't re-compute encryption key"
             + " for nonce, since the required block key (keyID=" + keyId
             + ") doesn't exist. Current key: " + currentKey.getKeyId());
       }

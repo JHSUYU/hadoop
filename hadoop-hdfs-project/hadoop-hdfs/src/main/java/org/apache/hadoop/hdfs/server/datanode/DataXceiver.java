@@ -61,6 +61,7 @@ import org.apache.hadoop.hdfs.server.datanode.ShortCircuitRegistry.NewShmInfo;
 import org.apache.hadoop.hdfs.server.protocol.DatanodeRegistration;
 import org.apache.hadoop.hdfs.shortcircuit.ShortCircuitShm.SlotId;
 import org.apache.hadoop.io.IOUtils;
+import org.apache.hadoop.ipc.CausynthMessagePropagation;
 import org.apache.hadoop.net.NetUtils;
 import org.apache.hadoop.net.unix.DomainSocket;
 import org.apache.hadoop.security.token.SecretManager.InvalidToken;
@@ -225,6 +226,7 @@ class DataXceiver extends Receiver implements Runnable {
     Op op = null;
     Op firstOp = null;
 
+    CausynthMessagePropagation.setLocalOwner(datanode.getDatanodeId());
     try {
       synchronized(this) {
         xceiver = Thread.currentThread();
@@ -333,6 +335,7 @@ class DataXceiver extends Receiver implements Runnable {
         LOG.error(s, t);
       }
     } finally {
+      CausynthMessagePropagation.clearLocalOwner();
       collectThreadLocalStates();
       LOG.debug("{}:Number of active connections is: {}",
           datanode.getDisplayName(), datanode.getXceiverCount());

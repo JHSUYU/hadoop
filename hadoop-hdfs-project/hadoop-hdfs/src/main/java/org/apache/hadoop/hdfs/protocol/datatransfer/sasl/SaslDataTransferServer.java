@@ -58,7 +58,6 @@ import org.apache.hadoop.hdfs.security.token.block.BlockPoolTokenSecretManager;
 import org.apache.hadoop.hdfs.security.token.block.BlockTokenIdentifier;
 import org.apache.hadoop.hdfs.security.token.block.InvalidBlockTokenException;
 import org.apache.hadoop.hdfs.server.datanode.DNConf;
-import org.apache.hadoop.ipc.CausynthMessagePropagation;
 import org.apache.hadoop.security.CustomizedCallbackHandler;
 import org.apache.hadoop.security.SaslPropertiesResolver;
 import org.apache.hadoop.security.SecurityUtil;
@@ -122,12 +121,7 @@ public class SaslDataTransferServer {
       LOG.debug(
         "SASL server doing encrypted handshake for peer = {}, datanodeId = {}",
         peer, datanodeId);
-      CausynthMessagePropagation.setLocalOwner(datanodeId);
-      try {
-        return getEncryptedStreams(peer, underlyingOut, underlyingIn);
-      } finally {
-        CausynthMessagePropagation.clearLocalOwner();
-      }
+      return getEncryptedStreams(peer, underlyingOut, underlyingIn);
     } else if (!UserGroupInformation.isSecurityEnabled()) {
       LOG.debug(
         "SASL server skipping handshake in unsecured configuration for "

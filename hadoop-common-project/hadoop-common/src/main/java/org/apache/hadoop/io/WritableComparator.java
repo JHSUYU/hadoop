@@ -20,7 +20,6 @@ package org.apache.hadoop.io;
 
 import java.io.DataInput;
 import java.io.IOException;
-import java.util.Arrays;
 import java.util.concurrent.ConcurrentHashMap;
 
 import org.apache.hadoop.classification.InterfaceAudience;
@@ -230,7 +229,14 @@ public class WritableComparator implements RawComparator, Configurable {
    */
   public static int compareBytes(byte[] b1, int s1, int l1,
                                  byte[] b2, int s2, int l2) {
-    return Arrays.compareUnsigned(b1, s1, s1 + l1, b2, s2, s2 + l2);
+    int end = Math.min(l1, l2);
+    for (int i = 0; i < end; i++) {
+      int diff = (b1[s1 + i] & 0xff) - (b2[s2 + i] & 0xff);
+      if (diff != 0) {
+        return diff;
+      }
+    }
+    return l1 - l2;
   }
 
   /**

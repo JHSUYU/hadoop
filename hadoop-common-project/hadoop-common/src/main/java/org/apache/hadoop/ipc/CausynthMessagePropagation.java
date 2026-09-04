@@ -117,17 +117,17 @@ public final class CausynthMessagePropagation {
 
   /** Emits the next message of the current SASL exchange. */
   public static Outbound outboundSasl() {
+    String pending = PENDING_SASL.get();
+    if (pending != null) {
+      return outbound(SASL, pending, "1", "REQUEST", LOCAL_OWNER.get());
+    }
     Inbound current = CURRENT.get();
     if (current != null && "REQUEST".equals(current.half)) {
       return outbound(SASL, current.correlationId, current.attemptId,
           "RESPONSE", LOCAL_OWNER.get());
     }
     endInbound();
-    String correlationId = PENDING_SASL.get();
-    if (correlationId == null) {
-      return Outbound.EMPTY;
-    }
-    return outbound(SASL, correlationId, "1", "REQUEST", LOCAL_OWNER.get());
+    return Outbound.EMPTY;
   }
 
   /** Installs one message without discarding values carried earlier in the
@@ -147,6 +147,10 @@ public final class CausynthMessagePropagation {
   public static void clearLocalOwner() {
     LOCAL_OWNER.remove();
     endInbound();
+  }
+
+  public static void startRecording() {
+    CausynthTraceRecorder.startRecording();
   }
 
   public static void registerSource(Object anchor, String kind, String role,

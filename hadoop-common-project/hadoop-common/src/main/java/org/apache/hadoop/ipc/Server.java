@@ -2962,7 +2962,8 @@ public abstract class Server {
       // Reject requests for RPC kinds with no registered protocols on this
       // server instance. This prevents deserialization of untrusted payloads
       // for unsupported kinds. See HADOOP-19864.
-      if (Server.this instanceof RPC.Server server) {
+      if (Server.this instanceof RPC.Server) {
+        RPC.Server server = (RPC.Server) Server.this;
         final RPC.RpcKind kind = ProtoUtil.convert(header.getRpcKind());
         if (!server.hasRegisteredProtocols(kind)) {
           final String err = "No protocols registered on this server for RpcKind "

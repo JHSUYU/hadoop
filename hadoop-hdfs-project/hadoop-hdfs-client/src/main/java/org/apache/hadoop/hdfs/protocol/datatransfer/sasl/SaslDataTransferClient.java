@@ -201,15 +201,10 @@ public class SaslDataTransferClient {
       Token<BlockTokenIdentifier> accessToken, DatanodeID datanodeId,
       SecretKey secretKey)
       throws IOException {
-    CausynthMessagePropagation.beginSasl();
-    try {
-      IOStreamPair ios = checkTrustAndSend(socket.getInetAddress(),
-          underlyingOut, underlyingIn, encryptionKeyFactory, accessToken,
-          datanodeId, secretKey);
-      return ios != null ? ios : new IOStreamPair(underlyingIn, underlyingOut);
-    } finally {
-      CausynthMessagePropagation.endSasl();
-    }
+    IOStreamPair ios = checkTrustAndSend(socket.getInetAddress(),
+        underlyingOut, underlyingIn, encryptionKeyFactory, accessToken,
+        datanodeId, secretKey);
+    return ios != null ? ios : new IOStreamPair(underlyingIn, underlyingOut);
   }
 
   /**
@@ -267,41 +262,46 @@ public class SaslDataTransferClient {
       Token<BlockTokenIdentifier> accessToken, DatanodeID datanodeId,
       SecretKey secretKey)
       throws IOException {
-    if (encryptionKey != null) {
-      LOG.debug("SASL client doing encrypted handshake for addr = {}, "
-          + "datanodeId = {}", addr, datanodeId);
-      return getEncryptedStreams(addr, underlyingOut, underlyingIn,
-          encryptionKey, accessToken, secretKey);
-    } else if (!UserGroupInformation.isSecurityEnabled()) {
-      LOG.debug("SASL client skipping handshake in unsecured configuration for "
-          + "addr = {}, datanodeId = {}", addr, datanodeId);
-      return null;
-    } else if (SecurityUtil.isPrivilegedPort(datanodeId.getXferPort())) {
-      LOG.debug(
-          "SASL client skipping handshake in secured configuration with "
-              + "privileged port for addr = {}, datanodeId = {}",
-          addr, datanodeId);
-      return null;
-    } else if (fallbackToSimpleAuth != null && fallbackToSimpleAuth.get()) {
-      LOG.debug(
-          "SASL client skipping handshake in secured configuration with "
-              + "unsecured cluster for addr = {}, datanodeId = {}",
-          addr, datanodeId);
-      return null;
-    } else if (saslPropsResolver != null) {
-      LOG.debug(
-          "SASL client doing general handshake for addr = {}, datanodeId = {}",
-          addr, datanodeId);
-      return getSaslStreams(addr, underlyingOut, underlyingIn,
-          accessToken, secretKey);
-    } else {
-      // It's a secured cluster using non-privileged ports, but no SASL.  The
-      // only way this can happen is if the DataNode has
-      // ignore.secure.ports.for.testing configured so this is a rare edge case.
-      LOG.debug("SASL client skipping handshake in secured configuration with "
-              + "no SASL protection configured for addr = {}, datanodeId = {}",
-          addr, datanodeId);
-      return null;
+    CausynthMessagePropagation.beginSasl();
+    try {
+      if (encryptionKey != null) {
+        LOG.debug("SASL client doing encrypted handshake for addr = {}, "
+            + "datanodeId = {}", addr, datanodeId);
+        return getEncryptedStreams(addr, underlyingOut, underlyingIn,
+            encryptionKey, accessToken, secretKey);
+      } else if (!UserGroupInformation.isSecurityEnabled()) {
+        LOG.debug("SASL client skipping handshake in unsecured configuration for "
+            + "addr = {}, datanodeId = {}", addr, datanodeId);
+        return null;
+      } else if (SecurityUtil.isPrivilegedPort(datanodeId.getXferPort())) {
+        LOG.debug(
+            "SASL client skipping handshake in secured configuration with "
+                + "privileged port for addr = {}, datanodeId = {}",
+            addr, datanodeId);
+        return null;
+      } else if (fallbackToSimpleAuth != null && fallbackToSimpleAuth.get()) {
+        LOG.debug(
+            "SASL client skipping handshake in secured configuration with "
+                + "unsecured cluster for addr = {}, datanodeId = {}",
+            addr, datanodeId);
+        return null;
+      } else if (saslPropsResolver != null) {
+        LOG.debug(
+            "SASL client doing general handshake for addr = {}, datanodeId = {}",
+            addr, datanodeId);
+        return getSaslStreams(addr, underlyingOut, underlyingIn,
+            accessToken, secretKey);
+      } else {
+        // It's a secured cluster using non-privileged ports, but no SASL.  The
+        // only way this can happen is if the DataNode has
+        // ignore.secure.ports.for.testing configured so this is a rare edge case.
+        LOG.debug("SASL client skipping handshake in secured configuration with "
+                + "no SASL protection configured for addr = {}, datanodeId = {}",
+            addr, datanodeId);
+        return null;
+      }
+    } finally {
+      CausynthMessagePropagation.endSasl();
     }
   }
 
