@@ -35,7 +35,6 @@ import org.apache.hadoop.hdfs.server.protocol.NamenodeProtocol;
 import org.apache.hadoop.security.token.Token;
 import org.apache.hadoop.util.Daemon;
 import org.apache.hadoop.util.StringUtils;
-import org.apache.hadoop.util.Timer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -46,6 +45,13 @@ import org.slf4j.LoggerFactory;
 public class KeyManager implements Closeable, DataEncryptionKeyFactory {
   private static final Logger LOG = LoggerFactory.getLogger(KeyManager.class);
 
+  @FunctionalInterface
+  interface TestHook {
+    void run(KeyManager keyManager) throws IOException;
+  }
+
+  static TestHook testWait = ignored -> { };
+
   private final NamenodeProtocol namenode;
 
   private final boolean isBlockTokenEnabled;
@@ -55,17 +61,11 @@ public class KeyManager implements Closeable, DataEncryptionKeyFactory {
   private final BlockTokenSecretManager blockTokenSecretManager;
   private final BlockKeyUpdater blockKeyUpdater;
   private DataEncryptionKey encryptionKey;
-  /**
-   * Timer object for querying the current time. Separated out for
-   * unit testing.
-   */
-  private Timer timer;
 
   public KeyManager(String blockpoolID, NamenodeProtocol namenode,
       boolean encryptDataTransfer, Configuration conf) throws IOException {
     this.namenode = namenode;
     this.encryptDataTransfer = encryptDataTransfer;
-    this.timer = new Timer();
 
     final ExportedBlockKeys keys = namenode.getBlockKeys();
     this.isBlockTokenEnabled = keys.isBlockTokenEnabled();
@@ -88,6 +88,7 @@ public class KeyManager implements Closeable, DataEncryptionKeyFactory {
       // sync block keys with NN more frequently than NN updates its block keys
       this.blockKeyUpdater = new BlockKeyUpdater(updateInterval / 4);
       this.shouldRun = true;
+      testWait.run(this);
     } else {
       this.blockTokenSecretManager = null;
       this.blockKeyUpdater = null;
@@ -98,6 +99,10 @@ public class KeyManager implements Closeable, DataEncryptionKeyFactory {
     if (blockKeyUpdater != null) {
       blockKeyUpdater.daemon.start();
     }
+  }
+
+  void updateBlockKeys() throws IOException {
+    blockTokenSecretManager.addKeys(namenode.getBlockKeys());
   }
 
   /** Get an access token for a block. */
@@ -118,33 +123,15 @@ public class KeyManager implements Closeable, DataEncryptionKeyFactory {
 
   @Override
   public DataEncryptionKey newDataEncryptionKey() {
-    if (encryptDataTransfer) {
-      synchronized (this) {
-        if (encryptionKey == null ||
-            encryptionKey.expiryDate < timer.now()) {
-          // Encryption Key (EK) is generated from Block Key (BK).
-          // Check if EK is expired, and generate a new one using the current BK
-          // if so, otherwise continue to use the previously generated EK.
-          //
-          // It's important to make sure that when EK is not expired, the BK
-          // used to generate the EK is not expired and removed, because
-          // the same BK will be used to re-generate the EK
-          // by BlockTokenSecretManager.
-          //
-          // The current implementation ensures that when an EK is not expired
-          // (within tokenLifetime), the BK that's used to generate it
-          // still has at least "keyUpdateInterval" of life time before
-          // the BK gets expired and removed.
-          // See BlockTokenSecretManager for details.
-          LOG.debug("Generating new data encryption key because current key "
-              + (encryptionKey == null ?
-              "is null." : "expired on " + encryptionKey.expiryDate));
-          encryptionKey = blockTokenSecretManager.generateDataEncryptionKey();
-        }
-        return encryptionKey;
-      }
-    } else {
+    if (!encryptDataTransfer) {
       return null;
+    }
+    synchronized (this) {
+      // HDFS-11741: the original cache never checks the key expiry.
+      if (encryptionKey == null) {
+        encryptionKey = blockTokenSecretManager.generateDataEncryptionKey();
+      }
+      return encryptionKey;
     }
   }
 
@@ -177,7 +164,7 @@ public class KeyManager implements Closeable, DataEncryptionKeyFactory {
       try {
         while (shouldRun) {
           try {
-            blockTokenSecretManager.addKeys(namenode.getBlockKeys());
+            updateBlockKeys();
           } catch (IOException e) {
             LOG.error("Failed to set keys", e);
           }

@@ -178,6 +178,11 @@ public class TestBalancer {
   }
 
   ClientProtocol client;
+  Runnable beforeBalancer = () -> { };
+
+  MiniDFSCluster getCluster() {
+    return cluster;
+  }
 
   static final long TIMEOUT = 40000L; //msec
   static final double CAPACITY_ALLOWED_VARIANCE = 0.005;  // 0.5%
@@ -412,6 +417,7 @@ public class TestBalancer {
       cluster.injectBlocks(i, Arrays.asList(blocksDN[i]), null);
 
     final long totalCapacity = sum(capacities);
+    beforeBalancer.run();
     runBalancer(conf, totalUsedSpace, totalCapacity);
     cluster.shutdown();
   }
@@ -1191,10 +1197,14 @@ public class TestBalancer {
   }
 
   void testBalancer1Internal(Configuration conf) throws Exception {
+    testBalancer1Internal(conf, CAPACITY);
+  }
+
+  void testBalancer1Internal(Configuration conf, long capacity) throws Exception {
     initConf(conf);
     testUnevenDistribution(conf,
-        new long[]{50 * CAPACITY / 100, 10 * CAPACITY / 100},
-        new long[]{CAPACITY, CAPACITY},
+        new long[]{50 * capacity / 100, 10 * capacity / 100},
+        new long[]{capacity, capacity},
         new String[]{RACK0, RACK1});
   }
 

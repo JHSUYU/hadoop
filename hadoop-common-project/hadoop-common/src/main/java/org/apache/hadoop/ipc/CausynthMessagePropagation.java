@@ -163,6 +163,7 @@ public final class CausynthMessagePropagation {
   }
 
   public static long beginRequest(Object source, String api) {
+    endInbound();
     return CausynthTraceRecorder.beginSourceRequest(source, api);
   }
 
