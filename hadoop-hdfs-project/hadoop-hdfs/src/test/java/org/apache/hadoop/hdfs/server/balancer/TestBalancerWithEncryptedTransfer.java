@@ -18,15 +18,19 @@
 package org.apache.hadoop.hdfs.server.balancer;
 
 import java.io.IOException;
+import java.util.concurrent.TimeoutException;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.hdfs.DFSConfigKeys;
 import org.apache.hadoop.hdfs.HdfsConfiguration;
 import org.apache.hadoop.hdfs.MiniDFSCluster;
 import org.apache.hadoop.hdfs.security.token.block.BlockTokenSecretManager;
+import org.apache.hadoop.hdfs.security.token.block.ExportedBlockKeys;
+import org.apache.hadoop.hdfs.server.blockmanagement.DatanodeDescriptor;
 import org.apache.hadoop.hdfs.server.datanode.DataNode;
 import org.apache.hadoop.hdfs.server.namenode.NameNodeRpcServer;
 import org.apache.hadoop.ipc.CausynthMessagePropagation;
+import org.apache.hadoop.test.GenericTestUtils;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
@@ -54,11 +58,11 @@ public class TestBalancerWithEncryptedTransfer {
     CausynthMessagePropagation.registerSource(
         workload, "EXTERNAL_APP", "BALANCER", "hdfs-17899/balancer", 0);
     long[] request = {0L};
+    workload.beforeBalancer = () -> request[0] =
+        CausynthMessagePropagation.beginRequest(workload, "balance-block");
     KeyManager.testWait = keyManager -> {
       KeyManager.testWait = ignored -> { };
       CausynthMessagePropagation.registerSourceAlias(keyManager, workload);
-      request[0] = CausynthMessagePropagation.beginRequest(
-          keyManager, "balance-block");
       prepareStaleKeyBoundary(workload.getCluster(), keyManager);
     };
     try {
@@ -88,20 +92,57 @@ public class TestBalancerWithEncryptedTransfer {
         .getBlockManager().getBlockTokenSecretManager();
     CausynthMessagePropagation.registerSourceAlias(master,
         namenode.getClientRpcServer());
-    master.generateKeys();
-    master.updateKeys(Long.MAX_VALUE);
-    master.updateKeys(Long.MAX_VALUE);
+    String blockPoolId = cluster.getNamesystem().getBlockPoolId();
     for (DataNode node : cluster.getDataNodes()) {
       CausynthMessagePropagation.registerSourceAlias(
-          node.getBlockPoolTokenSecretManager().get(
-              cluster.getNamesystem().getBlockPoolId()),
+          node.getBlockPoolTokenSecretManager().get(blockPoolId),
           node.getDatanodeId());
-      node.getBlockPoolTokenSecretManager().get(
-          cluster.getNamesystem().getBlockPoolId())
-          .setOnlyKeyForTesting(master.getCurrentKey());
     }
 
+    CausynthMessagePropagation.startRecording();
+    ExportedBlockKeys initial = master.exportKeys();
+    int staleKeyId = initial.getCurrentKey().getKeyId();
+    master.setKeyUpdateIntervalForTesting(-initial.getTokenLifetime() - 1);
+    try {
+      master.updateKeys(Long.MAX_VALUE);
+      pushKeyUpdate(cluster, blockPoolId,
+          master.getCurrentKey().getKeyId(), null);
+      master.updateKeys(Long.MAX_VALUE);
+      pushKeyUpdate(cluster, blockPoolId,
+          master.getCurrentKey().getKeyId(), staleKeyId);
+    } finally {
+      master.setKeyUpdateIntervalForTesting(initial.getKeyUpdateInterval());
+    }
     keyManager.updateBlockKeys();
+  }
+
+  private static void pushKeyUpdate(MiniDFSCluster cluster,
+      String blockPoolId, int currentKeyId, Integer absentKeyId)
+      throws IOException {
+    for (DatanodeDescriptor node : cluster.getNamesystem().getBlockManager()
+        .getDatanodeManager().getDatanodes()) {
+      node.setNeedKeyUpdate(true);
+    }
+    cluster.triggerHeartbeats();
+    try {
+      GenericTestUtils.waitFor(() -> {
+        for (DataNode node : cluster.getDataNodes()) {
+          BlockTokenSecretManager keys = node.getBlockPoolTokenSecretManager()
+              .get(blockPoolId);
+          if (!keys.hasKey(currentKeyId)
+              || keys.getCurrentKey().getKeyId() != currentKeyId
+              || absentKeyId != null && keys.hasKey(absentKeyId)) {
+            return false;
+          }
+        }
+        return true;
+      }, 10, 30000);
+    } catch (InterruptedException e) {
+      Thread.currentThread().interrupt();
+      throw new IOException(e);
+    } catch (TimeoutException e) {
+      throw new IOException(e);
+    }
   }
 
   @Test

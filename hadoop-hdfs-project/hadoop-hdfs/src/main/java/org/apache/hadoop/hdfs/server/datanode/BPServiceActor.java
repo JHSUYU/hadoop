@@ -70,6 +70,7 @@ import org.apache.hadoop.hdfs.server.protocol.StorageBlockReport;
 import org.apache.hadoop.hdfs.server.protocol.StorageReport;
 import org.apache.hadoop.hdfs.server.protocol.VolumeFailureSummary;
 import org.apache.hadoop.io.IOUtils;
+import org.apache.hadoop.ipc.CausynthMessagePropagation;
 import org.apache.hadoop.ipc.RemoteException;
 import org.apache.hadoop.net.NetUtils;
 import org.apache.hadoop.util.Preconditions;
@@ -708,53 +709,63 @@ class BPServiceActor implements Runnable {
           if (!dn.areHeartbeatsDisabledForTests()) {
             LOG.debug("Before sending heartbeat to namenode {}, the state of the namenode known"
                 + " to datanode so far is {}", this.getNameNodeAddress(), state);
-            resp = sendHeartBeat(requestBlockReportLease);
-            assert resp != null;
-            if (resp.getFullBlockReportLeaseId() != 0) {
-              if (fullBlockReportLeaseId != 0) {
-                LOG.warn(nnAddr + " sent back a full block report lease " +
-                        "ID of 0x" +
-                        Long.toHexString(resp.getFullBlockReportLeaseId()) +
-                        ", but we already have a lease ID of 0x" +
-                        Long.toHexString(fullBlockReportLeaseId) + ". " +
-                        "Overwriting old lease ID.");
-              }
-              fullBlockReportLeaseId = resp.getFullBlockReportLeaseId();
-            }
-            dn.getMetrics().addHeartbeat(scheduler.monotonicNow() - startTime,
-                getRpcMetricSuffix());
-
-            // If the state of this NN has changed (eg STANDBY->ACTIVE)
-            // then let the BPOfferService update itself.
-            //
-            // Important that this happens before processCommand below,
-            // since the first heartbeat to a new active might have commands
-            // that we should actually process.
-            bpos.updateActorStatesFromHeartbeat(
-                this, resp.getNameNodeHaState());
-            HAServiceState stateFromResp = resp.getNameNodeHaState().getState();
-            if (state != stateFromResp) {
-              LOG.info("After receiving heartbeat response, updating state of namenode {} to {}",
-                  this.getNameNodeAddress(), stateFromResp);
-            }
-            state = stateFromResp;
-
-            if (state == HAServiceState.ACTIVE) {
-              handleRollingUpgradeStatus(resp);
-            }
-            DatanodeCommand[] cmds = resp.getCommands();
-            if (cmds != null && cmds.length != 0) {
-              int length = cmds.length;
-              for (int i = length - 1; i >= 0; i--) {
-                if (cmds[i] instanceof KeyUpdateCommand) {
-                  commandProcessingThread.enqueueFirst(cmds[i]);
-                  cmds[i] = null;
-                  break;
+            long causynthRequest =
+                CausynthMessagePropagation.beginRequestIfRegistered(
+                    dn.getDatanodeId(), "heartbeat");
+            try {
+              resp = sendHeartBeat(requestBlockReportLease);
+              assert resp != null;
+              if (resp.getFullBlockReportLeaseId() != 0) {
+                if (fullBlockReportLeaseId != 0) {
+                  LOG.warn(nnAddr + " sent back a full block report lease " +
+                          "ID of 0x" +
+                          Long.toHexString(resp.getFullBlockReportLeaseId()) +
+                          ", but we already have a lease ID of 0x" +
+                          Long.toHexString(fullBlockReportLeaseId) + ". " +
+                          "Overwriting old lease ID.");
                 }
+                fullBlockReportLeaseId = resp.getFullBlockReportLeaseId();
               }
-              commandProcessingThread.enqueue(cmds);
+              dn.getMetrics().addHeartbeat(scheduler.monotonicNow() - startTime,
+                  getRpcMetricSuffix());
+
+              // If the state of this NN has changed (eg STANDBY->ACTIVE)
+              // then let the BPOfferService update itself.
+              //
+              // Important that this happens before processCommand below,
+              // since the first heartbeat to a new active might have commands
+              // that we should actually process.
+              bpos.updateActorStatesFromHeartbeat(
+                  this, resp.getNameNodeHaState());
+              HAServiceState stateFromResp = resp.getNameNodeHaState().getState();
+              if (state != stateFromResp) {
+                LOG.info("After receiving heartbeat response, updating state of namenode {} to {}",
+                    this.getNameNodeAddress(), stateFromResp);
+              }
+              state = stateFromResp;
+
+              if (state == HAServiceState.ACTIVE) {
+                handleRollingUpgradeStatus(resp);
+              }
+              DatanodeCommand[] cmds = resp.getCommands();
+              if (cmds != null && cmds.length != 0) {
+                int length = cmds.length;
+                for (int i = length - 1; i >= 0; i--) {
+                  if (cmds[i] instanceof KeyUpdateCommand) {
+                    commandProcessingThread.enqueueFirst(cmds[i]);
+                    cmds[i] = null;
+                    break;
+                  }
+                }
+                commandProcessingThread.enqueue(cmds);
+              }
+              isSlownode = resp.getIsSlownode();
+            } finally {
+              if (causynthRequest != 0L) {
+                CausynthMessagePropagation.endRequest(
+                    causynthRequest, "heartbeat");
+              }
             }
-            isSlownode = resp.getIsSlownode();
           }
         }
         if (!dn.areIBRDisabledForTests() &&
@@ -1487,7 +1498,7 @@ class BPServiceActor implements Runnable {
       if (cmd == null) {
         return;
       }
-      queue.put(() -> processCommand(new DatanodeCommand[]{cmd}));
+      queue.put(traced(() -> processCommand(new DatanodeCommand[]{cmd})));
       dn.getMetrics().incrActorCmdQueueLength(1);
     }
 
@@ -1501,7 +1512,7 @@ class BPServiceActor implements Runnable {
         return;
       }
       ((LinkedBlockingDeque<Runnable>) queue).putFirst(
-          () -> processCommand(new DatanodeCommand[]{cmd}));
+          traced(() -> processCommand(new DatanodeCommand[]{cmd})));
 
       LOG.info("Enqueue command: {} to the head of queue", cmd);
       dn.getMetrics().incrActorCmdQueueLength(1);
@@ -1511,16 +1522,20 @@ class BPServiceActor implements Runnable {
       if (cmds == null) {
         return;
       }
-      queue.put(() -> processCommand(
-          cmds.toArray(new DatanodeCommand[cmds.size()])));
+      queue.put(traced(() -> processCommand(
+          cmds.toArray(new DatanodeCommand[cmds.size()]))));
       dn.getMetrics().incrActorCmdQueueLength(1);
     }
 
     void enqueue(DatanodeCommand[] cmds) throws InterruptedException {
       if (cmds.length != 0) {
-        queue.put(() -> processCommand(cmds));
+        queue.put(traced(() -> processCommand(cmds)));
         dn.getMetrics().incrActorCmdQueueLength(1);
       }
+    }
+
+    private Runnable traced(Runnable command) {
+      return CausynthMessagePropagation.async(command);
     }
   }
 

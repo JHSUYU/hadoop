@@ -178,6 +178,7 @@ public class TestBalancer {
   }
 
   ClientProtocol client;
+  Runnable beforeBalancer = () -> { };
 
   MiniDFSCluster getCluster() {
     return cluster;
@@ -416,6 +417,7 @@ public class TestBalancer {
       cluster.injectBlocks(i, Arrays.asList(blocksDN[i]), null);
 
     final long totalCapacity = sum(capacities);
+    beforeBalancer.run();
     runBalancer(conf, totalUsedSpace, totalCapacity);
     cluster.shutdown();
   }
