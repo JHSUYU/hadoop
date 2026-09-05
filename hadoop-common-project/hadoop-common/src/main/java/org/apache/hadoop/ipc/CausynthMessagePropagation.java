@@ -149,6 +149,10 @@ public final class CausynthMessagePropagation {
     endInbound();
   }
 
+  public static void startRecording() {
+    CausynthTraceRecorder.startRecording();
+  }
+
   public static void registerSource(Object anchor, String kind, String role,
       String sourceId, long epoch) {
     CausynthTraceRecorder.registerSource(anchor, kind, role, sourceId, epoch);
@@ -159,7 +163,16 @@ public final class CausynthMessagePropagation {
   }
 
   public static long beginRequest(Object source, String api) {
+    endInbound();
     return CausynthTraceRecorder.beginSourceRequest(source, api);
+  }
+
+  public static long beginRequestIfRegistered(Object source, String api) {
+    try {
+      return beginRequest(source, api);
+    } catch (IllegalArgumentException ignored) {
+      return 0L;
+    }
   }
 
   public static void endRequest(long request, String api) {

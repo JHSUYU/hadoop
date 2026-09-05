@@ -51,6 +51,7 @@ import java.security.PrivilegedExceptionAction;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Properties;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
 import org.apache.hadoop.conf.Configuration;
@@ -1079,6 +1080,9 @@ public class TestExternalStoragePolicySatisfier {
         new StorageType[][]{{StorageType.DISK, StorageType.SSD}};
     config.setBoolean(DFSConfigKeys.DFS_ENCRYPT_DATA_TRANSFER_KEY, true);
     config.setBoolean(DFS_BLOCK_ACCESS_TOKEN_ENABLE_KEY, true);
+    config.setLong(DFSConfigKeys.DFS_BLOCK_ACCESS_KEY_UPDATE_INTERVAL_KEY, 60);
+    config.setLong(DFSConfigKeys.DFS_BLOCK_ACCESS_TOKEN_LIFETIME_KEY, 1);
+    config.setLong(DFSConfigKeys.DFS_HEARTBEAT_INTERVAL_KEY, 3600);
     config.setInt(
         DFSConfigKeys.DFS_STORAGE_POLICY_SATISFIER_MOVE_TASK_MAX_RETRY_ATTEMPTS_KEY,
         0);
@@ -1098,19 +1102,45 @@ public class TestExternalStoragePolicySatisfier {
       CausynthMessagePropagation.registerSourceAlias(master,
           ((NameNodeRpcServer) hdfsCluster.getNameNodeRpc())
               .getClientRpcServer());
-      master.generateKeys();
-      master.updateKeys(Long.MAX_VALUE);
-      master.updateKeys(Long.MAX_VALUE);
-      target.getBlockPoolTokenSecretManager().get(
-          hdfsCluster.getNamesystem().getBlockPoolId())
-          .setOnlyKeyForTesting(master.getCurrentKey());
 
       dfs.setStoragePolicy(new Path(FILE), ONE_SSD);
       dfs.satisfyStoragePolicy(new Path(FILE));
+      CausynthMessagePropagation.startRecording();
+
+      int initialKeyId = currentKeyId(master);
+      master.setKeyUpdateIntervalForTesting(1);
+      GenericTestUtils.waitFor(
+          () -> currentKeyId(master) != initialKeyId, 100, 15000);
+      int firstRotatedKeyId = currentKeyId(master);
+      GenericTestUtils.waitFor(
+          () -> currentKeyId(master) != firstRotatedKeyId, 100, 15000);
+      master.setKeyUpdateIntervalForTesting(TimeUnit.MINUTES.toMillis(60));
+      int currentKeyId = currentKeyId(master);
+
+      hdfsCluster.triggerHeartbeats();
+      BlockTokenSecretManager targetKeys =
+          target.getBlockPoolTokenSecretManager().get(
+              hdfsCluster.getNamesystem().getBlockPoolId());
+      GenericTestUtils.waitFor(
+          () -> targetKeys.hasKey(currentKeyId), 100, 15000);
+
+      long refreshRequest = CausynthMessagePropagation.beginRequest(
+          nnc, "refresh-block-keys");
+      try {
+        try {
+          nnc.getKeyManager().updateBlockKeys();
+        } catch (IOException expected) {
+          LOG.info("SPS retained its prior block keys after RPC failure",
+              expected);
+        }
+      } finally {
+        CausynthMessagePropagation.endRequest(
+            refreshRequest, "refresh-block-keys");
+      }
+
       long request = CausynthMessagePropagation.beginRequest(
           nnc, "satisfy-storage-policy");
       try {
-        nnc.getKeyManager().updateBlockKeys();
         startExternalSps();
         hdfsCluster.triggerHeartbeats();
         DFSTestUtil.waitExpectedStorageType(
@@ -1121,6 +1151,12 @@ public class TestExternalStoragePolicySatisfier {
       }
     } finally {
       shutdownCluster();
+    }
+  }
+
+  private static int currentKeyId(BlockTokenSecretManager manager) {
+    synchronized (manager) {
+      return manager.getCurrentKey().getKeyId();
     }
   }
 

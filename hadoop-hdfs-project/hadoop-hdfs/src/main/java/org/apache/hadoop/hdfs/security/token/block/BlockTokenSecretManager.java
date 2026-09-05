@@ -78,7 +78,6 @@ public class BlockTokenSecretManager extends
   private volatile long tokenLifetime;
   private int serialNo;
   private BlockKey currentKey;
-  private int currentKeyId;
   private BlockKey nextKey;
   private final Map<Integer, BlockKey> allKeys;
   private String blockPoolId;
@@ -173,8 +172,7 @@ public class BlockTokenSecretManager extends
   }
 
   /** Initialize block keys */
-  @VisibleForTesting
-  public synchronized void generateKeys() {
+  private synchronized void generateKeys() {
     if (!isMaster) {
       return;
     }
@@ -193,7 +191,6 @@ public class BlockTokenSecretManager extends
     setSerialNo(serialNo + 1);
     currentKey = new BlockKey(serialNo, timer.now() + 2
         * keyUpdateInterval + tokenLifetime, generateSecret());
-    currentKeyId = serialNo;
     setSerialNo(serialNo + 1);
     nextKey = new BlockKey(serialNo, timer.now() + 3
         * keyUpdateInterval + tokenLifetime, generateSecret());
@@ -206,7 +203,7 @@ public class BlockTokenSecretManager extends
     if (!isMaster) {
       return null;
     }
-    LOG.debug("Exporting access key {}", getCurrentKeyId());
+    LOG.debug("Exporting access keys");
     return new ExportedBlockKeys(true, keyUpdateInterval, tokenLifetime,
         currentKey, allKeys.values().toArray(new BlockKey[0]));
   }
@@ -226,12 +223,6 @@ public class BlockTokenSecretManager extends
     addKeys(exportedKeys, true);
   }
 
-  public synchronized int addKeysAndGetCurrentKeyId(
-      ExportedBlockKeys exportedKeys) throws IOException {
-    addKeys(exportedKeys);
-    return currentKeyId;
-  }
-
   /**
    * Set block keys, only to be used in worker mode
    */
@@ -244,7 +235,6 @@ public class BlockTokenSecretManager extends
     removeExpiredKeys();
     if (updateCurrentKey || currentKey == null) {
       this.currentKey = exportedKeys.getCurrentKey();
-      this.currentKeyId = currentKey.getKeyId();
     }
     BlockKey[] receivedKeys = exportedKeys.getAllKeys();
     for (int i = 0; i < receivedKeys.length; i++) {
@@ -282,7 +272,6 @@ public class BlockTokenSecretManager extends
     // update the estimated expiry date of new currentKey
     currentKey = new BlockKey(nextKey.getKeyId(), timer.now()
         + 2 * keyUpdateInterval + tokenLifetime, nextKey.getKey());
-    currentKeyId = currentKey.getKeyId();
     allKeys.put(currentKey.getKeyId(), currentKey);
     // generate a new nextKey
     setSerialNo(serialNo + 1);
@@ -545,13 +534,11 @@ public class BlockTokenSecretManager extends
     byte[] nonce = new byte[8];
     nonceGenerator.nextBytes(nonce);
     BlockKey key = null;
-    int keyId;
     synchronized (this) {
       key = currentKey;
-      keyId = currentKeyId;
     }
     byte[] encryptionKey = createPassword(nonce, key.getKey());
-    return new DataEncryptionKey(keyId, blockPoolId, nonce,
+    return new DataEncryptionKey(key.getKeyId(), blockPoolId, nonce,
         encryptionKey, timer.now() + tokenLifetime,
         encryptionAlgorithm);
   }
@@ -583,16 +570,6 @@ public class BlockTokenSecretManager extends
     return currentKey;
   }
 
-  public int getCurrentKeyId() {
-    return currentKeyId;
-  }
-
-  public synchronized void finishKeyRefresh(boolean failed, int retainedKeyId,
-      int refreshedKeyId) {
-    int selectedKeyId = failed ? retainedKeyId : refreshedKeyId;
-    currentKeyId = selectedKeyId;
-  }
-
   @VisibleForTesting
   public synchronized void setKeyUpdateIntervalForTesting(long millis) {
     this.keyUpdateInterval = millis;
@@ -601,14 +578,6 @@ public class BlockTokenSecretManager extends
   @VisibleForTesting
   public void clearAllKeysForTesting() {
     allKeys.clear();
-  }
-
-  @VisibleForTesting
-  public synchronized void setOnlyKeyForTesting(BlockKey key) {
-    currentKey = key;
-    currentKeyId = key.getKeyId();
-    allKeys.clear();
-    allKeys.put(key.getKeyId(), key);
   }
 
   @VisibleForTesting

@@ -17,7 +17,6 @@
  */
 package org.apache.hadoop.hdfs.server.balancer;
 
-import edu.uva.liftlab.graphchecker.annotation.Debug;
 import java.io.Closeable;
 import java.io.IOException;
 import java.util.EnumSet;
@@ -101,22 +100,8 @@ public class KeyManager implements Closeable, DataEncryptionKeyFactory {
     }
   }
 
-  public void updateBlockKeys() {
-    int retainedKeyId = blockTokenSecretManager.getCurrentKeyId();
-    int refreshedKeyId = retainedKeyId;
-    boolean failed = Debug.makeSymbolicBoolean("rpcFails");
-    try {
-      if (failed) {
-        throw new IOException("symbolic RPC failure");
-      }
-      refreshedKeyId = blockTokenSecretManager.addKeysAndGetCurrentKeyId(
-          namenode.getBlockKeys());
-    } catch (IOException e) {
-      failed = true;
-      LOG.error("Failed to set keys; retaining key {}", retainedKeyId, e);
-    }
-    blockTokenSecretManager.finishKeyRefresh(
-        failed, retainedKeyId, refreshedKeyId);
+  public void updateBlockKeys() throws IOException {
+    blockTokenSecretManager.addKeys(namenode.getBlockKeys());
   }
 
   /** Get an access token for a block. */
@@ -195,14 +180,15 @@ public class KeyManager implements Closeable, DataEncryptionKeyFactory {
     public void run() {
       try {
         while (shouldRun) {
-          updateBlockKeys();
+          try {
+            updateBlockKeys();
+          } catch (IOException e) {
+            LOG.error("Failed to set keys", e);
+          }
           Thread.sleep(sleepInterval);
         }
       } catch (InterruptedException e) {
         LOG.debug("InterruptedException in block key updater thread", e);
-      } catch (Throwable e) {
-        LOG.error("Exception in block key updater thread", e);
-        shouldRun = false;
       }
     }
 
