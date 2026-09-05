@@ -17,7 +17,9 @@
  */
 package org.apache.hadoop.hdfs.server.datanode;
 
+import java.io.IOException;
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FSDataOutputStream;
@@ -28,15 +30,14 @@ import org.apache.hadoop.hdfs.DFSTestUtil;
 import org.apache.hadoop.hdfs.DistributedFileSystem;
 import org.apache.hadoop.hdfs.HdfsConfiguration;
 import org.apache.hadoop.hdfs.MiniDFSCluster;
-import org.apache.hadoop.hdfs.NameNodeProxies;
 import org.apache.hadoop.hdfs.protocol.DatanodeInfo;
 import org.apache.hadoop.hdfs.protocol.DatanodeInfo.DatanodeInfoBuilder;
 import org.apache.hadoop.hdfs.protocol.ExtendedBlock;
 import org.apache.hadoop.hdfs.protocol.LocatedBlock;
 import org.apache.hadoop.hdfs.security.token.block.BlockTokenSecretManager;
-import org.apache.hadoop.hdfs.security.token.block.ExportedBlockKeys;
 import org.apache.hadoop.hdfs.server.namenode.NameNodeRpcServer;
-import org.apache.hadoop.hdfs.server.protocol.NamenodeProtocol;
+import org.apache.hadoop.hdfs.server.protocol.DatanodeCommand;
+import org.apache.hadoop.hdfs.server.protocol.HeartbeatResponse;
 import org.apache.hadoop.ipc.CausynthMessagePropagation;
 import org.apache.hadoop.test.GenericTestUtils;
 import org.junit.jupiter.api.Test;
@@ -53,6 +54,8 @@ public class TestCausynthDataTransferRpcFailure {
     Configuration conf = new HdfsConfiguration();
     conf.setBoolean(DFSConfigKeys.DFS_ENCRYPT_DATA_TRANSFER_KEY, true);
     conf.setBoolean(DFSConfigKeys.DFS_BLOCK_ACCESS_TOKEN_ENABLE_KEY, true);
+    conf.setLong(DFSConfigKeys.DFS_BLOCK_ACCESS_KEY_UPDATE_INTERVAL_KEY, 60);
+    conf.setLong(DFSConfigKeys.DFS_BLOCK_ACCESS_TOKEN_LIFETIME_KEY, 1);
     conf.setLong(DFSConfigKeys.DFS_HEARTBEAT_INTERVAL_KEY, 3600);
     try (MiniDFSCluster cluster = new MiniDFSCluster.Builder(conf)
         .numDataNodes(2).build();
@@ -75,25 +78,34 @@ public class TestCausynthDataTransferRpcFailure {
       CausynthMessagePropagation.registerSourceAlias(master,
           ((NameNodeRpcServer) cluster.getNameNodeRpc()).getClientRpcServer());
       CausynthMessagePropagation.registerSourceAlias(
+          source.getBlockPoolTokenSecretManager().get(block.getBlockPoolId()),
+          source.getDatanodeId());
+      CausynthMessagePropagation.registerSourceAlias(
           target.getBlockPoolTokenSecretManager().get(block.getBlockPoolId()),
           target.getDatanodeId());
-      master.generateKeys();
-      ExportedBlockKeys stale = master.exportKeys();
-      master.updateKeys(Long.MAX_VALUE);
-      master.updateKeys(Long.MAX_VALUE);
-      ExportedBlockKeys fresh = master.exportKeys();
-      source.getBlockPoolTokenSecretManager().get(block.getBlockPoolId())
-          .setOnlyKeyForTesting(stale.getCurrentKey());
-      target.getBlockPoolTokenSecretManager().get(block.getBlockPoolId())
-          .setOnlyKeyForTesting(fresh.getCurrentKey());
+      CausynthMessagePropagation.startRecording();
+
+      int initialKeyId = currentKeyId(master);
+      master.setKeyUpdateIntervalForTesting(1);
+      GenericTestUtils.waitFor(
+          () -> currentKeyId(master) != initialKeyId, 100, 15000);
+      int firstRotatedKeyId = currentKeyId(master);
+      GenericTestUtils.waitFor(
+          () -> currentKeyId(master) != firstRotatedKeyId, 100, 15000);
+      master.setKeyUpdateIntervalForTesting(TimeUnit.MINUTES.toMillis(60));
+      int currentKeyId = currentKeyId(master);
+
+      BlockTokenSecretManager targetKeys = target
+          .getBlockPoolTokenSecretManager().get(block.getBlockPoolId());
+      refreshKeysFromNameNode(target);
+      GenericTestUtils.waitFor(
+          () -> currentKeyId(targetKeys) == currentKeyId, 100, 15000);
+
+      refreshKeysFromNameNode(source);
 
       long request = CausynthMessagePropagation.beginRequest(
           source.getDatanodeId(), "replicate-block");
       try {
-        NamenodeProtocol namenode = NameNodeProxies.createProxy(conf,
-            fs.getUri(), NamenodeProtocol.class).getProxy();
-        source.getAllBpOs().get(0).refreshBlockKeysForTesting(namenode);
-
         source.transferBlock(block,
             new DatanodeInfo[]{new DatanodeInfoBuilder()
                 .setNodeID(target.getDatanodeId()).build()},
@@ -104,6 +116,33 @@ public class TestCausynthDataTransferRpcFailure {
       } finally {
         CausynthMessagePropagation.endRequest(request, "replicate-block");
       }
+    }
+  }
+
+  private static int currentKeyId(BlockTokenSecretManager manager) {
+    synchronized (manager) {
+      return manager.getCurrentKey().getKeyId();
+    }
+  }
+
+  private static void refreshKeysFromNameNode(DataNode datanode)
+      throws IOException {
+    BPOfferService service = datanode.getAllBpOs().get(0);
+    BPServiceActor actor = service.getBPServiceActors().get(0);
+    long request = CausynthMessagePropagation.beginRequest(
+        datanode.getDatanodeId(), "heartbeat");
+    try {
+      HeartbeatResponse response = actor.sendHeartBeat(false);
+      DatanodeCommand[] commands = response.getCommands();
+      if (commands != null) {
+        for (DatanodeCommand command : commands) {
+          service.processCommandFromActor(command, actor);
+        }
+      }
+    } catch (IOException expected) {
+      // A transport failure deliberately leaves the prior keys intact.
+    } finally {
+      CausynthMessagePropagation.endRequest(request, "heartbeat");
     }
   }
 

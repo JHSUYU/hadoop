@@ -241,35 +241,25 @@ public class PBHelper {
   }
 
   public static BlockKeyProto convert(BlockKey key) {
-    return convert(key, key.getKeyId());
-  }
-
-  private static BlockKeyProto convert(BlockKey key, int keyId) {
     byte[] encodedKey = key.getEncodedKey();
     ByteString keyBytes = PBHelperClient.getByteString(encodedKey == null ?
         DFSUtilClient.EMPTY_BYTES : encodedKey);
-    return BlockKeyProto.newBuilder().setKeyId(keyId)
+    return BlockKeyProto.newBuilder().setKeyId(key.getKeyId())
         .setKeyBytes(keyBytes).setExpiryDate(key.getExpiryDate()).build();
   }
 
   public static BlockKey convert(BlockKeyProto k) {
-    return convert(k, k.getKeyId());
-  }
-
-  private static BlockKey convert(BlockKeyProto k, int keyId) {
-    return new BlockKey(keyId, k.getExpiryDate(), k.getKeyBytes()
+    return new BlockKey(k.getKeyId(), k.getExpiryDate(), k.getKeyBytes()
         .toByteArray());
   }
 
   public static ExportedBlockKeysProto convert(ExportedBlockKeys keys) {
-    BlockKey current = keys.getCurrentKey();
-    int currentKeyId = current.getKeyId();
     ExportedBlockKeysProto.Builder builder = ExportedBlockKeysProto
         .newBuilder();
     builder.setIsBlockTokenEnabled(keys.isBlockTokenEnabled())
         .setKeyUpdateInterval(keys.getKeyUpdateInterval())
         .setTokenLifeTime(keys.getTokenLifetime())
-        .setCurrentKey(convert(current, currentKeyId));
+        .setCurrentKey(convert(keys.getCurrentKey()));
     for (BlockKey k : keys.getAllKeys()) {
       builder.addAllKeys(convert(k));
     }
@@ -277,11 +267,9 @@ public class PBHelper {
   }
 
   public static ExportedBlockKeys convert(ExportedBlockKeysProto keys) {
-    BlockKeyProto current = keys.getCurrentKey();
-    int currentKeyId = current.getKeyId();
     return new ExportedBlockKeys(keys.getIsBlockTokenEnabled(),
         keys.getKeyUpdateInterval(), keys.getTokenLifeTime(),
-        convert(current, currentKeyId), convertBlockKeys(keys.getAllKeysList()));
+        convert(keys.getCurrentKey()), convertBlockKeys(keys.getAllKeysList()));
   }
 
   public static CheckpointSignatureProto convert(CheckpointSignature s) {

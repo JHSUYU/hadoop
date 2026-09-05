@@ -18,6 +18,7 @@
 
 package org.apache.hadoop.ipc;
 
+import edu.uva.liftlab.graphchecker.annotation.Debug;
 import org.apache.commons.lang3.tuple.Pair;
 import org.apache.hadoop.security.AccessControlException;
 import org.apache.hadoop.classification.VisibleForTesting;
@@ -1237,6 +1238,10 @@ public class Client implements AutoCloseable {
           CausynthMessagePropagation.outbound(
               CausynthMessagePropagation.IPC, correlationId,
               Integer.toString(call.retry), "REQUEST", Client.this);
+      if (causynth.active()
+          && Debug.makeSymbolicBoolean("hadoopIpcRequestFails")) {
+        throw new IOException("symbolic Hadoop IPC transport failure");
+      }
       RpcRequestHeaderProto.Builder header = ProtoUtil.makeRpcRequestHeader(
           call.rpcKind, OperationProto.RPC_FINAL_PACKET, call.id, call.retry,
           clientId, call.alignmentContext).toBuilder();
