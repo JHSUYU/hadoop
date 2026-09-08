@@ -27,7 +27,9 @@ import org.apache.hadoop.hdfs.DistributedFileSystem;
 import org.apache.hadoop.hdfs.MiniDFSCluster;
 import org.apache.hadoop.hdfs.XAttrHelper;
 import org.apache.hadoop.hdfs.server.namenode.INode;
+import org.apache.hadoop.hdfs.server.namenode.NameNodeRpcServer;
 import org.apache.hadoop.hdfs.server.namenode.XAttrFeature;
+import org.apache.hadoop.ipc.CausynthMessagePropagation;
 import org.junit.After;
 import org.junit.Assert;
 import org.junit.Before;
@@ -60,6 +62,11 @@ public class TestOrderedSnapshotDeletion {
 
     cluster = new MiniDFSCluster.Builder(conf).numDataNodes(0).build();
     cluster.waitActive();
+    CausynthMessagePropagation.registerSource(
+        this, "EXTERNAL_APP", "HDFS_CLIENT", "hdfs-17960/client", 0);
+    CausynthMessagePropagation.registerSource(
+        cluster, "CLUSTER_NODE", "NAMENODE", "hdfs-17960/nn0", 0);
+    bindNameNodeAliases();
   }
 
   @After
@@ -209,21 +216,78 @@ public class TestOrderedSnapshotDeletion {
   @Test(timeout = 6000000)
   public void testOrderedDeletionWithRestart() throws Exception {
     DistributedFileSystem hdfs = cluster.getFileSystem();
-    hdfs.mkdirs(snapshottableDir);
-    hdfs.allowSnapshot(snapshottableDir);
+    CausynthMessagePropagation.startRecording();
 
-    final Path sub0 = new Path(snapshottableDir, "sub0");
-    hdfs.mkdirs(sub0);
-    hdfs.createSnapshot(snapshottableDir, "s0");
+    long createRequest = CausynthMessagePropagation.beginRequest(
+        this, "create-snapshots");
+    try {
+      hdfs.mkdirs(snapshottableDir);
+      hdfs.allowSnapshot(snapshottableDir);
 
-    final Path sub1 = new Path(snapshottableDir, "sub1");
-    hdfs.mkdirs(sub1);
-    hdfs.createSnapshot(snapshottableDir, "s1");
-    assertXAttrSet("s1", hdfs, null);
-    assertXAttrSet("s1", hdfs, null);
-    cluster.getNameNode().getConf().
-        setBoolean(DFS_NAMENODE_SNAPSHOT_DELETION_ORDERED, false);
-    cluster.restartNameNodes();
+      final Path sub0 = new Path(snapshottableDir, "sub0");
+      hdfs.mkdirs(sub0);
+      hdfs.createSnapshot(snapshottableDir, "s0");
+
+      final Path sub1 = new Path(snapshottableDir, "sub1");
+      hdfs.mkdirs(sub1);
+      hdfs.createSnapshot(snapshottableDir, "s1");
+    } finally {
+      CausynthMessagePropagation.endRequest(
+          createRequest, "create-snapshots");
+    }
+
+    long deleteRequest = CausynthMessagePropagation.beginRequest(
+        this, "record-ordered-deletes");
+    try {
+      assertXAttrSet("s1", hdfs, null);
+      assertXAttrSet("s1", hdfs, null);
+    } finally {
+      CausynthMessagePropagation.endRequest(
+          deleteRequest, "record-ordered-deletes");
+    }
+
+    cluster.getNameNode().getConf().setBoolean(
+        DFS_NAMENODE_SNAPSHOT_DELETION_ORDERED, false);
+    CausynthMessagePropagation.restartSource(
+        cluster, "CLUSTER_NODE", "NAMENODE", "hdfs-17960/nn0", 1);
+    long restartRequest = CausynthMessagePropagation.beginRequest(
+        cluster, "restart-namenode");
+    try {
+      cluster.restartNameNodes();
+      bindNameNodeAliases();
+    } finally {
+      CausynthMessagePropagation.endRequest(
+          restartRequest, "restart-namenode");
+    }
+    Assert.assertEquals(1,
+        hdfs.getSnapshotListing(snapshottableDir).length);
+    Assert.assertEquals(0,
+        cluster.getNamesystem().getSnapshotManager().getNumSnapshots());
+
+    long checkpointRequest = CausynthMessagePropagation.beginRequest(
+        this, "checkpoint-namespace");
+    try {
+      hdfs.setSafeMode(SafeModeAction.ENTER);
+      try {
+        hdfs.saveNamespace();
+        Assert.fail("checkpoint should detect the inconsistent snapshot count");
+      } catch (IOException expected) {
+        assertTrue(expected.getMessage().contains(
+            "Failed to save in any storage directories"));
+      }
+      hdfs.setSafeMode(SafeModeAction.LEAVE);
+    } finally {
+      CausynthMessagePropagation.endRequest(
+          checkpointRequest, "checkpoint-namespace");
+    }
+  }
+
+  private void bindNameNodeAliases() {
+    CausynthMessagePropagation.registerSourceAlias(
+        cluster.getNameNode(), cluster);
+    NameNodeRpcServer rpc = (NameNodeRpcServer) cluster.getNameNodeRpc();
+    CausynthMessagePropagation.registerSourceAlias(
+        rpc.getClientRpcServer(), cluster);
   }
 
   @Test(timeout = 60000)

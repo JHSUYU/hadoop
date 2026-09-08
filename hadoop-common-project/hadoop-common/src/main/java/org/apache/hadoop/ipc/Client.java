@@ -283,6 +283,8 @@ public class Client implements AutoCloseable {
     boolean done;               // true when call is done
     private final Object externalHandler;
     private AlignmentContext alignmentContext;
+    private String causynthTrace = "";
+    private String causynthSymbolic = "";
 
     private Call(RPC.RpcKind rpcKind, Writable param) {
       this.rpcKind = rpcKind;
@@ -351,6 +353,13 @@ public class Client implements AutoCloseable {
     public synchronized void setRpcResponse(Writable rpcResponse) {
       this.rpcResponse = rpcResponse;
       callComplete();
+    }
+
+    private void setCausynthResponse(RpcResponseHeaderProto header) {
+      causynthTrace = header.hasCausynthTrace()
+          ? header.getCausynthTrace() : "";
+      causynthSymbolic = header.hasCausynthSymbolic()
+          ? header.getCausynthSymbolic() : "";
     }
     
     public synchronized Writable getRpcResponse() {
@@ -1173,12 +1182,24 @@ public class Client implements AutoCloseable {
       // 2) RpcRequest
       //
       // Items '1' and '2' are prepared here. 
-      RpcRequestHeaderProto header = ProtoUtil.makeRpcRequestHeader(
+      CausynthMessagePropagation.endInbound();
+      String correlationId = CausynthMessagePropagation.rpcCorrelation(
+          clientId, call.id);
+      CausynthMessagePropagation.Outbound causynth =
+          CausynthMessagePropagation.outbound(correlationId,
+              Integer.toString(call.retry), "REQUEST", Client.this);
+      RpcRequestHeaderProto.Builder header = ProtoUtil.makeRpcRequestHeader(
           call.rpcKind, OperationProto.RPC_FINAL_PACKET, call.id, call.retry,
-          clientId, call.alignmentContext);
+          clientId, call.alignmentContext).toBuilder();
+      if (causynth.active()) {
+        header.setCausynthTrace(causynth.trace);
+        if (!causynth.symbolic.isEmpty()) {
+          header.setCausynthSymbolic(causynth.symbolic);
+        }
+      }
 
       final ResponseBuffer buf = new ResponseBuffer();
-      header.writeDelimitedTo(buf);
+      header.build().writeDelimitedTo(buf);
       RpcWritable.wrap(call.rpcRequest).writeTo(buf);
       // Wait for the message to be sent. We offer with timeout to
       // prevent a race condition between checking the shouldCloseConnection
@@ -1214,6 +1235,7 @@ public class Client implements AutoCloseable {
         if (status == RpcStatusProto.SUCCESS) {
           Writable value = packet.newInstance(valueClass, conf);
           final Call call = calls.remove(callId);
+          call.setCausynthResponse(header);
           if (call.alignmentContext != null) {
             call.alignmentContext.receiveResponseState(header);
           }
@@ -1237,6 +1259,7 @@ public class Client implements AutoCloseable {
           RemoteException re = new RemoteException(exceptionClassName, errorMsg, erCode);
           if (status == RpcStatusProto.ERROR) {
             final Call call = calls.remove(callId);
+            call.setCausynthResponse(header);
             call.setException(re);
           } else if (status == RpcStatusProto.FATAL) {
             // Close the connection
@@ -1578,6 +1601,7 @@ public class Client implements AutoCloseable {
         }
       }
 
+      installCausynthResponse(call);
       if (call.error != null) {
         if (call.error instanceof RemoteException ||
             call.error instanceof SaslException) {
@@ -1595,6 +1619,16 @@ public class Client implements AutoCloseable {
         return call.getRpcResponse();
       }
     }
+  }
+
+  private void installCausynthResponse(Call call) {
+    if (call.causynthTrace.isEmpty()) {
+      return;
+    }
+    CausynthMessagePropagation.inbound(call.causynthTrace,
+        call.causynthSymbolic,
+        CausynthMessagePropagation.rpcCorrelation(clientId, call.id),
+        Integer.toString(call.retry), "RESPONSE", this);
   }
 
   // for unit testing only
