@@ -339,6 +339,10 @@ public class Client implements AutoCloseable {
     private AlignmentContext alignmentContext;
     private String causynthTrace = "";
     private String causynthSymbolic = "";
+    /** The request scope this call was created in, captured on the thread
+     * that created it and carried with it to the send. */
+    private final Object causynthScope =
+        CausynthMessagePropagation.captureScope();
 
     private Call(RPC.RpcKind rpcKind, Writable param) {
       this.rpcKind = rpcKind;
@@ -1237,7 +1241,8 @@ public class Client implements AutoCloseable {
       CausynthMessagePropagation.Outbound causynth =
           CausynthMessagePropagation.outbound(
               CausynthMessagePropagation.IPC, correlationId,
-              Integer.toString(call.retry), "REQUEST", Client.this);
+              Integer.toString(call.retry), "REQUEST", Client.this,
+              call.causynthScope);
       if (causynth.active()
           && Debug.makeSymbolicBoolean("hadoopIpcRequestFails")) {
         throw new IOException("symbolic Hadoop IPC transport failure");
@@ -1641,7 +1646,7 @@ public class Client implements AutoCloseable {
   }
 
   private void installCausynthResponse(Call call) {
-    if (call.causynthTrace.isEmpty()) {
+    if (call.causynthTrace.isEmpty() && call.causynthSymbolic.isEmpty()) {
       return;
     }
     CausynthMessagePropagation.inbound(call.causynthTrace,

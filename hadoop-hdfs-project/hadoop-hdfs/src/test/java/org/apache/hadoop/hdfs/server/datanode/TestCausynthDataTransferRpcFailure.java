@@ -18,7 +18,12 @@
 package org.apache.hadoop.hdfs.server.datanode;
 
 import java.io.IOException;
+import java.lang.reflect.Field;
+import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.TreeSet;
 import java.util.concurrent.TimeUnit;
 
 import org.apache.hadoop.conf.Configuration;
@@ -34,6 +39,7 @@ import org.apache.hadoop.hdfs.protocol.DatanodeInfo;
 import org.apache.hadoop.hdfs.protocol.DatanodeInfo.DatanodeInfoBuilder;
 import org.apache.hadoop.hdfs.protocol.ExtendedBlock;
 import org.apache.hadoop.hdfs.protocol.LocatedBlock;
+import org.apache.hadoop.hdfs.security.token.block.BlockKey;
 import org.apache.hadoop.hdfs.security.token.block.BlockTokenSecretManager;
 import org.apache.hadoop.hdfs.server.namenode.NameNodeRpcServer;
 import org.apache.hadoop.hdfs.server.protocol.DatanodeCommand;
@@ -43,10 +49,14 @@ import org.apache.hadoop.test.GenericTestUtils;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /** Real NN -> source DN -> target DN stale-key workload for HDFS-17899. */
 public class TestCausynthDataTransferRpcFailure {
+  /** Block-key serial number pinned by {@link #pinBlockKeys}. */
+  private static final int SERIAL_NO = Integer.MAX_VALUE / 17899 + 2;
+
   @Test
   @Timeout(120)
   public void testReplicationAfterModeledKeyRefreshRpcFailure()
@@ -54,6 +64,12 @@ public class TestCausynthDataTransferRpcFailure {
     Configuration conf = new HdfsConfiguration();
     conf.setBoolean(DFSConfigKeys.DFS_ENCRYPT_DATA_TRANSFER_KEY, true);
     conf.setBoolean(DFSConfigKeys.DFS_BLOCK_ACCESS_TOKEN_ENABLE_KEY, true);
+    conf.setInt(
+        DFSConfigKeys.DFS_CLIENT_BLOCK_WRITE_LOCATEFOLLOWINGBLOCK_RETRIES_KEY,
+        12);
+    conf.setInt(DFSConfigKeys.DFS_CLIENT_SOCKET_TIMEOUT_KEY, 10 * 60 * 1000);
+    conf.setInt(DFSConfigKeys.DFS_NAMENODE_HEARTBEAT_RECHECK_INTERVAL_KEY,
+        10 * 60 * 1000);
     conf.setLong(DFSConfigKeys.DFS_BLOCK_ACCESS_KEY_UPDATE_INTERVAL_KEY, 60);
     conf.setLong(DFSConfigKeys.DFS_BLOCK_ACCESS_TOKEN_LIFETIME_KEY, 1);
     conf.setLong(DFSConfigKeys.DFS_HEARTBEAT_INTERVAL_KEY, 3600);
@@ -71,6 +87,7 @@ public class TestCausynthDataTransferRpcFailure {
       List<DataNode> nodes = cluster.getDataNodes();
       DataNode source = find(nodes, located.getLocations()[0]);
       DataNode target = nodes.get(0) == source ? nodes.get(1) : nodes.get(0);
+      pinBlockKeys(cluster);
       registerSources(cluster, source, target);
 
       BlockTokenSecretManager master = cluster.getNamesystem()
@@ -97,9 +114,10 @@ public class TestCausynthDataTransferRpcFailure {
 
       BlockTokenSecretManager targetKeys = target
           .getBlockPoolTokenSecretManager().get(block.getBlockPoolId());
-      refreshKeysFromNameNode(target);
-      GenericTestUtils.waitFor(
-          () -> currentKeyId(targetKeys) == currentKeyId, 100, 15000);
+      if (refreshKeysFromNameNode(target)) {
+        GenericTestUtils.waitFor(
+            () -> currentKeyId(targetKeys) == currentKeyId, 100, 15000);
+      }
 
       refreshKeysFromNameNode(source);
 
@@ -119,13 +137,103 @@ public class TestCausynthDataTransferRpcFailure {
     }
   }
 
+  /**
+   * Makes every block-key id the recorded window sees identical across
+   * GraphChecker replay sessions.  The NameNode manager seeds serialNo from
+   * SecureRandom once per JVM and each replay task is its own JVM, so without
+   * this the replay groups of one campaign mint unrelated ids.  setSerialNo
+   * only moves the counter, so the two constructor-time keys keep their
+   * random ids; two rotations retire them: the first mints SERIAL_NO + 1 as
+   * nextKey, the second makes it currentKey (the stale key of this workload)
+   * and mints SERIAL_NO + 2.  DataNodes mint nothing themselves (they only
+   * addKeys what the NameNode exports), so delivering the master's export
+   * in-process here is the same state a KeyUpdateCommand delivers; it stays
+   * out of the trace because nothing is recorded yet.  The recorded window's
+   * own rotations and refreshes are unchanged.
+   */
+  private static void pinBlockKeys(MiniDFSCluster cluster) throws Exception {
+    BlockTokenSecretManager master = cluster.getNamesystem()
+        .getBlockManager().getBlockTokenSecretManager();
+    master.setSerialNo(SERIAL_NO);
+    { // causynth-d3-rotation-scope
+      long causynthRotation = org.apache.hadoop.ipc.CausynthMessagePropagation.beginTick(
+          master, "KEY_MANAGER_TICK");
+      try {
+        master.updateKeys(Long.MAX_VALUE);
+      } finally {
+        org.apache.hadoop.ipc.CausynthMessagePropagation.endTick(
+            causynthRotation);
+      }
+    }
+    { // causynth-d3-rotation-scope
+      long causynthRotation = org.apache.hadoop.ipc.CausynthMessagePropagation.beginTick(
+          master, "KEY_MANAGER_TICK");
+      try {
+        master.updateKeys(Long.MAX_VALUE);
+      } finally {
+        org.apache.hadoop.ipc.CausynthMessagePropagation.endTick(
+            causynthRotation);
+      }
+    }
+    assertEquals(SERIAL_NO + 1, master.getCurrentKey().getKeyId());
+    // The two retired constructor-time keys still sit in every allKeys map
+    // (they expire long after the run) and would reach the target as a
+    // second, unpinned key family.  Drop them everywhere before recording, so
+    // every manager starts the recorded window holding exactly the pinned
+    // pair; managers created later (a Balancer/SPS KeyManager) copy the
+    // pruned NameNode export and never see them.
+    Set<Integer> pinned =
+        new TreeSet<>(Arrays.asList(SERIAL_NO + 1, SERIAL_NO + 2));
+    retainKeys(master, pinned);
+    assertEquals(pinned, keyIds(master));
+    String blockPoolId = cluster.getNamesystem().getBlockPoolId();
+    for (DataNode node : cluster.getDataNodes()) {
+      BlockTokenSecretManager manager =
+          node.getBlockPoolTokenSecretManager().get(blockPoolId);
+      manager.addKeys(master.exportKeys());
+      retainKeys(manager, pinned);
+      assertEquals(pinned, keyIds(manager),
+          "DataNode " + node.getDatanodeId() + " holds unpinned keys");
+      assertEquals(SERIAL_NO + 1, manager.getCurrentKey().getKeyId());
+      assertTrue(manager.hasKey(SERIAL_NO + 1) && manager.hasKey(SERIAL_NO + 2));
+    }
+  }
+
+  /** The private allKeys map; BlockTokenSecretManager has no test accessor. */
+  @SuppressWarnings("unchecked")
+  private static Map<Integer, BlockKey> allKeys(
+      BlockTokenSecretManager manager) throws ReflectiveOperationException {
+    Field field = BlockTokenSecretManager.class.getDeclaredField("allKeys");
+    field.setAccessible(true);
+    return (Map<Integer, BlockKey>) field.get(manager);
+  }
+
+  private static void retainKeys(BlockTokenSecretManager manager,
+      Set<Integer> keyIds) throws ReflectiveOperationException {
+    synchronized (manager) {
+      allKeys(manager).keySet().retainAll(keyIds);
+    }
+  }
+
+  private static Set<Integer> keyIds(BlockTokenSecretManager manager)
+      throws ReflectiveOperationException {
+    synchronized (manager) {
+      return new TreeSet<>(allKeys(manager).keySet());
+    }
+  }
+
   private static int currentKeyId(BlockTokenSecretManager manager) {
     synchronized (manager) {
       return manager.getCurrentKey().getKeyId();
     }
   }
 
-  private static void refreshKeysFromNameNode(DataNode datanode)
+  /**
+   * Returns true when the key-refresh heartbeat completed. A modeled transport
+   * failure returns false so the caller can skip waiting for keys that will
+   * never arrive and proceed straight to the transfer.
+   */
+  private static boolean refreshKeysFromNameNode(DataNode datanode)
       throws IOException {
     BPOfferService service = datanode.getAllBpOs().get(0);
     BPServiceActor actor = service.getBPServiceActors().get(0);
@@ -139,8 +247,10 @@ public class TestCausynthDataTransferRpcFailure {
           service.processCommandFromActor(command, actor);
         }
       }
+      return true;
     } catch (IOException expected) {
       // A transport failure deliberately leaves the prior keys intact.
+      return false;
     } finally {
       CausynthMessagePropagation.endRequest(request, "heartbeat");
     }
