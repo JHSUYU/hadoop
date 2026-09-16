@@ -126,7 +126,7 @@ public class SaslDataTransferServer {
       try {
         return getEncryptedStreams(peer, underlyingOut, underlyingIn);
       } finally {
-        CausynthMessagePropagation.clearLocalOwner();
+        CausynthMessagePropagation.clearLocalOwnerKeepingScope();
       }
     } else if (!UserGroupInformation.isSecurityEnabled()) {
       LOG.debug(

@@ -203,7 +203,8 @@ public class TestBalancer {
     conf.setLong(DFSConfigKeys.DFS_BLOCK_SIZE_KEY, DEFAULT_BLOCK_SIZE);
     conf.setInt(DFSConfigKeys.DFS_BYTES_PER_CHECKSUM_KEY, DEFAULT_BLOCK_SIZE);
     conf.setLong(DFSConfigKeys.DFS_HEARTBEAT_INTERVAL_KEY, 1L);
-    conf.setInt(DFSConfigKeys.DFS_NAMENODE_HEARTBEAT_RECHECK_INTERVAL_KEY, 500);
+    conf.setIfUnset(
+        DFSConfigKeys.DFS_NAMENODE_HEARTBEAT_RECHECK_INTERVAL_KEY, "500");
     conf.setLong(DFSConfigKeys.DFS_NAMENODE_REDUNDANCY_INTERVAL_SECONDS_KEY,
         1L);
     SimulatedFSDataset.setFactory(conf);
@@ -899,7 +900,8 @@ public class TestBalancer {
     while (retry > 0) {
       // start rebalancing
       Collection<URI> namenodes = DFSUtil.getInternalNsRpcUris(conf);
-      final int run = runBalancer(namenodes, p, conf);
+      final int run = runBalancer(namenodes, p, conf,
+          totalDfsUsedSpace, totalCapacity);
       if (conf.getInt(
           DFSConfigKeys.DFS_DATANODE_BALANCE_MAX_NUM_CONCURRENT_MOVES_KEY,
           DFSConfigKeys.DFS_DATANODE_BALANCE_MAX_NUM_CONCURRENT_MOVES_DEFAULT)
@@ -946,9 +948,10 @@ public class TestBalancer {
     }
   }
 
-  private static int runBalancer(Collection<URI> namenodes,
+  private int runBalancer(Collection<URI> namenodes,
       final BalancerParameters p,
-      Configuration conf) throws IOException, InterruptedException {
+      Configuration conf, long expectedUsedSpace, long expectedTotalSpace)
+      throws IOException, InterruptedException, TimeoutException {
     final long sleeptime = conf.getLong(
         DFSConfigKeys.DFS_HEARTBEAT_INTERVAL_KEY,
         DFSConfigKeys.DFS_HEARTBEAT_INTERVAL_DEFAULT) * 2000
@@ -993,6 +996,10 @@ public class TestBalancer {
         }
 
         if (!done) {
+          cluster.triggerBlockReports();
+          cluster.triggerHeartbeats();
+          waitForHeartBeat(expectedUsedSpace, expectedTotalSpace,
+              client, cluster);
           Thread.sleep(sleeptime);
         }
       }
