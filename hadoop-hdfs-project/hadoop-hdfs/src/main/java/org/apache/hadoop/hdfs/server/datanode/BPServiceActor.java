@@ -70,6 +70,7 @@ import org.apache.hadoop.hdfs.server.protocol.StorageBlockReport;
 import org.apache.hadoop.hdfs.server.protocol.StorageReport;
 import org.apache.hadoop.hdfs.server.protocol.VolumeFailureSummary;
 import org.apache.hadoop.io.IOUtils;
+import org.apache.hadoop.ipc.CausynthMessagePropagation;
 import org.apache.hadoop.ipc.RemoteException;
 import org.apache.hadoop.net.NetUtils;
 import org.apache.hadoop.util.Preconditions;
@@ -684,6 +685,27 @@ class BPServiceActor implements Runnable {
     // Now loop for a long time....
     //
     while (shouldRun()) {
+      // A response scope an earlier turn's last RPC left open on this
+      // thread ends before this turn opens its own, so the turn's scopes
+      // nest: the IPC client ends it before every request it builds.
+      // causynth-d3-lineage
+      CausynthMessagePropagation.endInbound();
+      // One offer-service turn is one lineage root: nothing
+      // requested it. // causynth-d3-lineage
+      long causynthTick = CausynthMessagePropagation.beginTick(
+          dn.getDatanodeId(), "BP_SERVICE_ACTOR");
+      // The turn runs on a thread started inside DataNode initialisation,
+      // before the workload registered this node, so it carries no node of
+      // its own: the tick names the hop but every activation on the thread
+      // -- the registration this heartbeat converts included -- is still
+      // addressed to no node, and two DataNodes of one JVM collide.  The
+      // turn is this node's own action; opened here, inside the tick, so
+      // the tick stays the outermost hop and keeps its window index.
+      // causynth-d3-lineage
+      Object causynthSource = dn.getCausynthSourceAnchor();
+      long causynthTurn = causynthSource == null ? 0L
+          : CausynthMessagePropagation.beginRequest(causynthSource,
+              "offer-service");
       try {
         DataNodeFaultInjector.get().startOfferService();
         final long startTime = scheduler.monotonicNow();
@@ -807,6 +829,11 @@ class BPServiceActor implements Runnable {
         sleepAfterException();
       } finally {
         DataNodeFaultInjector.get().endOfferService();
+        if (causynthTurn != 0L) {
+          CausynthMessagePropagation.endRequest(causynthTurn,
+              "offer-service");
+        }
+        CausynthMessagePropagation.endTick(causynthTick);
       }
       processQueueMessages();
     } // while (shouldRun())
@@ -1073,6 +1100,16 @@ class BPServiceActor implements Runnable {
       // second loop to avoid a pointless wait on the above latch in every
       // iteration of the main loop.
       while (shouldRun()) {
+        CausynthMessagePropagation.endInbound();
+        // One lifeline turn is one lineage root on this DataNode, exactly
+        // as an offer-service turn is, and this thread was started in the
+        // same place with the same missing node. // causynth-d3-lineage
+        long causynthTick = CausynthMessagePropagation.beginTick(
+            dn.getDatanodeId(), "BP_LIFELINE_SENDER");
+        Object causynthSource = dn.getCausynthSourceAnchor();
+        long causynthTurn = causynthSource == null ? 0L
+            : CausynthMessagePropagation.beginRequest(causynthSource,
+                "lifeline");
         try {
           if (lifelineNamenode == null) {
             lifelineNamenode = dn.connectToLifelineNN(lifelineNnAddr);
@@ -1084,6 +1121,11 @@ class BPServiceActor implements Runnable {
         } catch (IOException e) {
           LOG.warn("IOException in LifelineSender for " + BPServiceActor.this,
               e);
+        } finally {
+          if (causynthTurn != 0L) {
+            CausynthMessagePropagation.endRequest(causynthTurn, "lifeline");
+          }
+          CausynthMessagePropagation.endTick(causynthTick);
         }
       }
 
@@ -1422,6 +1464,35 @@ class BPServiceActor implements Runnable {
     }
 
     /**
+     * The scope of the thread enqueueing this command, carried with it.
+     *
+     * <p>This thread is started in the {@link BPServiceActor} constructor,
+     * which runs inside DataNode initialisation, so it carries no node of
+     * its own either: without this, every command it runs -- a {@code
+     * KeyUpdateCommand}'s {@code addKeys} included -- is addressed to no
+     * node and two DataNodes of one JVM collide.  The offer-service turn
+     * that received the command from the NameNode is the scope the command
+     * ran because of. // causynth-d3-lineage</p>
+     */
+    private Runnable carryingScope(final Runnable action) {
+      final Object scope = CausynthMessagePropagation.captureScope();
+      return () -> {
+        // The scopes of one command nest inside each other only if the
+        // response scope an earlier command's RPC left open on this thread
+        // is ended first, and again before this one is left.
+        CausynthMessagePropagation.endInbound();
+        long causynthCommand = CausynthMessagePropagation.enterCarriedScope(
+            scope, "DN_COMMAND_PROCESSOR", "process-command");
+        try {
+          action.run();
+        } finally {
+          CausynthMessagePropagation.endInbound();
+          CausynthMessagePropagation.exitCarriedScope(causynthCommand);
+        }
+      };
+    }
+
+    /**
      * Process commands in queue one by one, and wait until queue not empty.
      */
     private void processQueue() {
@@ -1487,7 +1558,8 @@ class BPServiceActor implements Runnable {
       if (cmd == null) {
         return;
       }
-      queue.put(() -> processCommand(new DatanodeCommand[]{cmd}));
+      queue.put(carryingScope(
+          () -> processCommand(new DatanodeCommand[]{cmd})));
       dn.getMetrics().incrActorCmdQueueLength(1);
     }
 
@@ -1501,7 +1573,7 @@ class BPServiceActor implements Runnable {
         return;
       }
       ((LinkedBlockingDeque<Runnable>) queue).putFirst(
-          () -> processCommand(new DatanodeCommand[]{cmd}));
+          carryingScope(() -> processCommand(new DatanodeCommand[]{cmd})));
 
       LOG.info("Enqueue command: {} to the head of queue", cmd);
       dn.getMetrics().incrActorCmdQueueLength(1);
@@ -1511,14 +1583,14 @@ class BPServiceActor implements Runnable {
       if (cmds == null) {
         return;
       }
-      queue.put(() -> processCommand(
-          cmds.toArray(new DatanodeCommand[cmds.size()])));
+      queue.put(carryingScope(() -> processCommand(
+          cmds.toArray(new DatanodeCommand[cmds.size()]))));
       dn.getMetrics().incrActorCmdQueueLength(1);
     }
 
     void enqueue(DatanodeCommand[] cmds) throws InterruptedException {
       if (cmds.length != 0) {
-        queue.put(() -> processCommand(cmds));
+        queue.put(carryingScope(() -> processCommand(cmds)));
         dn.getMetrics().incrActorCmdQueueLength(1);
       }
     }

@@ -180,6 +180,43 @@ public class TestBalancer {
   ClientProtocol client;
   Runnable beforeBalancer = () -> { };
 
+  /**
+   * Set by workloads that are replayed on a slow, interpreter-only JVM.
+   *
+   * <p>{@link #initConf} pins the NameNode's dead-node window at
+   * {@code 2 * 500 + 10 * 1000 * 1 = 11s}, which assumes a DataNode's single
+   * {@code BPServiceActor} thread comes back within 11s.  Under an
+   * interpreted replay that thread can still be inside its first block report
+   * well past that, so the NameNode prunes both DataNodes mid-write and
+   * {@code addBlock} starts answering "There are 0 datanode(s) running".  The
+   * DataNode then re-registers, its block report lease is rejected as
+   * invalid, and the cycle repeats until the client's retry budget is gone.
+   *
+   * <p>When set, the dead-node window is widened to the production default
+   * and each cluster is given time to finish its first block report before
+   * anything writes to it.  Defaults to {@code false}, so every other
+   * TestBalancer case keeps exactly the timings it has today.</p>
+   */
+  static boolean tolerateSlowDatanodes = false;
+
+  /** Dead-node window becomes 2*300000 + 10000 = 610s when tolerating. */
+  private static final int SLOW_HEARTBEAT_RECHECK_INTERVAL_MS = 300000;
+  /** Cap on the pre-write wait for the first block report when tolerating. */
+  private static final int SLOW_FIRST_BLOCK_REPORT_TIMEOUT_MS = 120000;
+
+  /**
+   * Waits for every DataNode of {@code cluster} to have delivered its first
+   * block report, so a following write does not spend its retry budget
+   * waiting on registration and block-report churn.  A no-op unless
+   * {@link #tolerateSlowDatanodes} is set.
+   */
+  private static void awaitFirstBlockReport(MiniDFSCluster cluster)
+      throws IOException, InterruptedException, TimeoutException {
+    if (tolerateSlowDatanodes) {
+      cluster.waitFirstBRCompleted(0, SLOW_FIRST_BLOCK_REPORT_TIMEOUT_MS);
+    }
+  }
+
   MiniDFSCluster getCluster() {
     return cluster;
   }
@@ -203,7 +240,8 @@ public class TestBalancer {
     conf.setLong(DFSConfigKeys.DFS_BLOCK_SIZE_KEY, DEFAULT_BLOCK_SIZE);
     conf.setInt(DFSConfigKeys.DFS_BYTES_PER_CHECKSUM_KEY, DEFAULT_BLOCK_SIZE);
     conf.setLong(DFSConfigKeys.DFS_HEARTBEAT_INTERVAL_KEY, 1L);
-    conf.setInt(DFSConfigKeys.DFS_NAMENODE_HEARTBEAT_RECHECK_INTERVAL_KEY, 500);
+    conf.setInt(DFSConfigKeys.DFS_NAMENODE_HEARTBEAT_RECHECK_INTERVAL_KEY,
+        tolerateSlowDatanodes ? SLOW_HEARTBEAT_RECHECK_INTERVAL_MS : 500);
     conf.setLong(DFSConfigKeys.DFS_NAMENODE_REDUNDANCY_INTERVAL_SECONDS_KEY,
         1L);
     SimulatedFSDataset.setFactory(conf);
@@ -315,6 +353,7 @@ public class TestBalancer {
     cluster = new MiniDFSCluster.Builder(conf).numDataNodes(numNodes).build();
     try {
       cluster.waitActive();
+      awaitFirstBlockReport(cluster);
       client = NameNodeProxies.createProxy(conf, cluster.getFileSystem(0).getUri(),
           ClientProtocol.class).getProxy();
 
@@ -410,6 +449,7 @@ public class TestBalancer {
                                               .simulatedCapacities(capacities)
                                               .build();
     cluster.waitActive();
+    awaitFirstBlockReport(cluster);
     client = NameNodeProxies.createProxy(conf, cluster.getFileSystem(0).getUri(),
         ClientProtocol.class).getProxy();
 

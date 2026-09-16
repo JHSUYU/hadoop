@@ -298,7 +298,21 @@ class DataXceiver extends Receiver implements Runnable {
           firstOp = op;
           incrReadWriteOpMetrics(op);
         }
-        processOp(op);
+        // One op is one hop, and the message scope a SASL
+        // handshake opened ends with the op rather than with the
+        // handshake. // causynth-d3-lineage
+        long causynthOp = CausynthMessagePropagation.beginTick(
+            datanode.getDatanodeId(), "DATA_XCEIVER");
+        try {
+          processOp(op);
+        } finally {
+          CausynthMessagePropagation.endTick(causynthOp);
+          try {
+            CausynthMessagePropagation.endInbound();
+          } catch (RuntimeException scopeAlreadyEnded) {
+            // Ending twice is not a workload error.
+          }
+        }
         ++opsProcessed;
       } while ((peer != null) &&
           (!peer.isClosed() && dnConf.socketKeepaliveTimeout > 0));
