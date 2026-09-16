@@ -46,11 +46,16 @@ import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.lang.management.ManagementFactory;
+import java.lang.reflect.Field;
 import java.net.InetSocketAddress;
 import java.security.PrivilegedExceptionAction;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
 import java.util.Properties;
+import java.util.Set;
+import java.util.TreeSet;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
@@ -63,6 +68,7 @@ import org.apache.hadoop.fs.StorageType;
 import org.apache.hadoop.fs.permission.FsPermission;
 import org.apache.hadoop.hdfs.DFSConfigKeys;
 import org.apache.hadoop.hdfs.DFSTestUtil;
+import org.apache.hadoop.hdfs.protocol.ExtendedBlock;
 import org.apache.hadoop.hdfs.DistributedFileSystem;
 import org.apache.hadoop.hdfs.HdfsConfiguration;
 import org.apache.hadoop.hdfs.MiniDFSCluster;
@@ -110,6 +116,7 @@ import org.slf4j.LoggerFactory;
 import javax.management.MBeanServer;
 import javax.management.ObjectName;
 import java.util.function.Supplier;
+import org.apache.hadoop.hdfs.security.token.block.BlockKey;
 
 import org.apache.hadoop.hdfs.security.token.block.BlockTokenSecretManager;
 import org.apache.hadoop.hdfs.server.namenode.NameNodeRpcServer;
@@ -1073,6 +1080,9 @@ public class TestExternalStoragePolicySatisfier {
     }
   }
 
+  /** Block-key serial number pinned by {@link #pinBlockKeys}. */
+  private static final int SERIAL_NO = Integer.MAX_VALUE / 17899 + 1;
+
   @Test
   @Timeout(value = 120)
   public void testCausynthSpsKeyRefreshRpcFailure() throws Exception {
@@ -1080,6 +1090,12 @@ public class TestExternalStoragePolicySatisfier {
         new StorageType[][]{{StorageType.DISK, StorageType.SSD}};
     config.setBoolean(DFSConfigKeys.DFS_ENCRYPT_DATA_TRANSFER_KEY, true);
     config.setBoolean(DFS_BLOCK_ACCESS_TOKEN_ENABLE_KEY, true);
+    config.setInt(
+        DFSConfigKeys.DFS_CLIENT_BLOCK_WRITE_LOCATEFOLLOWINGBLOCK_RETRIES_KEY,
+        12);
+    config.setInt(DFSConfigKeys.DFS_CLIENT_SOCKET_TIMEOUT_KEY, 10 * 60 * 1000);
+    config.setInt(DFSConfigKeys.DFS_NAMENODE_HEARTBEAT_RECHECK_INTERVAL_KEY,
+        10 * 60 * 1000);
     config.setLong(DFSConfigKeys.DFS_BLOCK_ACCESS_KEY_UPDATE_INTERVAL_KEY, 60);
     config.setLong(DFSConfigKeys.DFS_BLOCK_ACCESS_TOKEN_LIFETIME_KEY, 1);
     config.setLong(DFSConfigKeys.DFS_HEARTBEAT_INTERVAL_KEY, 3600);
@@ -1092,8 +1108,30 @@ public class TestExternalStoragePolicySatisfier {
           true, false);
       dfs = hdfsCluster.getFileSystem();
       writeContent(FILE, (short) 1);
+      // Before the SPS KeyManager takes its constructor snapshot, and before
+      // anything is recorded.
+      pinBlockKeys(hdfsCluster);
       nnc = DFSTestUtil.getNameNodeConnector(config,
           HdfsServerConstants.MOVER_ID_PATH, 1, true);
+      // getNameNodeConnector starts the KeyManager's BlockKeyUpdater
+      // daemon, whose run() performs one updateBlockKeys() before it
+      // sleeps.  The recorded run happened to finish that turn before
+      // startRecording() below; under the concolic VM it does not, and the
+      // daemon's addKeys then lands inside the recorded window and takes
+      // the occurrence this test means for main's own updateBlockKeys.
+      // Wait for the daemon's first turn explicitly, on state it already
+      // publishes: an access token can only be issued once addKeys has
+      // installed the block keys.
+      final ExtendedBlock firstBlock =
+          DFSTestUtil.getFirstBlock(dfs, new Path(FILE));
+      GenericTestUtils.waitFor(() -> {
+        try {
+          return nnc.getKeyManager().getAccessToken(firstBlock,
+              new StorageType[]{StorageType.DISK}, new String[]{""}) != null;
+        } catch (Exception keysNotInstalledYet) {
+          return false;
+        }
+      }, 100, 15000);
       DataNode target = hdfsCluster.getDataNodes().get(0);
       registerCausynthSources(target);
 
@@ -1151,6 +1189,91 @@ public class TestExternalStoragePolicySatisfier {
       }
     } finally {
       shutdownCluster();
+    }
+  }
+
+  /**
+   * Makes every block-key id the recorded window sees identical across
+   * GraphChecker replay sessions.  The NameNode manager seeds serialNo from
+   * SecureRandom once per JVM and each replay task is its own JVM, so without
+   * this the replay groups of one campaign mint unrelated ids.  setSerialNo
+   * only moves the counter, so the two constructor-time keys keep their
+   * random ids; two rotations retire them: the first mints SERIAL_NO + 1 as
+   * nextKey, the second makes it currentKey (the stale key of this workload)
+   * and mints SERIAL_NO + 2.  DataNodes and the SPS KeyManager mint nothing themselves (they only
+   * addKeys what the NameNode exports), so delivering the master's export
+   * in-process here is the same state a KeyUpdateCommand delivers; it stays
+   * out of the trace because nothing is recorded yet.  The recorded window's
+   * own rotations and refreshes are unchanged.
+   */
+  private static void pinBlockKeys(MiniDFSCluster cluster) throws Exception {
+    BlockTokenSecretManager master = cluster.getNamesystem()
+        .getBlockManager().getBlockTokenSecretManager();
+    master.setSerialNo(SERIAL_NO);
+    { // causynth-d3-rotation-scope
+      long causynthRotation = org.apache.hadoop.ipc.CausynthMessagePropagation.beginTick(
+          master, "KEY_MANAGER_TICK");
+      try {
+        master.updateKeys(Long.MAX_VALUE);
+      } finally {
+        org.apache.hadoop.ipc.CausynthMessagePropagation.endTick(
+            causynthRotation);
+      }
+    }
+    { // causynth-d3-rotation-scope
+      long causynthRotation = org.apache.hadoop.ipc.CausynthMessagePropagation.beginTick(
+          master, "KEY_MANAGER_TICK");
+      try {
+        master.updateKeys(Long.MAX_VALUE);
+      } finally {
+        org.apache.hadoop.ipc.CausynthMessagePropagation.endTick(
+            causynthRotation);
+      }
+    }
+    assertEquals(SERIAL_NO + 1, master.getCurrentKey().getKeyId());
+    // The two retired constructor-time keys still sit in every allKeys map
+    // (they expire long after the run) and would reach the target as a
+    // second, unpinned key family.  Drop them everywhere before recording, so
+    // every manager starts the recorded window holding exactly the pinned
+    // pair; managers created later (a Balancer/SPS KeyManager) copy the
+    // pruned NameNode export and never see them.
+    Set<Integer> pinned =
+        new TreeSet<>(Arrays.asList(SERIAL_NO + 1, SERIAL_NO + 2));
+    retainKeys(master, pinned);
+    assertEquals(pinned, keyIds(master));
+    String blockPoolId = cluster.getNamesystem().getBlockPoolId();
+    for (DataNode node : cluster.getDataNodes()) {
+      BlockTokenSecretManager manager =
+          node.getBlockPoolTokenSecretManager().get(blockPoolId);
+      manager.addKeys(master.exportKeys());
+      retainKeys(manager, pinned);
+      assertEquals(pinned, keyIds(manager),
+          "DataNode " + node.getDatanodeId() + " holds unpinned keys");
+      assertEquals(SERIAL_NO + 1, manager.getCurrentKey().getKeyId());
+      assertTrue(manager.hasKey(SERIAL_NO + 1) && manager.hasKey(SERIAL_NO + 2));
+    }
+  }
+
+  /** The private allKeys map; BlockTokenSecretManager has no test accessor. */
+  @SuppressWarnings("unchecked")
+  private static Map<Integer, BlockKey> allKeys(
+      BlockTokenSecretManager manager) throws ReflectiveOperationException {
+    Field field = BlockTokenSecretManager.class.getDeclaredField("allKeys");
+    field.setAccessible(true);
+    return (Map<Integer, BlockKey>) field.get(manager);
+  }
+
+  private static void retainKeys(BlockTokenSecretManager manager,
+      Set<Integer> keyIds) throws ReflectiveOperationException {
+    synchronized (manager) {
+      allKeys(manager).keySet().retainAll(keyIds);
+    }
+  }
+
+  private static Set<Integer> keyIds(BlockTokenSecretManager manager)
+      throws ReflectiveOperationException {
+    synchronized (manager) {
+      return new TreeSet<>(allKeys(manager).keySet());
     }
   }
 
