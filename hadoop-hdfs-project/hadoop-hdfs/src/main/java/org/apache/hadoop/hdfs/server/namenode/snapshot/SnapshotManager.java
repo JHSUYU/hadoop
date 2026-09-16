@@ -62,6 +62,7 @@ import org.apache.hadoop.hdfs.server.namenode.INodeDirectory;
 import org.apache.hadoop.hdfs.server.namenode.INodesInPath;
 import org.apache.hadoop.hdfs.server.namenode.LeaseManager;
 import org.apache.hadoop.hdfs.util.ReadOnlyList;
+import org.apache.hadoop.ipc.CausynthSymbolicSource;
 import org.apache.hadoop.metrics2.util.MBeans;
 import org.apache.hadoop.util.Lists;
 
@@ -173,6 +174,10 @@ public class SnapshotManager implements SnapshotStatsMXBean {
     this.snapshotDeletionOrdered = conf.getBoolean(
         DFS_NAMENODE_SNAPSHOT_DELETION_ORDERED,
         DFS_NAMENODE_SNAPSHOT_DELETION_ORDERED_DEFAULT);
+    CausynthSymbolicSource.symbolize(
+        "HDFS.CONFIG.SNAPSHOT_DELETION_ORDERED", this,
+        "<org.apache.hadoop.hdfs.server.namenode.snapshot.SnapshotManager: "
+            + "boolean snapshotDeletionOrdered>");
     LOG.info("{} = {}", DFS_NAMENODE_SNAPSHOT_DELETION_ORDERED,
         snapshotDeletionOrdered);
 

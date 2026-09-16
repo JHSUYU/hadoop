@@ -35,12 +35,27 @@ public final class CausynthMessagePropagation {
   private CausynthMessagePropagation() {
   }
 
+  /**
+   * The request scope of the calling thread, as a value the work it is
+   * creating can carry to whatever thread later sends it.
+   */
+  public static Object captureScope() {
+    return CausynthTraceRecorder.captureScope();
+  }
+
   public static Outbound outbound(String transport, String correlationId,
       String attemptId, String half, Object localOwner) {
+    return outbound(transport, correlationId, attemptId, half, localOwner,
+        null);
+  }
+
+  /** The same leg, for work carrying the scope it was created in. */
+  public static Outbound outbound(String transport, String correlationId,
+      String attemptId, String half, Object localOwner, Object scope) {
     String trace = CausynthTraceRecorder.outboundExchange(transport,
-        correlationId, attemptId, half, localOwner);
+        correlationId, attemptId, half, localOwner, scope);
     String symbolic = SymbolicMessageEnvelope.takeOutbound();
-    return trace.isEmpty() ? Outbound.EMPTY
+    return trace.isEmpty() && symbolic.isEmpty() ? Outbound.EMPTY
         : new Outbound(correlationId, attemptId, trace, symbolic);
   }
 
@@ -54,12 +69,16 @@ public final class CausynthMessagePropagation {
       Object localOwner) {
     endInbound();
     SymbolicMessageEnvelope.clearInbound();
-    if (trace == null || trace.isEmpty()) {
+    boolean hasTrace = trace != null && !trace.isEmpty();
+    boolean hasSymbolic = symbolic != null && !symbolic.isEmpty();
+    if (!hasTrace && !hasSymbolic) {
       return Inbound.EMPTY;
     }
-    long token = CausynthTraceRecorder.inboundExchange(trace, transport,
-        correlationId, attemptId, half, localOwner);
-    if (symbolic != null && !symbolic.isEmpty()) {
+    long token = hasTrace
+        ? CausynthTraceRecorder.inboundExchange(trace, transport,
+            correlationId, attemptId, half, localOwner)
+        : 0L;
+    if (hasSymbolic) {
       SymbolicMessageEnvelope.installInbound(symbolic);
     }
     Inbound scope = new Inbound(token, correlationId, attemptId, half);
@@ -84,7 +103,9 @@ public final class CausynthMessagePropagation {
     }
     CURRENT.remove();
     SymbolicMessageEnvelope.clearInbound();
-    CausynthTraceRecorder.endInboundExchange(scope.token);
+    if (scope.token > 0L) {
+      CausynthTraceRecorder.endInboundExchange(scope.token);
+    }
   }
 
   /** Emits the next alternating SASL request or response message. */
@@ -121,6 +142,10 @@ public final class CausynthMessagePropagation {
     endInbound();
   }
 
+  public static void startRecording() {
+    CausynthTraceRecorder.startRecording();
+  }
+
   public static void registerSource(Object anchor, String kind, String role,
       String sourceId, long epoch) {
     CausynthTraceRecorder.registerSource(anchor, kind, role, sourceId, epoch);
@@ -130,7 +155,13 @@ public final class CausynthMessagePropagation {
     CausynthTraceRecorder.registerSourceAlias(alias, anchor);
   }
 
+  public static void restartSource(Object anchor, String kind, String role,
+      String sourceId, long epoch) {
+    CausynthTraceRecorder.restartSource(anchor, kind, role, sourceId, epoch);
+  }
+
   public static long beginRequest(Object source, String api) {
+    endInbound();
     return CausynthTraceRecorder.beginSourceRequest(source, api);
   }
 
@@ -155,7 +186,7 @@ public final class CausynthMessagePropagation {
     }
 
     public boolean active() {
-      return !trace.isEmpty();
+      return !trace.isEmpty() || !symbolic.isEmpty();
     }
   }
 
