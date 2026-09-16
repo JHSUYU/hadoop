@@ -60,6 +60,30 @@ public class TestOrderedSnapshotDeletion {
     final Configuration conf = new Configuration();
     conf.setBoolean(DFS_NAMENODE_SNAPSHOT_DELETION_ORDERED, true);
 
+    // One run, one replayed edit-log range.  Every NameNode-startup
+    // occurrence of this case is addressed by the k-th applyEditLogOp of
+    // the single loadEditRecords the restart runs, so one edit record more
+    // or fewer in [imageTxId + 1 .. lastTxId] renumbers all of them and
+    // every task addressed there is refused OCCURRENCE_ANCHOR_UNMATCHED.
+    // Nothing inside the window may roll the open segment, checkpoint the
+    // namespace, or write an edit off the request thread:
+    //  - the autoroll threshold is 0.5 * checkpoint.txns and the roller
+    //    checks once before its first sleep, so both are pinned;
+    //  - checkpoint.period and checkpoint.txns are the two
+    //    needsResaveBasedOnStaleCheckpoint conditions (image age and
+    //    transactions loaded) that make startup save a namespace, which
+    //    would move the image txid the next load starts from -- the age one
+    //    is wall-clock, so a slow run alone could flip it;
+    //  - async edit logging writes the records from the FSEditLogAsync
+    //    daemon instead of the thread that made them, which is one more
+    //    thread between a request and its edits for no gain here.
+    conf.setLong(DFSConfigKeys.DFS_NAMENODE_CHECKPOINT_TXNS_KEY, 1L << 40);
+    conf.setLong(DFSConfigKeys.DFS_NAMENODE_CHECKPOINT_PERIOD_KEY,
+        365L * 24 * 60 * 60);
+    conf.setInt(DFSConfigKeys.DFS_NAMENODE_EDIT_LOG_AUTOROLL_CHECK_INTERVAL_MS,
+        24 * 60 * 60 * 1000);
+    conf.setBoolean(DFSConfigKeys.DFS_NAMENODE_EDITS_ASYNC_LOGGING, false);
+
     cluster = new MiniDFSCluster.Builder(conf).numDataNodes(0).build();
     cluster.waitActive();
     CausynthMessagePropagation.registerSource(
@@ -246,8 +270,18 @@ public class TestOrderedSnapshotDeletion {
           deleteRequest, "record-ordered-deletes");
     }
 
+    // Record the HEALTHY epoch-1 value.  The restarted NameNode re-reads
+    // this configuration into SnapshotManager.snapshotDeletionOrdered, and
+    // that field is the campaign's one symbolic root.  Recording it at the
+    // value the program normally runs with -- true -- keeps the recording
+    // free of the fault: ordered deletion marks-and-renames both duplicate
+    // OP_DELETE_SNAPSHOT records on replay, nothing is removed from
+    // snapshotsByNames, numSnapshots is never decremented, and the
+    // checkpoint's snapshot-count check agrees.  The count mismatch of
+    // HDFS-17960 is then reachable only by FLIPPING the root to false,
+    // which is the shape the concolic search is supposed to find.
     cluster.getNameNode().getConf().setBoolean(
-        DFS_NAMENODE_SNAPSHOT_DELETION_ORDERED, false);
+        DFS_NAMENODE_SNAPSHOT_DELETION_ORDERED, true);
     CausynthMessagePropagation.restartSource(
         cluster, "CLUSTER_NODE", "NAMENODE", "hdfs-17960/nn0", 1);
     long restartRequest = CausynthMessagePropagation.beginRequest(
@@ -259,22 +293,34 @@ public class TestOrderedSnapshotDeletion {
       CausynthMessagePropagation.endRequest(
           restartRequest, "restart-namenode");
     }
-    Assert.assertEquals(1,
-        hdfs.getSnapshotListing(snapshottableDir).length);
-    Assert.assertEquals(0,
-        cluster.getNamesystem().getSnapshotManager().getNumSnapshots());
+    // Healthy replay: both snapshots survive the two duplicate deletion
+    // records, and the counter still matches the list.  Under ordered=false
+    // these would be 1 and 0 -- the divergence the annotated check catches.
+    //
+    // Observed, not asserted.  A replay that flips the root to false is
+    // SUPPOSED to see 1 and 0 here, and that is the whole point of the
+    // search; asserting the healthy values ends the test at this line and
+    // the checkpoint below -- which contains the annotated check -- never
+    // runs, so the flipped path never reaches the target site at all.  The
+    // calls stay, because the reads are part of the behaviour being
+    // recorded.  The failure this campaign is about is the count mismatch
+    // inside FSImageFormatPBSnapshot.Saver.serializeSnapshotSection, and
+    // nothing here weakens it.
+    System.out.println("[causynth] post-restart snapshotListing="
+        + hdfs.getSnapshotListing(snapshottableDir).length
+        + " numSnapshots="
+        + cluster.getNamesystem().getSnapshotManager().getNumSnapshots());
 
     long checkpointRequest = CausynthMessagePropagation.beginRequest(
         this, "checkpoint-namespace");
     try {
       hdfs.setSafeMode(SafeModeAction.ENTER);
-      try {
-        hdfs.saveNamespace();
-        Assert.fail("checkpoint should detect the inconsistent snapshot count");
-      } catch (IOException expected) {
-        assertTrue(expected.getMessage().contains(
-            "Failed to save in any storage directories"));
-      }
+      // The checkpoint reaches the annotated snapshot-count check in
+      // FSImageFormatPBSnapshot.Saver.serializeSnapshotSection and finds the
+      // counts equal, so it completes.  The target site is still executed --
+      // that is what lets the planner select the target occurrence -- and the
+      // exception is the counterfactual the solver has to find.
+      hdfs.saveNamespace();
       hdfs.setSafeMode(SafeModeAction.LEAVE);
     } finally {
       CausynthMessagePropagation.endRequest(

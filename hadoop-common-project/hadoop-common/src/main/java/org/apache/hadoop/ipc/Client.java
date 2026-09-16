@@ -285,6 +285,10 @@ public class Client implements AutoCloseable {
     private AlignmentContext alignmentContext;
     private String causynthTrace = "";
     private String causynthSymbolic = "";
+    /** The request scope this call was created in, captured on the thread
+     * that created it and carried with it to the send. */
+    private final Object causynthScope =
+        CausynthMessagePropagation.captureScope();
 
     private Call(RPC.RpcKind rpcKind, Writable param) {
       this.rpcKind = rpcKind;
@@ -1187,7 +1191,8 @@ public class Client implements AutoCloseable {
           clientId, call.id);
       CausynthMessagePropagation.Outbound causynth =
           CausynthMessagePropagation.outbound(correlationId,
-              Integer.toString(call.retry), "REQUEST", Client.this);
+              Integer.toString(call.retry), "REQUEST", Client.this,
+              call.causynthScope);
       RpcRequestHeaderProto.Builder header = ProtoUtil.makeRpcRequestHeader(
           call.rpcKind, OperationProto.RPC_FINAL_PACKET, call.id, call.retry,
           clientId, call.alignmentContext).toBuilder();

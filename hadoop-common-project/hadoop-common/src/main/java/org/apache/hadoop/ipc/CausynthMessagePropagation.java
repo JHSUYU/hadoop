@@ -30,12 +30,26 @@ public final class CausynthMessagePropagation {
   private CausynthMessagePropagation() {
   }
 
+  /**
+   * The request scope of the calling thread, as a value the work it is
+   * creating can carry to whatever thread later sends it.
+   */
+  public static Object captureScope() {
+    return CausynthTraceRecorder.captureScope();
+  }
+
   public static Outbound outbound(String correlationId, String attemptId,
       String half, Object localOwner) {
+    return outbound(correlationId, attemptId, half, localOwner, null);
+  }
+
+  /** The same leg, for work carrying the scope it was created in. */
+  public static Outbound outbound(String correlationId, String attemptId,
+      String half, Object localOwner, Object scope) {
     String trace = CausynthTraceRecorder.outboundExchange(IPC, correlationId,
-        attemptId, half, localOwner);
+        attemptId, half, localOwner, scope);
     String symbolic = SymbolicMessageEnvelope.takeOutbound();
-    return trace.isEmpty() ? Outbound.EMPTY
+    return trace.isEmpty() && symbolic.isEmpty() ? Outbound.EMPTY
         : new Outbound(trace, symbolic);
   }
 
@@ -49,12 +63,16 @@ public final class CausynthMessagePropagation {
       Object localOwner) {
     endInbound();
     SymbolicMessageEnvelope.clearInbound();
-    if (trace == null || trace.isEmpty()) {
+    boolean hasTrace = trace != null && !trace.isEmpty();
+    boolean hasSymbolic = symbolic != null && !symbolic.isEmpty();
+    if (!hasTrace && !hasSymbolic) {
       return Inbound.EMPTY;
     }
-    long token = CausynthTraceRecorder.inboundExchange(trace, IPC,
-        correlationId, attemptId, half, localOwner);
-    if (symbolic != null && !symbolic.isEmpty()) {
+    long token = hasTrace
+        ? CausynthTraceRecorder.inboundExchange(trace, IPC,
+            correlationId, attemptId, half, localOwner)
+        : 0L;
+    if (hasSymbolic) {
       SymbolicMessageEnvelope.installInbound(symbolic);
     }
     Inbound scope = new Inbound(token);
@@ -79,7 +97,33 @@ public final class CausynthMessagePropagation {
     }
     CURRENT.remove();
     SymbolicMessageEnvelope.clearInbound();
-    CausynthTraceRecorder.endInboundExchange(scope.token);
+    if (scope.token > 0L) {
+      CausynthTraceRecorder.endInboundExchange(scope.token);
+    }
+  }
+
+  /**
+   * Enters the scope a queued unit of work carried from where it was made.
+   * // causynth-d3-lineage
+   */
+  public static long enterCarriedScope(Object scope, String role,
+      String api) {
+    return CausynthTraceRecorder.enterCarriedScope(scope, role, api);
+  }
+
+  /** Leaves the scope {@link #enterCarriedScope} entered. */
+  public static void exitCarriedScope(long token) {
+    CausynthTraceRecorder.exitCarriedScope(token);
+  }
+
+  /** Opens one daemon tick as a lineage root of its own. */
+  public static long beginTick(Object owner, String role) {
+    return CausynthTraceRecorder.beginDaemonTick(owner, role);
+  }
+
+  /** Closes the tick {@link #beginTick} opened. */
+  public static void endTick(long token) {
+    CausynthTraceRecorder.endDaemonTick(token);
   }
 
   public static void startRecording() {
@@ -121,7 +165,7 @@ public final class CausynthMessagePropagation {
     }
 
     public boolean active() {
-      return !trace.isEmpty();
+      return !trace.isEmpty() || !symbolic.isEmpty();
     }
   }
 

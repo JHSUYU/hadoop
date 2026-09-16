@@ -977,6 +977,11 @@ public abstract class Server {
     // store last seen states for multiple namespaces.
     private ByteString federatedNamespaceState;
 
+    /** The scope this call was built in, carried to the handler
+     * that runs it: the pool never inherits it. // causynth-d3-lineage */
+    final Object causynthScope =
+        CausynthMessagePropagation.captureScope();
+
     Call() {
       this(RpcConstants.INVALID_CALL_ID, RpcConstants.INVALID_RETRY_COUNT,
         RPC.RpcKind.RPC_BUILTIN, RpcConstants.DUMMY_CLIENT_ID);
@@ -1245,6 +1250,8 @@ public abstract class Server {
       long startNanos = Time.monotonicNowNanos();
       Writable value = null;
       ResponseParams responseParams = new ResponseParams();
+      long causynthCall = CausynthMessagePropagation
+          .enterCarriedScope(causynthScope, "IPC_HANDLER", null);
       CausynthMessagePropagation.Inbound causynth =
           CausynthMessagePropagation.inbound(causynthTrace,
               causynthSymbolic,
@@ -1282,6 +1289,7 @@ public abstract class Server {
         return null;
       } finally {
         CausynthMessagePropagation.endInbound(causynth);
+        CausynthMessagePropagation.exitCarriedScope(causynthCall);
       }
     }
 
