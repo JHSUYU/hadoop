@@ -26,6 +26,9 @@ import java.util.Set;
 import java.util.TreeSet;
 
 import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.net.NetUtils;
+import org.apache.hadoop.fs.permission.FsPermission;
+import java.net.InetSocketAddress;
 import org.apache.hadoop.fs.FSDataOutputStream;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hdfs.DFSClient;
@@ -113,6 +116,29 @@ public class TestCausynthWriteBlockMirrorStaleKey {
 
       pinBlockKeys(cluster);
 
+      // REGISTER BEFORE ANY TRAFFIC.  Registration used to happen after the
+      // warm-up write, and that is a race the concolic replay loses: a
+      // heartbeat that converts ExportedBlockKeys on an IPC handler thread
+      // can fall before registration in one pass and after it in another, so
+      // the plan built from the recording addresses an occurrence on the
+      // UNREGISTERED source while the replay attributes the same activation
+      // to nn0.  The addresses then cannot agree and the replay refuses the
+      // target: "matching root carried a registered source
+      // hdfs-17967/nn0#epoch0 instead of the unregistered source".
+      registerSources(cluster, fs.getClient());
+      BlockTokenSecretManager master = cluster.getNamesystem()
+          .getBlockManager().getBlockTokenSecretManager();
+      String blockPoolId = cluster.getNamesystem().getBlockPoolId();
+      NameNodeRpcServer namenode =
+          (NameNodeRpcServer) cluster.getNameNodeRpc();
+      CausynthMessagePropagation.registerSourceAlias(master,
+          namenode.getClientRpcServer());
+      for (DataNode node : cluster.getDataNodes()) {
+        CausynthMessagePropagation.registerSourceAlias(
+            node.getBlockPoolTokenSecretManager().get(blockPoolId),
+            node.getDatanodeId());
+      }
+
       // WARM THE CLIENT'S OWN ENCRYPTION KEY, before the rotations and after
       // the pinning.  A DFSClient fetches its data-encryption key lazily, on
       // its first encrypted connection, and caches it until it expires.
@@ -131,21 +157,9 @@ public class TestCausynthWriteBlockMirrorStaleKey {
         out.write(new byte[]{0});
       }
 
-      registerSources(cluster, fs.getClient());
-
-      BlockTokenSecretManager master = cluster.getNamesystem()
-          .getBlockManager().getBlockTokenSecretManager();
-      String blockPoolId = cluster.getNamesystem().getBlockPoolId();
-      NameNodeRpcServer namenode =
-          (NameNodeRpcServer) cluster.getNameNodeRpc();
-      CausynthMessagePropagation.registerSourceAlias(master,
-          namenode.getClientRpcServer());
-      for (DataNode node : cluster.getDataNodes()) {
-        CausynthMessagePropagation.registerSourceAlias(
-            node.getBlockPoolTokenSecretManager().get(blockPoolId),
-            node.getDatanodeId());
-      }
       CausynthMessagePropagation.startRecording();
+
+
 
       // THE ROTATIONS ARE DRIVEN HERE, NOT WAITED FOR.  Shortening the key
       // update interval and waiting for the NameNode's own key-updater daemon
@@ -216,24 +230,53 @@ public class TestCausynthWriteBlockMirrorStaleKey {
       // stays healthy because the mirror still holds it; a witness has to
       // move the clock past its expiry.  Both nodes are rolled back because
       // the NameNode, not this test, chooses which one heads the pipeline.
+      // ONLY THE HEAD IS SKEWED, and the head is PINNED.
+      //
+      // Rolling both nodes back made them symmetric, and the engine then
+      // could not tell them apart: two activations of the key-install region
+      // shared one address (BLOCKING OCCURRENCE_ADDRESS_SHARED) and one
+      // consumer was paired with two different producers across sessions
+      // (BLOCKING TOPOLOGY_DIVERGENCE, "a replacement, not growth").  The
+      // pipeline head is therefore chosen by this test, with favoredNodes,
+      // and only that node's current key is rolled back.  The mirror stays on
+      // the master's newest key, so the two differ in the recording and the
+      // handshake that carries a stale key has exactly one direction:
+      // head -> mirror.
+      DataNode head = cluster.getDataNodes().get(0);
+      DataNode mirror = cluster.getDataNodes().get(1);
       for (DataNode node : cluster.getDataNodes()) {
-        BlockTokenSecretManager manager =
-            node.getBlockPoolTokenSecretManager().get(blockPoolId);
         refreshKeysFromNameNode(node);
-        rollCurrentKeyBackTo(manager, SERIAL_NO + 1);
-        assertEquals(SERIAL_NO + 1, currentKeyId(manager),
-            "DataNode " + node.getDatanodeId() + " must present the pinned"
-                + " key, or the recording carries no rotation gap");
-        assertTrue(manager.hasKey(currentKeyId(master)),
-            "DataNode " + node.getDatanodeId() + " must still hold the"
-                + " master's current key, or block tokens cannot verify");
       }
+      BlockTokenSecretManager headKeys =
+          head.getBlockPoolTokenSecretManager().get(blockPoolId);
+      BlockTokenSecretManager mirrorKeys =
+          mirror.getBlockPoolTokenSecretManager().get(blockPoolId);
+      rollCurrentKeyBackTo(headKeys, SERIAL_NO + 1);
+      assertEquals(SERIAL_NO + 1, currentKeyId(headKeys),
+          "the head must present the pinned key, or the recording carries"
+              + " no rotation gap");
+      assertEquals(currentKeyId(master), currentKeyId(mirrorKeys),
+          "the mirror must be current, or the two nodes are symmetric and"
+              + " nothing distinguishes their activations");
+      assertTrue(mirrorKeys.hasKey(SERIAL_NO + 1),
+          "the mirror must still RETAIN the head's key, or the recording"
+              + " is already the failure");
+      assertTrue(headKeys.hasKey(currentKeyId(master)),
+          "the head must still hold the master's current key, or block"
+              + " tokens cannot verify");
 
       Path path = new Path("/causynth-hdfs-17967-a");
       long request = CausynthMessagePropagation.beginRequest(
           fs.getClient(), "write-block");
       try {
-        try (FSDataOutputStream out = fs.create(path, (short) 2)) {
+        // favoredNodes pins the head, so which node carries the stale key is
+        // this test's choice and not the NameNode's.
+        try (FSDataOutputStream out = fs.create(path,
+            FsPermission.getFileDefault(), true, 4096, (short) 2,
+            fs.getDefaultBlockSize(), null,
+            new InetSocketAddress[]{
+                NetUtils.createSocketAddr(head.getDatanodeId().getXferAddr())
+            })) {
           out.write(new byte[]{1, 2, 3, 4});
         }
         // Observed, not asserted beyond liveness: the recording takes the

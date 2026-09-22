@@ -1243,18 +1243,13 @@ public class Client implements AutoCloseable {
               CausynthMessagePropagation.IPC, correlationId,
               Integer.toString(call.retry), "REQUEST", Client.this,
               call.causynthScope);
-      // Minted on every path through this method, not only when the
-      // outbound context happens to be active: the declared fault marker is
-      // this region's one symbolic input, and Java's && short-circuits, so a
-      // replay reaching the send with no active context materialized no
-      // marker at all and the case's only MARKER_FLIPPED witness could never
-      // be asked for.  The THROW still needs an active context; only the
-      // mint is unconditional.
-      boolean hadoopIpcRequestFails =
-          Debug.makeSymbolicBoolean("hadoopIpcRequestFails");
-      if (causynth.active() && hadoopIpcRequestFails) {
-        throw new IOException("symbolic Hadoop IPC transport failure");
-      }
+      // No RPC fault marker in this case.  It belongs to HDFS-17899, whose
+      // mechanism is a key-refresh RPC that fails; HDFS-17967's is a
+      // clock-driven expiry, and an extra symbolic boolean here only gives
+      // the composer a MARKER it can flip without deciding the recording --
+      // which is exactly what it did: "the formula shows MARKER_FLIPPED, and
+      // it is satisfiable with every declared root at its recorded value
+      // too, so the recording does not decide the arm".
       RpcRequestHeaderProto.Builder header = ProtoUtil.makeRpcRequestHeader(
           call.rpcKind, OperationProto.RPC_FINAL_PACKET, call.id, call.retry,
           clientId, call.alignmentContext).toBuilder();
