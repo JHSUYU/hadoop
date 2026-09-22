@@ -20,6 +20,7 @@ package org.apache.hadoop.hdfs.server.datanode;
 import java.io.IOException;
 import java.lang.reflect.Field;
 import java.util.Arrays;
+import java.util.concurrent.TimeUnit;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeSet;
@@ -92,6 +93,19 @@ public class TestCausynthWriteBlockMirrorStaleKey {
     // No automatic heartbeat inside the recorded window: a refresh the
     // workload did not ask for would close the rotation gap behind its back.
     conf.setLong(DFSConfigKeys.DFS_HEARTBEAT_INTERVAL_KEY, 3600);
+    // ...but suppressing heartbeats makes every DataNode look STALE after
+    // the default 30s, and block placement then avoids stale nodes.  The
+    // native run is quick enough never to notice; the concolic replay is not,
+    // and it placed ONE replica instead of two, so there was no mirror, no
+    // handshake and no target ("the write needs a two-node pipeline").  The
+    // staleness window is therefore pushed out past any replay, and
+    // stale-node avoidance is turned off for writes as well.
+    conf.setLong(DFSConfigKeys.DFS_NAMENODE_STALE_DATANODE_INTERVAL_KEY,
+        TimeUnit.HOURS.toMillis(6));
+    conf.setBoolean(
+        DFSConfigKeys.DFS_NAMENODE_AVOID_STALE_DATANODE_FOR_WRITE_KEY, false);
+    conf.setBoolean(
+        DFSConfigKeys.DFS_NAMENODE_AVOID_STALE_DATANODE_FOR_READ_KEY, false);
     try (MiniDFSCluster cluster = new MiniDFSCluster.Builder(conf)
         .numDataNodes(2).build();
          DistributedFileSystem fs = cluster.getFileSystem()) {
