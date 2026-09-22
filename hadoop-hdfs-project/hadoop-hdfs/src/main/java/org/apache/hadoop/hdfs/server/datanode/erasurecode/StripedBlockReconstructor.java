@@ -24,7 +24,6 @@ import org.apache.hadoop.classification.InterfaceAudience;
 import org.apache.hadoop.hdfs.server.datanode.DataNodeFaultInjector;
 import org.apache.hadoop.hdfs.server.datanode.metrics.DataNodeMetrics;
 import org.apache.hadoop.io.erasurecode.rawcoder.InvalidDecodingException;
-import org.apache.hadoop.ipc.CausynthMessagePropagation;
 import org.apache.hadoop.util.Time;
 
 /**
@@ -37,15 +36,6 @@ class StripedBlockReconstructor extends StripedReconstructor
     implements Runnable {
 
   private StripedWriter stripedWriter;
-
-  /**
-   * The scope this task was BUILT in, carried to whichever pooled thread
-   * later runs it: stripedReconstructionPool never inherits it, exactly as
-   * the IPC handler pool does not (see {@code Server.Call#causynthScope}).
-   * // causynth-d3-lineage
-   */
-  private final Object causynthScope =
-      CausynthMessagePropagation.captureScope();
 
   StripedBlockReconstructor(ErasureCodingWorker worker,
       StripedReconstructionInfo stripedReconInfo) {
@@ -61,14 +51,6 @@ class StripedBlockReconstructor extends StripedReconstructor
 
   @Override
   public void run() {
-    // Stamp the pooled thread with this DataNode for the WHOLE task, not
-    // just the handshake: everything the reconstruction does afterwards --
-    // the target connection among it -- would otherwise run on a thread
-    // naming no node.  Same placement as DataXceiver.run().
-    // // causynth-d3-lineage
-    CausynthMessagePropagation.setLocalOwner(getDatanode().getDatanodeId());
-    long causynthTask = CausynthMessagePropagation.enterCarriedScope(
-        causynthScope, "EC_RECONSTRUCTOR", null);
     try {
       initDecoderIfNecessary();
 
@@ -101,8 +83,6 @@ class StripedBlockReconstructor extends StripedReconstructor
       getStripedReader().close();
       stripedWriter.close();
       cleanup();
-      CausynthMessagePropagation.exitCarriedScope(causynthTask);
-      CausynthMessagePropagation.clearLocalOwner();
     }
   }
 

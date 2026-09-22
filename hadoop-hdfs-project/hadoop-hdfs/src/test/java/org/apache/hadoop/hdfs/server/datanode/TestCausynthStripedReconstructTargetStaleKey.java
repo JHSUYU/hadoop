@@ -121,11 +121,9 @@ public class TestCausynthStripedReconstructTargetStaleKey {
     conf.setInt(
         DFSConfigKeys.DFS_DN_EC_RECONSTRUCTION_STRIPED_READ_BUFFER_SIZE_KEY,
         CELL_SIZE);
-    // No automatic heartbeat inside the recorded window: a refresh the
-    // workload did not ask for would close the rotation gap behind its back.
-    conf.setLong(DFSConfigKeys.DFS_HEARTBEAT_INTERVAL_KEY, 3600);
-    // ...but suppressed heartbeats make every DataNode look STALE after the
-    // default 30s, and placement then avoids them.
+    // A concolic replay is slow, and one held to its schedule prefix can
+    // hold a heartbeat until its turn: placement must not read a slow node
+    // as a stale one.
     conf.setLong(DFSConfigKeys.DFS_NAMENODE_STALE_DATANODE_INTERVAL_KEY,
         TimeUnit.HOURS.toMillis(6));
     conf.setBoolean(
@@ -199,14 +197,7 @@ public class TestCausynthStripedReconstructTargetStaleKey {
       String blockPoolId = blockGroup.getBlockPoolId();
       NameNodeRpcServer namenode =
           (NameNodeRpcServer) cluster.getNameNodeRpc();
-      CausynthMessagePropagation.registerSourceAlias(master,
-          namenode.getClientRpcServer());
-      for (DataNode node : nodes) {
-        CausynthMessagePropagation.registerSourceAlias(
-            node.getBlockPoolTokenSecretManager().get(blockPoolId),
-            node.getDatanodeId());
-      }
-      CausynthMessagePropagation.startRecording();
+      CausynthCluster.startRecording();
 
       int initialKeyId = currentKeyId(master);
       long rotations = CausynthMessagePropagation.beginRequest(
@@ -347,24 +338,10 @@ public class TestCausynthStripedReconstructTargetStaleKey {
     }
   }
 
-  /** One key-refresh heartbeat, so the node can verify fresh block tokens. */
+  /** One key-refresh heartbeat: the one shared helper's (CausynthCluster). */
   private static void refreshKeysFromNameNode(DataNode datanode, String api)
       throws IOException {
-    BPOfferService service = datanode.getAllBpOs().get(0);
-    BPServiceActor actor = service.getBPServiceActors().get(0);
-    long request = CausynthMessagePropagation.beginRequest(
-        datanode.getDatanodeId(), api);
-    try {
-      HeartbeatResponse response = actor.sendHeartBeat(false);
-      DatanodeCommand[] commands = response.getCommands();
-      if (commands != null) {
-        for (DatanodeCommand command : commands) {
-          service.processCommandFromActor(command, actor);
-        }
-      }
-    } finally {
-      CausynthMessagePropagation.endRequest(request, api);
-    }
+    CausynthCluster.refreshKeysFromNameNode(datanode, api);
   }
 
   /** The private allKeys map; BlockTokenSecretManager has no test accessor. */
@@ -409,17 +386,13 @@ public class TestCausynthStripedReconstructTargetStaleKey {
 
   private static void registerSources(MiniDFSCluster cluster, DataNode worker,
       DataNode helper, DataNode lost, DataNode target) {
-    NameNodeRpcServer namenode = (NameNodeRpcServer) cluster.getNameNodeRpc();
-    CausynthMessagePropagation.registerSource(
-        namenode.getClientRpcServer(), "CLUSTER_NODE", "NAMENODE",
-        "hdfs-17967/nn0", 0);
-    CausynthMessagePropagation.registerSource(worker.getDatanodeId(),
-        "CLUSTER_NODE", "DATANODE", "hdfs-17967/worker-dn", 0);
-    CausynthMessagePropagation.registerSource(helper.getDatanodeId(),
-        "CLUSTER_NODE", "DATANODE", "hdfs-17967/helper-dn", 0);
-    CausynthMessagePropagation.registerSource(lost.getDatanodeId(),
-        "CLUSTER_NODE", "DATANODE", "hdfs-17967/lost-dn", 0);
-    CausynthMessagePropagation.registerSource(target.getDatanodeId(),
-        "CLUSTER_NODE", "DATANODE", "hdfs-17967/target-dn", 0);
+    // Every node, registered whole, before any traffic the recording
+    // depends on (CausynthCluster).
+    CausynthCluster.registerNameNode(cluster, 0, "hdfs-17967/nn0");
+    CausynthCluster.registerDataNode(worker, "hdfs-17967/worker-dn");
+    CausynthCluster.registerDataNode(helper, "hdfs-17967/helper-dn");
+    CausynthCluster.registerDataNode(lost, "hdfs-17967/lost-dn");
+    CausynthCluster.registerDataNode(target, "hdfs-17967/target-dn");
+    CausynthCluster.registerOtherDataNodes(cluster, "hdfs-17967");
   }
 }
