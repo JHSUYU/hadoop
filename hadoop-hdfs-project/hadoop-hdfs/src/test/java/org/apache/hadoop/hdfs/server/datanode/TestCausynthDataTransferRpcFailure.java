@@ -73,12 +73,19 @@ public class TestCausynthDataTransferRpcFailure {
         10 * 60 * 1000);
     conf.setLong(DFSConfigKeys.DFS_BLOCK_ACCESS_KEY_UPDATE_INTERVAL_KEY, 60);
     conf.setLong(DFSConfigKeys.DFS_BLOCK_ACCESS_TOKEN_LIFETIME_KEY, 1);
+    // Each DataNode has IPC connections of its own, as a DataNode process
+    // does (CausynthCluster.dataNodeOverlays).
     try (MiniDFSCluster cluster = new MiniDFSCluster.Builder(conf)
-        .numDataNodes(2).build();
+        .numDataNodes(2)
+        .dataNodeConfOverlays(CausynthCluster.dataNodeOverlays(2)).build();
          DistributedFileSystem fs = cluster.getFileSystem()) {
       cluster.waitActive();
       Path path = new Path("/causynth-hdfs-17899-bug3");
-      try (FSDataOutputStream out = fs.create(path, (short) 1)) {
+      // Pinned to the first DataNode: the case's roles are read off this
+      // block, and random placement would make a different started node play
+      // them in every run (CausynthCluster.createOnNode).
+      try (FSDataOutputStream out = CausynthCluster.createOnNode(fs, path,
+          cluster.getDataNodes().get(0))) {
         out.write(1);
       }
 
@@ -86,6 +93,8 @@ public class TestCausynthDataTransferRpcFailure {
       ExtendedBlock block = located.getBlock();
       List<DataNode> nodes = cluster.getDataNodes();
       DataNode source = find(nodes, located.getLocations()[0]);
+      assertEquals(nodes.get(0), source,
+          "the block must be on the DataNode the workload pinned it to");
       DataNode target = nodes.get(0) == source ? nodes.get(1) : nodes.get(0);
       pinBlockKeys(cluster);
       registerSources(cluster, source, target);
