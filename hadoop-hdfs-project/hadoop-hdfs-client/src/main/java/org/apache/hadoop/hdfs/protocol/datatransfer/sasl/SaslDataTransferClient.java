@@ -147,21 +147,19 @@ public class SaslDataTransferClient {
       InputStream underlyingIn, DataEncryptionKeyFactory encryptionKeyFactory,
       Token<BlockTokenIdentifier> accessToken, DatanodeID datanodeId)
       throws IOException {
-    // The same SASL scope socketSend opens.  Without it this handshake puts
-    // no causal context on the wire and the peer cannot tell it apart from
-    // the client's own handshake to the same node.
-    CausynthMessagePropagation.beginSasl();
-    try {
-      // The encryption key factory only returns a key if encryption is
-      // enabled.
-      DataEncryptionKey encryptionKey = !trustedChannelResolver.isTrusted() ?
-          encryptionKeyFactory.newDataEncryptionKey() : null;
-      IOStreamPair ios = send(socket.getInetAddress(), underlyingOut,
-          underlyingIn, encryptionKey, accessToken, datanodeId, null);
-      return ios != null ? ios : new IOStreamPair(underlyingIn, underlyingOut);
-    } finally {
-      CausynthMessagePropagation.endSasl();
-    }
+    // NOT wrapped in beginSasl/endSasl.  In THIS tree the SASL scope is
+    // opened one level down, in the private send(...) every entry point goes
+    // through, so a scope here nests and the recording dies with
+    // "java.lang.IllegalStateException: nested SASL exchange".  Adding one
+    // was tried and reverted, 2026-09-22.  The hdfs-17967 trees carry the
+    // scope in socketSend/peerSend instead, which is why peerSend there
+    // needed its own.
+    // The encryption key factory only returns a key if encryption is enabled.
+    DataEncryptionKey encryptionKey = !trustedChannelResolver.isTrusted() ?
+        encryptionKeyFactory.newDataEncryptionKey() : null;
+    IOStreamPair ios = send(socket.getInetAddress(), underlyingOut,
+        underlyingIn, encryptionKey, accessToken, datanodeId, null);
+    return ios != null ? ios : new IOStreamPair(underlyingIn, underlyingOut);
   }
 
   /**
