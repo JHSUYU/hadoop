@@ -1295,6 +1295,31 @@ public class TestExternalStoragePolicySatisfier {
   }
 
   private void registerCausynthSources(DataNode target) {
+    // Disabling the DAEMON heartbeat here was tried on 2026-09-22 and
+    // REVERTED: unlike hdfs-17967 path A, whose every refresh is driven
+    // explicitly, THIS workload leans on the daemon to deliver the pinned
+    // keys, and without it the move dies in the workload itself --
+    //   InvalidEncryptionKeyException: required block key (keyID=1386616075)
+    //   doesn't exist. Current key: 119979
+    // where 1386616075 is a constructor-time, pre-pin SecureRandom id.  The
+    // BLOCKING OCCURRENCE_ADDRESS_SHARED over REGION.16ba41cf remains OPEN,
+    // and both ways of closing it are ruled out BY MEASUREMENT here:
+    //
+    //   setHeartbeatsDisabledForTests -- the move dies inside the workload,
+    //     InvalidEncryptionKeyException keyID=1386616075 (a constructor-time
+    //     pre-pin SecureRandom id), because unlike hdfs-17967 path A, whose
+    //     every refresh is driven explicitly, THIS workload leans on the
+    //     daemon to deliver the pinned keys;
+    //   pauseIBR -- which DID close the identical row on path A -- hangs the
+    //     test to its timeout, because path A asserts on
+    //     mirror.getFSDataset() locally while the SPS waits for the NameNode
+    //     to accept the move, and the NameNode learns of the new replica
+    //     through exactly that incremental report.
+    //
+    // So the two stray DatanodeRegistration conversions cannot be removed
+    // from this window; they have to be ATTRIBUTED instead, which is the
+    // source-anchor handover -- and that one is measured worse on path A
+    // (18 REPLAY TOPOLOGY_DIVERGENCE rows).  Left open deliberately.
     NameNodeRpcServer namenode =
         (NameNodeRpcServer) hdfsCluster.getNameNodeRpc();
     CausynthMessagePropagation.registerSource(
@@ -1306,10 +1331,18 @@ public class TestExternalStoragePolicySatisfier {
         target.getDatanodeId(), "CLUSTER_NODE", "DATANODE",
         "hdfs-17899/target-dn", 0);
     CausynthMessagePropagation.registerSourceAlias(nnc.getKeyManager(), nnc);
+    String blockPoolId = hdfsCluster.getNamesystem().getBlockPoolId();
     CausynthMessagePropagation.registerSourceAlias(
-        target.getBlockPoolTokenSecretManager().get(
-            hdfsCluster.getNamesystem().getBlockPoolId()),
+        target.getBlockPoolTokenSecretManager().get(blockPoolId),
         target.getDatanodeId());
+    // Registering the OTHER DataNodes was tried on 2026-09-22 and REVERTED:
+    // it does not clear the BLOCKING OCCURRENCE_ADDRESS_SHARED over
+    // REGION.16ba41cf (the colliding activations stay on
+    // workload/unregistered) and it brought back four ASSIGNMENT_UNPLANTED
+    // rows, taking the run from 59 BLOCKING gaps to 64.  Unlike hdfs-17899
+    // bug1 and the hdfs-17967 paths, this workload's extra DataNodes carry
+    // storage types the case is about, and naming them changes what the plan
+    // addresses.
   }
 
   /**
