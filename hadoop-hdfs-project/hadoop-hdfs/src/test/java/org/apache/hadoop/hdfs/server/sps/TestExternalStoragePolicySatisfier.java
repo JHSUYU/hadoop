@@ -1176,10 +1176,10 @@ public class TestExternalStoragePolicySatisfier {
       int initialKeyId = currentKeyId(master);
       master.setKeyUpdateIntervalForTesting(1);
       GenericTestUtils.waitFor(
-          () -> currentKeyId(master) != initialKeyId, 100, 15000);
+          () -> currentKeyId(master) != initialKeyId, 100, CausynthCluster.WINDOW_WAIT_MS);
       int firstRotatedKeyId = currentKeyId(master);
       GenericTestUtils.waitFor(
-          () -> currentKeyId(master) != firstRotatedKeyId, 100, 15000);
+          () -> currentKeyId(master) != firstRotatedKeyId, 100, CausynthCluster.WINDOW_WAIT_MS);
       master.setKeyUpdateIntervalForTesting(TimeUnit.MINUTES.toMillis(60));
       int currentKeyId = currentKeyId(master);
 
@@ -1188,7 +1188,7 @@ public class TestExternalStoragePolicySatisfier {
           target.getBlockPoolTokenSecretManager().get(
               hdfsCluster.getNamesystem().getBlockPoolId());
       GenericTestUtils.waitFor(
-          () -> targetKeys.hasKey(currentKeyId), 100, 15000);
+          () -> targetKeys.hasKey(currentKeyId), 100, CausynthCluster.WINDOW_WAIT_MS);
 
       long request = CausynthMessagePropagation.beginRequest(
           nnc, "satisfy-storage-policy");
