@@ -48,7 +48,6 @@ import org.apache.hadoop.crypto.CryptoInputStream;
 import org.apache.hadoop.crypto.CryptoOutputStream;
 import org.apache.hadoop.hdfs.net.Peer;
 import org.apache.hadoop.hdfs.protocol.datatransfer.IOStreamPair;
-import edu.uva.liftlab.graphchecker.annotation.CausynthExceptionTarget;
 import org.apache.hadoop.hdfs.protocol.datatransfer.InvalidEncryptionKeyException;
 import org.apache.hadoop.hdfs.protocol.proto.DataTransferProtos.DataTransferEncryptorMessageProto;
 import org.apache.hadoop.hdfs.protocol.proto.DataTransferProtos.DataTransferEncryptorMessageProto.DataTransferEncryptorStatus;
@@ -224,8 +223,7 @@ public final class DataTransferSaslUtil {
         proto.hasCausynthAttempt() ? proto.getCausynthAttempt() : "");
     switch (proto.getStatus()) {
     case ERROR_UNKNOWN_KEY:
-      throw new @CausynthExceptionTarget("hdfs-17967")
-          InvalidEncryptionKeyException(proto.getMessage());
+      throw new InvalidEncryptionKeyException(proto.getMessage());
     case ERROR:
       if (proto.hasAccessTokenError() && proto.getAccessTokenError()) {
         throw new InvalidBlockTokenException(proto.getMessage());

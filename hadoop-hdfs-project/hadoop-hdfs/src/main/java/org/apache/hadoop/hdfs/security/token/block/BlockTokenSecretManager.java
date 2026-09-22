@@ -579,7 +579,7 @@ public class BlockTokenSecretManager extends
     synchronized (this) {
       key = allKeys.get(keyId);
       if (key == null) {
-        throw new @CausynthExceptionTarget("hdfs-17899")
+        throw new @CausynthExceptionTarget("hdfs-17967")
             InvalidEncryptionKeyException("Can't re-compute encryption key"
             + " for nonce, since the required block key (keyID=" + keyId
             + ") doesn't exist. Current key: " + currentKey.getKeyId());
