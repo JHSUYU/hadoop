@@ -220,6 +220,29 @@ public final class CausynthMessagePropagation {
     return CausynthTraceRecorder.beginSourceRequest(source, api);
   }
 
+  /**
+   * {@link #beginRequest} for a source that may not be registered yet, such
+   * as a daemon turn on a thread started before the workload registered its
+   * node.  Returns 0 when there is nothing to open, which the caller checks
+   * before closing.
+   */
+  public static long beginRequestIfRegistered(Object source, String api) {
+    try {
+      return beginRequest(source, api);
+    } catch (IllegalArgumentException ignored) {
+      return 0L;
+    }
+  }
+
+  /**
+   * Marks a queued unit of work as carrying the scope it was made in, for a
+   * pool thread that inherits none of it.
+   */
+  public static Runnable async(Runnable action) {
+    CausynthTraceRecorder.captureAsync(action);
+    return action;
+  }
+
   public static void endRequest(long request, String api) {
     endInbound();
     CausynthTraceRecorder.endSourceRequest(request, api);

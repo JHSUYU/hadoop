@@ -713,6 +713,22 @@ class BPServiceActor implements Runnable {
           if (!dn.areHeartbeatsDisabledForTests()) {
             LOG.debug("Before sending heartbeat to namenode {}, the state of the namenode known"
                 + " to datanode so far is {}", this.getNameNodeAddress(), state);
+            // The daemon's OWN heartbeat is this node's own request, and it
+            // has to say so: this thread was started inside DataNode
+            // initialisation, before the workload registered the node, so
+            // without a scope here the NameNode serves the heartbeat on an
+            // IPC handler with no inbound context, and the registration and
+            // ExportedBlockKeys conversions it does come back addressed to
+            // workload/unregistered with ctx Lost:UNKNOWN.  Two of them then
+            // share ONE address -- BLOCKING OCCURRENCE_ADDRESS_SHARED over
+            // REGION.16ba41cf, which is a member of the published closure.
+            // Measured on hdfs-17967 path A, 2026-09-22; the three
+            // hdfs-17899 trees, which pass, have carried this since their
+            // own version of the same gap.  // causynth-d3-lineage
+            long causynthRequest =
+                CausynthMessagePropagation.beginRequestIfRegistered(
+                    dn.getDatanodeId(), "heartbeat");
+            try {
             resp = sendHeartBeat(requestBlockReportLease);
             assert resp != null;
             if (resp.getFullBlockReportLeaseId() != 0) {
@@ -760,6 +776,12 @@ class BPServiceActor implements Runnable {
               commandProcessingThread.enqueue(cmds);
             }
             isSlownode = resp.getIsSlownode();
+            } finally {
+              if (causynthRequest != 0L) {
+                CausynthMessagePropagation.endRequest(
+                    causynthRequest, "heartbeat");
+              }
+            }
           }
         }
         if (!dn.areIBRDisabledForTests() &&
@@ -1489,11 +1511,20 @@ class BPServiceActor implements Runnable {
       return true;
     }
 
+    /**
+     * The scope a command was ENQUEUED in, carried to the command-processing
+     * thread that later runs it: that thread inherits none of it.  The same
+     * wrapper the three hdfs-17899 trees use. // causynth-d3-lineage
+     */
+    private Runnable traced(Runnable command) {
+      return CausynthMessagePropagation.async(command);
+    }
+
     void enqueue(DatanodeCommand cmd) throws InterruptedException {
       if (cmd == null) {
         return;
       }
-      queue.put(() -> processCommand(new DatanodeCommand[]{cmd}));
+      queue.put(traced(() -> processCommand(new DatanodeCommand[]{cmd})));
       dn.getMetrics().incrActorCmdQueueLength(1);
     }
 
@@ -1507,7 +1538,7 @@ class BPServiceActor implements Runnable {
         return;
       }
       ((LinkedBlockingDeque<Runnable>) queue).putFirst(
-          () -> processCommand(new DatanodeCommand[]{cmd}));
+          traced(() -> processCommand(new DatanodeCommand[]{cmd})));
 
       LOG.info("Enqueue command: {} to the head of queue", cmd);
       dn.getMetrics().incrActorCmdQueueLength(1);
@@ -1517,8 +1548,8 @@ class BPServiceActor implements Runnable {
       if (cmds == null) {
         return;
       }
-      queue.put(() -> processCommand(
-          cmds.toArray(new DatanodeCommand[cmds.size()])));
+      queue.put(traced(() -> processCommand(
+          cmds.toArray(new DatanodeCommand[cmds.size()]))));
       dn.getMetrics().incrActorCmdQueueLength(1);
     }
 
