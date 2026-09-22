@@ -38,6 +38,7 @@ import org.apache.hadoop.io.retry.RetryPolicy.RetryAction;
 import org.apache.hadoop.ipc.RPC.RpcKind;
 import org.apache.hadoop.ipc.Server.AuthProtocol;
 import org.apache.hadoop.ipc.protobuf.IpcConnectionContextProtos.IpcConnectionContextProto;
+import edu.uva.liftlab.graphchecker.annotation.Debug;
 import org.apache.hadoop.ipc.protobuf.RpcHeaderProtos.RpcRequestHeaderProto;
 import org.apache.hadoop.ipc.protobuf.RpcHeaderProtos.RpcRequestHeaderProto.OperationProto;
 import org.apache.hadoop.ipc.protobuf.RpcHeaderProtos.RpcResponseHeaderProto;
@@ -1242,6 +1243,22 @@ public class Client implements AutoCloseable {
               CausynthMessagePropagation.IPC, correlationId,
               Integer.toString(call.retry), "REQUEST", Client.this,
               call.causynthScope);
+      // The symbolized RPC failure.  A key-refresh RPC that fails is what
+      // leaves a party holding a key its peer can no longer resolve, which
+      // is the trigger this whole family of bugs is about; the three
+      // hdfs-17899 trees have carried it from the start and this case is the
+      // same family (Hadoop PR 8364).
+      //
+      // Minted on every path through this method, not only when the outbound
+      // context happens to be active: Java's && short-circuits, so a replay
+      // reaching the send with no active context materializes no marker at
+      // all and the MARKER_FLIPPED witness can never be asked for.  The
+      // THROW still needs an active context; only the mint is unconditional.
+      boolean hadoopIpcRequestFails =
+          Debug.makeSymbolicBoolean("hadoopIpcRequestFails");
+      if (causynth.active() && hadoopIpcRequestFails) {
+        throw new IOException("symbolic Hadoop IPC transport failure");
+      }
       RpcRequestHeaderProto.Builder header = ProtoUtil.makeRpcRequestHeader(
           call.rpcKind, OperationProto.RPC_FINAL_PACKET, call.id, call.retry,
           clientId, call.alignmentContext).toBuilder();
