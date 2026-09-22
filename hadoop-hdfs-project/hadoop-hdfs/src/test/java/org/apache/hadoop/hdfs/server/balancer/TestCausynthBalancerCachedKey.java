@@ -287,7 +287,7 @@ public class TestCausynthBalancerCachedKey {
                 + " the cached key, and the failure is what a witness buys");
         final DataNode destination = target;
         GenericTestUtils.waitFor(
-            () -> destination.getFSDataset().isValidBlock(block), 20, 20000);
+            () -> destination.getFSDataset().isValidBlock(block), 20, CausynthCluster.WINDOW_WAIT_MS);
         assertTrue(target.getFSDataset().isValidBlock(block),
             "the destination must receive the block from the proxy");
       } finally {
