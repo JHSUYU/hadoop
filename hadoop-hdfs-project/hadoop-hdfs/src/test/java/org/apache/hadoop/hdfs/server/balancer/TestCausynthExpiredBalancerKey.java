@@ -48,7 +48,8 @@ public class TestCausynthExpiredBalancerKey {
 
   @Test
   public void testEncryptedBalancerAfterKeyRotations() throws Exception {
-    Configuration conf = new HdfsConfiguration();
+    // Nothing set up before the window expires on the wall clock.
+    Configuration conf = CausynthCluster.configure(new HdfsConfiguration());
     conf.setBoolean(DFSConfigKeys.DFS_ENCRYPT_DATA_TRANSFER_KEY, true);
     conf.setBoolean(DFSConfigKeys.DFS_BLOCK_ACCESS_TOKEN_ENABLE_KEY, true);
     conf.setInt(HdfsClientConfigKeys.BlockWrite.LOCATEFOLLOWINGBLOCK_RETRIES_KEY, 30);
@@ -123,7 +124,8 @@ public class TestCausynthExpiredBalancerKey {
         }
       }
       try {
-        for (DataNode node : cluster.getDataNodes()) {
+        // In the order of the nodes' names, not the cluster's.
+        for (DataNode node : CausynthCluster.dataNodes()) {
           BlockTokenSecretManager manager = node.getBlockPoolTokenSecretManager()
               .get(blockPoolId);
           long refresh = CausynthMessagePropagation.beginRequest(
