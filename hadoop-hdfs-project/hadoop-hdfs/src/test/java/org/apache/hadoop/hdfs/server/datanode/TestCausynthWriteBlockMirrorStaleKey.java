@@ -26,6 +26,13 @@ import java.util.Set;
 import java.util.TreeSet;
 
 import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.test.GenericTestUtils;
+import org.apache.hadoop.fs.StorageType;
+import org.apache.hadoop.hdfs.protocol.ExtendedBlock;
+import org.apache.hadoop.hdfs.protocol.DatanodeInfo.DatanodeInfoBuilder;
+import org.apache.hadoop.hdfs.protocol.DatanodeInfo;
+import java.util.List;
+import java.util.ArrayList;
 import org.apache.hadoop.net.NetUtils;
 import org.apache.hadoop.fs.permission.FsPermission;
 import java.net.InetSocketAddress;
@@ -85,9 +92,6 @@ public class TestCausynthWriteBlockMirrorStaleKey {
     Configuration conf = new HdfsConfiguration();
     conf.setBoolean(DFSConfigKeys.DFS_ENCRYPT_DATA_TRANSFER_KEY, true);
     conf.setBoolean(DFSConfigKeys.DFS_BLOCK_ACCESS_TOKEN_ENABLE_KEY, true);
-    conf.setInt(
-        DFSConfigKeys.DFS_CLIENT_BLOCK_WRITE_LOCATEFOLLOWINGBLOCK_RETRIES_KEY,
-        12);
     conf.setInt(DFSConfigKeys.DFS_CLIENT_SOCKET_TIMEOUT_KEY, 10 * 60 * 1000);
     conf.setInt(DFSConfigKeys.DFS_NAMENODE_HEARTBEAT_RECHECK_INTERVAL_KEY,
         10 * 60 * 1000);
@@ -96,13 +100,9 @@ public class TestCausynthWriteBlockMirrorStaleKey {
     // No automatic heartbeat inside the recorded window: a refresh the
     // workload did not ask for would close the rotation gap behind its back.
     conf.setLong(DFSConfigKeys.DFS_HEARTBEAT_INTERVAL_KEY, 3600);
-    // ...but suppressing heartbeats makes every DataNode look STALE after
-    // the default 30s, and block placement then avoids stale nodes.  The
-    // native run is quick enough never to notice; the concolic replay is not,
-    // and it placed ONE replica instead of two, so there was no mirror, no
-    // handshake and no target ("the write needs a two-node pipeline").  The
-    // staleness window is therefore pushed out past any replay, and
-    // stale-node avoidance is turned off for writes as well.
+    // ...but suppressed heartbeats make every DataNode look STALE after the
+    // default 30s and placement then avoids them.  The native run is too
+    // quick to notice; the concolic replay is not.
     conf.setLong(DFSConfigKeys.DFS_NAMENODE_STALE_DATANODE_INTERVAL_KEY,
         TimeUnit.HOURS.toMillis(6));
     conf.setBoolean(
@@ -110,75 +110,51 @@ public class TestCausynthWriteBlockMirrorStaleKey {
     conf.setBoolean(
         DFSConfigKeys.DFS_NAMENODE_AVOID_STALE_DATANODE_FOR_READ_KEY, false);
     try (MiniDFSCluster cluster = new MiniDFSCluster.Builder(conf)
-        .numDataNodes(2).build();
+        .numDataNodes(3).build();
          DistributedFileSystem fs = cluster.getFileSystem()) {
       cluster.waitActive();
 
-      pinBlockKeys(cluster);
+      // The block is written BEFORE anything is recorded, at replication 1,
+      // purely so a DataNode has something to transfer.
+      Path path = new Path("/causynth-hdfs-17967-a");
+      try (FSDataOutputStream out = fs.create(path, (short) 1)) {
+        out.write(new byte[]{1, 2, 3, 4});
+      }
+      LocatedBlock located = DFSTestUtil.getAllBlocks(fs, path).get(0);
+      ExtendedBlock block = located.getBlock();
+      List<DataNode> nodes = cluster.getDataNodes();
+      DataNode source = find(nodes, located.getLocations()[0]);
+      List<DataNode> rest = new ArrayList<>();
+      for (DataNode node : nodes) {
+        if (node != source) rest.add(node);
+      }
+      DataNode head = rest.get(0);
+      DataNode mirror = rest.get(1);
 
-      // REGISTER BEFORE ANY TRAFFIC.  Registration used to happen after the
-      // warm-up write, and that is a race the concolic replay loses: a
-      // heartbeat that converts ExportedBlockKeys on an IPC handler thread
-      // can fall before registration in one pass and after it in another, so
-      // the plan built from the recording addresses an occurrence on the
-      // UNREGISTERED source while the replay attributes the same activation
-      // to nn0.  The addresses then cannot agree and the replay refuses the
-      // target: "matching root carried a registered source
-      // hdfs-17967/nn0#epoch0 instead of the unregistered source".
-      registerSources(cluster, fs.getClient());
+      pinBlockKeys(cluster);
+      registerSources(cluster, source, head, mirror);
+
       BlockTokenSecretManager master = cluster.getNamesystem()
           .getBlockManager().getBlockTokenSecretManager();
-      String blockPoolId = cluster.getNamesystem().getBlockPoolId();
+      String blockPoolId = block.getBlockPoolId();
       NameNodeRpcServer namenode =
           (NameNodeRpcServer) cluster.getNameNodeRpc();
       CausynthMessagePropagation.registerSourceAlias(master,
           namenode.getClientRpcServer());
-      for (DataNode node : cluster.getDataNodes()) {
+      for (DataNode node : nodes) {
         CausynthMessagePropagation.registerSourceAlias(
             node.getBlockPoolTokenSecretManager().get(blockPoolId),
             node.getDatanodeId());
       }
-
-      // WARM THE CLIENT'S OWN ENCRYPTION KEY, before the rotations and after
-      // the pinning.  A DFSClient fetches its data-encryption key lazily, on
-      // its first encrypted connection, and caches it until it expires.
-      // Without this the first encrypted write in the recorded window is also
-      // the client's first fetch, so the client gets the master's CURRENT key
-      // while both DataNodes are deliberately two serials behind -- the gap
-      // runs the wrong way, neither node can resolve the client's key, the
-      // client excludes both and the write fails outright with "could only be
-      // written to 0 of the 1 minReplication nodes".  Warmed here the client
-      // holds a key the DataNodes have, so the recording is healthy and the
-      // only stale key in it is the pipeline head's, which is what this case
-      // is about.  The token lifetime and key-update interval above put the
-      // cached key's expiry about an hour out, so it is not refetched.
-      Path warmup = new Path("/causynth-hdfs-17967-a-warmup");
-      try (FSDataOutputStream out = fs.create(warmup, (short) 2)) {
-        out.write(new byte[]{0});
-      }
-
       CausynthMessagePropagation.startRecording();
 
-
-
-      // THE ROTATIONS ARE DRIVEN HERE, NOT WAITED FOR.  Shortening the key
-      // update interval and waiting for the NameNode's own key-updater daemon
-      // to notice leaves the rotation on a thread with no root context, and
-      // the first-pass trace then refuses to build a skeleton for it:
-      // "region skeleton has no authoritative execution context root:
-      // BlockTokenSecretManager.updateKeys()".  Calling it inside a tick
-      // scope -- the same scope pinBlockKeys uses for the two rotations it
-      // makes before recording -- gives each rotation an owner, and it is
-      // deterministic besides, which matters under the concolic VM where a
-      // daemon's timing is not the recording's.
-      // ...and inside a REQUEST scope on the NameNode, not only a tick.  A
-      // tick names the rotation; the request names the node it happened on.
-      // Driven from the test's main thread, which sits inside no request, the
-      // rotation has no root and the first-pass trace refuses to build a
-      // skeleton for it -- "region skeleton has no authoritative execution
-      // context root".  In the cases that pass, the equivalent rotation runs
-      // on the NameNode's own instrumented heartbeat thread, which carries
-      // one; this supplies the same thing explicitly.
+      // NO CLIENT IN THE RECORDED WINDOW.  An earlier version drove this with
+      // a client write, and the client's own SASL exchange dragged its whole
+      // anchor chain into the target's identity.  A DataNode transfer to TWO
+      // targets produces the same mirror pipeline -- Sender.writeBlock sends
+      // to targets[0] and passes targets[1..] downstream, so the head opens
+      // the mirror connection itself -- in the shape of hdfs-17899-bug3,
+      // which passes.
       int initialKeyId = currentKeyId(master);
       long rotations = CausynthMessagePropagation.beginRequest(
           namenode.getClientRpcServer(), "rotate-block-keys");
@@ -197,72 +173,16 @@ public class TestCausynthWriteBlockMirrorStaleKey {
       }
       assertEquals(initialKeyId + 2, currentKeyId(master),
           "the recorded window must rotate the master twice");
-
-      // Rotating the master directly does not, by itself, tell the DataNodes
-      // to come and get the new keys: the NameNode normally sets that flag
-      // from its own HeartbeatManager when the update interval elapses, and
-      // driving the rotation here bypasses it.  Ask for the KeyUpdateCommand
-      // explicitly, so the keys still arrive the way the case declares them
-      // -- on a heartbeat response, over the block-key ports -- rather than
-      // being installed in process.
-      for (DataNode node : cluster.getDataNodes()) {
+      for (DataNode node : nodes) {
         cluster.getNamesystem().getBlockManager().getDatanodeManager()
             .getDatanode(node.getDatanodeId()).setNeedKeyUpdate(true);
       }
 
-      // TOKENS AND HANDSHAKES NEED DIFFERENT KEYS HERE, so the two are
-      // separated rather than left to one refresh.
-      //
-      // Leaving both DataNodes unrefreshed does give a rotation gap, but it
-      // breaks the write before any mirror handshake happens: the NameNode
-      // signs the client's BLOCK TOKEN with its current key, a DataNode that
-      // does not hold that key cannot verify it, and the client excludes both
-      // nodes ("Got access token error ... could only be written to 0 of the
-      // 1 minReplication nodes").  That is a different failure from the one
-      // this case is about.
-      //
-      // So both nodes take the rotated keys -- tokens verify -- and each then
-      // has its CURRENT key rolled back to the pinned one, which every node
-      // still retains because it has not expired.  The pipeline head derives
-      // the data-encryption key it presents to the mirror from that current
-      // key, so the handshake carries a key two serials behind the master
-      // while everything else in the write is up to date.  The recording
-      // stays healthy because the mirror still holds it; a witness has to
-      // move the clock past its expiry.  Both nodes are rolled back because
-      // the NameNode, not this test, chooses which one heads the pipeline.
-      // ONLY THE HEAD IS SKEWED, and the head is PINNED.
-      //
-      // Rolling both nodes back made them symmetric, and the engine then
-      // could not tell them apart: two activations of the key-install region
-      // shared one address (BLOCKING OCCURRENCE_ADDRESS_SHARED) and one
-      // consumer was paired with two different producers across sessions
-      // (BLOCKING TOPOLOGY_DIVERGENCE, "a replacement, not growth").  The
-      // pipeline head is therefore chosen by this test, with favoredNodes,
-      // and only that node's current key is rolled back.  The mirror stays on
-      // the master's newest key, so the two differ in the recording and the
-      // handshake that carries a stale key has exactly one direction:
-      // head -> mirror.
-      DataNode head = cluster.getDataNodes().get(0);
-      DataNode mirror = cluster.getDataNodes().get(1);
-      // Each refresh under its OWN request api.  Both DataNodes must take the
-      // rotated keys so block tokens verify, but two heartbeats named alike
-      // give the NameNode two key-conversion activations that nothing
-      // distinguishes -- same node, same (lost) context, same execution index
-      // -- and one address then holds two occurrences
-      // (BLOCKING OCCURRENCE_ADDRESS_SHARED), which also lets one consumer be
-      // paired with two producers across sessions (TOPOLOGY_DIVERGENCE).
-      // Both refreshes share one request api, and that is NOT an oversight.
-      // Naming them apart ("heartbeat-head"/"heartbeat-mirror") is the
-      // obvious fix for the NameNode's two indistinguishable key-conversion
-      // activations, and it was tried: it changed the request structure of
-      // the recorded window, the anchor chain shifted with it, and the replay
-      // stopped reaching the target altogether (REPLAY exit 2).  The same
-      // happened when 17899's fault marker was deleted from ipc/Client.  The
-      // anchor chain is fragile to ANY change in the shape of the recorded
-      // requests, which is the engine-level defect this case is left on;
-      // until that is fixed, the workload must not be restructured to work
-      // around identity problems.
-      for (DataNode node : cluster.getDataNodes()) {
+      // Only the HEAD is skewed: it derives the key it presents to the mirror
+      // from its current key, and the mirror still RETAINS that key, so the
+      // recording is healthy and a witness has to move the clock past its
+      // expiry.  The mirror stays current, so the two are not symmetric.
+      for (DataNode node : nodes) {
         refreshKeysFromNameNode(node, "heartbeat");
       }
       BlockTokenSecretManager headKeys =
@@ -271,66 +191,47 @@ public class TestCausynthWriteBlockMirrorStaleKey {
           mirror.getBlockPoolTokenSecretManager().get(blockPoolId);
       rollCurrentKeyBackTo(headKeys, SERIAL_NO + 1);
       assertEquals(SERIAL_NO + 1, currentKeyId(headKeys),
-          "the head must present the pinned key, or the recording carries"
-              + " no rotation gap");
+          "the head must present the pinned key, or there is no gap");
       assertEquals(currentKeyId(master), currentKeyId(mirrorKeys),
-          "the mirror must be current, or the two nodes are symmetric and"
-              + " nothing distinguishes their activations");
+          "the mirror must be current, or the two are symmetric");
       assertTrue(mirrorKeys.hasKey(SERIAL_NO + 1),
-          "the mirror must still RETAIN the head's key, or the recording"
-              + " is already the failure");
-      assertTrue(headKeys.hasKey(currentKeyId(master)),
-          "the head must still hold the master's current key, or block"
-              + " tokens cannot verify");
+          "the mirror must still RETAIN the head's key, or the recording is"
+              + " already the failure");
 
-      Path path = new Path("/causynth-hdfs-17967-a");
       long request = CausynthMessagePropagation.beginRequest(
-          fs.getClient(), "write-block");
+          source.getDatanodeId(), "transfer-block");
       try {
-        // favoredNodes pins the head, so which node carries the stale key is
-        // this test's choice and not the NameNode's.
-        try (FSDataOutputStream out = fs.create(path,
-            FsPermission.getFileDefault(), true, 4096, (short) 2,
-            fs.getDefaultBlockSize(), null,
-            new InetSocketAddress[]{
-                NetUtils.createSocketAddr(head.getDatanodeId().getXferAddr())
-            })) {
-          out.write(new byte[]{1, 2, 3, 4});
-        }
-        // Observed, not asserted beyond liveness: the recording takes the
-        // healthy arm by construction, and what the campaign is about is the
-        // counterfactual in which the mirror can no longer resolve the head's
-        // key.
-        LocatedBlock located = DFSTestUtil.getAllBlocks(fs, path).get(0);
-        assertEquals(2, located.getLocations().length,
-            "the write needs a two-node pipeline for a mirror handshake");
+        source.transferBlock(block,
+            new DatanodeInfo[]{
+                new DatanodeInfoBuilder().setNodeID(
+                    head.getDatanodeId()).build(),
+                new DatanodeInfoBuilder().setNodeID(
+                    mirror.getDatanodeId()).build()},
+            new StorageType[]{StorageType.DISK, StorageType.DISK},
+            new String[0]);
+        GenericTestUtils.waitFor(
+            () -> mirror.getFSDataset().isValidBlock(block), 20, 20000);
+        assertTrue(mirror.getFSDataset().isValidBlock(block),
+            "the mirror must receive the block through the head");
       } finally {
-        CausynthMessagePropagation.endRequest(request, "write-block");
+        CausynthMessagePropagation.endRequest(request, "transfer-block");
       }
-      assertTrue(fs.exists(path));
     }
   }
 
   /**
    * Makes every block-key id the recorded window sees identical across
-   * GraphChecker replay sessions; see the same helper in
-   * {@code TestCausynthDataTransferRpcFailure}, from which this is taken
-   * unchanged but for the serial.
+   * GraphChecker replay sessions: the NameNode manager seeds serialNo from
+   * SecureRandom once per JVM and each replay task is its own JVM.  Two
+   * rotations here retire the constructor-time keys, and those are then
+   * dropped everywhere so every manager starts the window holding exactly the
+   * pinned pair.  Taken from hdfs-17899-bug3, which passes.
    */
   private static void pinBlockKeys(MiniDFSCluster cluster) throws Exception {
     BlockTokenSecretManager master = cluster.getNamesystem()
         .getBlockManager().getBlockTokenSecretManager();
     master.setSerialNo(SERIAL_NO);
-    { // causynth-d3-rotation-scope
-      long causynthRotation = CausynthMessagePropagation.beginTick(
-          master, "KEY_MANAGER_TICK");
-      try {
-        master.updateKeys(Long.MAX_VALUE);
-      } finally {
-        CausynthMessagePropagation.endTick(causynthRotation);
-      }
-    }
-    { // causynth-d3-rotation-scope
+    for (int rotation = 0; rotation < 2; rotation++) { // causynth-d3-rotation-scope
       long causynthRotation = CausynthMessagePropagation.beginTick(
           master, "KEY_MANAGER_TICK");
       try {
@@ -429,18 +330,23 @@ public class TestCausynthWriteBlockMirrorStaleKey {
     }
   }
 
+  private static DataNode find(List<DataNode> nodes, DatanodeInfo location) {
+    return nodes.stream().filter(node -> node.getDatanodeUuid()
+        .equals(location.getDatanodeUuid())).findFirst()
+        .orElseThrow(IllegalStateException::new);
+  }
+
   private static void registerSources(MiniDFSCluster cluster,
-      DFSClient client) throws IOException {
+      DataNode source, DataNode head, DataNode mirror) {
     NameNodeRpcServer namenode = (NameNodeRpcServer) cluster.getNameNodeRpc();
-    CausynthMessagePropagation.registerSource(
-        client, "EXTERNAL_APP", "DFS_CLIENT", "hdfs-17967/client", 0);
     CausynthMessagePropagation.registerSource(
         namenode.getClientRpcServer(), "CLUSTER_NODE", "NAMENODE",
         "hdfs-17967/nn0", 0);
-    int index = 0;
-    for (DataNode node : cluster.getDataNodes()) {
-      CausynthMessagePropagation.registerSource(node.getDatanodeId(),
-          "CLUSTER_NODE", "DATANODE", "hdfs-17967/dn" + index++, 0);
-    }
+    CausynthMessagePropagation.registerSource(source.getDatanodeId(),
+        "CLUSTER_NODE", "DATANODE", "hdfs-17967/source-dn", 0);
+    CausynthMessagePropagation.registerSource(head.getDatanodeId(),
+        "CLUSTER_NODE", "DATANODE", "hdfs-17967/head-dn", 0);
+    CausynthMessagePropagation.registerSource(mirror.getDatanodeId(),
+        "CLUSTER_NODE", "DATANODE", "hdfs-17967/mirror-dn", 0);
   }
 }
