@@ -1145,6 +1145,31 @@ public class TestExternalStoragePolicySatisfier {
       dfs.satisfyStoragePolicy(new Path(FILE));
       CausynthMessagePropagation.startRecording();
 
+      // The SPS refreshes BEFORE the rotations, so the key it carries into
+      // the move is two serials behind the master's current one.  It used to
+      // refresh after them and so presented the CURRENT key: a zero rotation
+      // gap, and with no gap no clock move can make that key expire -- the
+      // fatal was then satisfied at the recorded valuation and refuted
+      // nothing (FORMULA_SAT_AT_RECORDED_VALUATION).  The two cases that
+      // pass both record a gap: hdfs-17897 puts 119992 on the wire against a
+      // current 119994.  The recording stays HEALTHY because a DataNode
+      // retains its older keys until they expire, which is exactly what the
+      // witness has to move the clock past.  The request scope is unchanged,
+      // so the fault marker still governs this refresh.
+      long refreshRequest = CausynthMessagePropagation.beginRequest(
+          nnc, "refresh-block-keys");
+      try {
+        try {
+          nnc.getKeyManager().updateBlockKeys();
+        } catch (IOException expected) {
+          LOG.info("SPS retained its prior block keys after RPC failure",
+              expected);
+        }
+      } finally {
+        CausynthMessagePropagation.endRequest(
+            refreshRequest, "refresh-block-keys");
+      }
+
       int initialKeyId = currentKeyId(master);
       master.setKeyUpdateIntervalForTesting(1);
       GenericTestUtils.waitFor(
@@ -1161,20 +1186,6 @@ public class TestExternalStoragePolicySatisfier {
               hdfsCluster.getNamesystem().getBlockPoolId());
       GenericTestUtils.waitFor(
           () -> targetKeys.hasKey(currentKeyId), 100, 15000);
-
-      long refreshRequest = CausynthMessagePropagation.beginRequest(
-          nnc, "refresh-block-keys");
-      try {
-        try {
-          nnc.getKeyManager().updateBlockKeys();
-        } catch (IOException expected) {
-          LOG.info("SPS retained its prior block keys after RPC failure",
-              expected);
-        }
-      } finally {
-        CausynthMessagePropagation.endRequest(
-            refreshRequest, "refresh-block-keys");
-      }
 
       long request = CausynthMessagePropagation.beginRequest(
           nnc, "satisfy-storage-policy");
