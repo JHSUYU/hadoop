@@ -265,7 +265,7 @@ public class TestCausynthStripedReconstructTargetStaleKey {
             Collections.singletonList(task));
         GenericTestUtils.waitFor(
             () -> reconstructionTarget.getFSDataset().isValidBlock(rebuilt),
-            50, 60000);
+            50, CausynthCluster.WINDOW_WAIT_MS);
         assertTrue(target.getFSDataset().isValidBlock(rebuilt),
             "the target must receive the rebuilt internal block; the recorded"
                 + " reconstruction has to SUCCEED");
