@@ -685,10 +685,10 @@ class BPServiceActor implements Runnable {
     // Now loop for a long time....
     //
     while (shouldRun()) {
-      // One offer-service turn is one lineage root: nothing
-      // requested it. // causynth-d3-lineage
+      // One offer-service turn is one root, owned by this DataNode: a tick,
+      // the special case of a service-loop turn (GraphChecker).
       long causynthTick = CausynthMessagePropagation.beginTick(
-          dn.getDatanodeId(), "BP_SERVICE_ACTOR");
+          dn, "BP_SERVICE_ACTOR");
       try {
         DataNodeFaultInjector.get().startOfferService();
         final long startTime = scheduler.monotonicNow();
@@ -713,63 +713,53 @@ class BPServiceActor implements Runnable {
           if (!dn.areHeartbeatsDisabledForTests()) {
             LOG.debug("Before sending heartbeat to namenode {}, the state of the namenode known"
                 + " to datanode so far is {}", this.getNameNodeAddress(), state);
-            long causynthRequest =
-                CausynthMessagePropagation.beginRequestIfRegistered(
-                    dn.getDatanodeId(), "heartbeat");
-            try {
-              resp = sendHeartBeat(requestBlockReportLease);
-              assert resp != null;
-              if (resp.getFullBlockReportLeaseId() != 0) {
-                if (fullBlockReportLeaseId != 0) {
-                  LOG.warn(nnAddr + " sent back a full block report lease " +
-                          "ID of 0x" +
-                          Long.toHexString(resp.getFullBlockReportLeaseId()) +
-                          ", but we already have a lease ID of 0x" +
-                          Long.toHexString(fullBlockReportLeaseId) + ". " +
-                          "Overwriting old lease ID.");
-                }
-                fullBlockReportLeaseId = resp.getFullBlockReportLeaseId();
+            resp = sendHeartBeat(requestBlockReportLease);
+            assert resp != null;
+            if (resp.getFullBlockReportLeaseId() != 0) {
+              if (fullBlockReportLeaseId != 0) {
+                LOG.warn(nnAddr + " sent back a full block report lease " +
+                        "ID of 0x" +
+                        Long.toHexString(resp.getFullBlockReportLeaseId()) +
+                        ", but we already have a lease ID of 0x" +
+                        Long.toHexString(fullBlockReportLeaseId) + ". " +
+                        "Overwriting old lease ID.");
               }
-              dn.getMetrics().addHeartbeat(scheduler.monotonicNow() - startTime,
-                  getRpcMetricSuffix());
-
-              // If the state of this NN has changed (eg STANDBY->ACTIVE)
-              // then let the BPOfferService update itself.
-              //
-              // Important that this happens before processCommand below,
-              // since the first heartbeat to a new active might have commands
-              // that we should actually process.
-              bpos.updateActorStatesFromHeartbeat(
-                  this, resp.getNameNodeHaState());
-              HAServiceState stateFromResp = resp.getNameNodeHaState().getState();
-              if (state != stateFromResp) {
-                LOG.info("After receiving heartbeat response, updating state of namenode {} to {}",
-                    this.getNameNodeAddress(), stateFromResp);
-              }
-              state = stateFromResp;
-
-              if (state == HAServiceState.ACTIVE) {
-                handleRollingUpgradeStatus(resp);
-              }
-              DatanodeCommand[] cmds = resp.getCommands();
-              if (cmds != null && cmds.length != 0) {
-                int length = cmds.length;
-                for (int i = length - 1; i >= 0; i--) {
-                  if (cmds[i] instanceof KeyUpdateCommand) {
-                    commandProcessingThread.enqueueFirst(cmds[i]);
-                    cmds[i] = null;
-                    break;
-                  }
-                }
-                commandProcessingThread.enqueue(cmds);
-              }
-              isSlownode = resp.getIsSlownode();
-            } finally {
-              if (causynthRequest != 0L) {
-                CausynthMessagePropagation.endRequest(
-                    causynthRequest, "heartbeat");
-              }
+              fullBlockReportLeaseId = resp.getFullBlockReportLeaseId();
             }
+            dn.getMetrics().addHeartbeat(scheduler.monotonicNow() - startTime,
+                getRpcMetricSuffix());
+
+            // If the state of this NN has changed (eg STANDBY->ACTIVE)
+            // then let the BPOfferService update itself.
+            //
+            // Important that this happens before processCommand below,
+            // since the first heartbeat to a new active might have commands
+            // that we should actually process.
+            bpos.updateActorStatesFromHeartbeat(
+                this, resp.getNameNodeHaState());
+            HAServiceState stateFromResp = resp.getNameNodeHaState().getState();
+            if (state != stateFromResp) {
+              LOG.info("After receiving heartbeat response, updating state of namenode {} to {}",
+                  this.getNameNodeAddress(), stateFromResp);
+            }
+            state = stateFromResp;
+
+            if (state == HAServiceState.ACTIVE) {
+              handleRollingUpgradeStatus(resp);
+            }
+            DatanodeCommand[] cmds = resp.getCommands();
+            if (cmds != null && cmds.length != 0) {
+              int length = cmds.length;
+              for (int i = length - 1; i >= 0; i--) {
+                if (cmds[i] instanceof KeyUpdateCommand) {
+                  commandProcessingThread.enqueueFirst(cmds[i]);
+                  cmds[i] = null;
+                  break;
+                }
+              }
+              commandProcessingThread.enqueue(cmds);
+            }
+            isSlownode = resp.getIsSlownode();
           }
         }
         if (!dn.areIBRDisabledForTests() &&
@@ -1093,7 +1083,14 @@ class BPServiceActor implements Runnable {
           if (lifelineNamenode == null) {
             lifelineNamenode = dn.connectToLifelineNN(lifelineNnAddr);
           }
-          sendLifelineIfDue();
+          // One lifeline turn is one root of this DataNode's (GraphChecker).
+          long causynthTick = CausynthMessagePropagation.beginTick(
+              dn, "BP_LIFELINE_SENDER");
+          try {
+            sendLifelineIfDue();
+          } finally {
+            CausynthMessagePropagation.endTick(causynthTick);
+          }
           Thread.sleep(scheduler.getLifelineWaitTime());
         } catch (InterruptedException e) {
           Thread.currentThread().interrupt();
@@ -1503,7 +1500,7 @@ class BPServiceActor implements Runnable {
       if (cmd == null) {
         return;
       }
-      queue.put(traced(() -> processCommand(new DatanodeCommand[]{cmd})));
+      queue.put(() -> processCommand(new DatanodeCommand[]{cmd}));
       dn.getMetrics().incrActorCmdQueueLength(1);
     }
 
@@ -1517,7 +1514,7 @@ class BPServiceActor implements Runnable {
         return;
       }
       ((LinkedBlockingDeque<Runnable>) queue).putFirst(
-          traced(() -> processCommand(new DatanodeCommand[]{cmd})));
+          () -> processCommand(new DatanodeCommand[]{cmd}));
 
       LOG.info("Enqueue command: {} to the head of queue", cmd);
       dn.getMetrics().incrActorCmdQueueLength(1);
@@ -1527,20 +1524,16 @@ class BPServiceActor implements Runnable {
       if (cmds == null) {
         return;
       }
-      queue.put(traced(() -> processCommand(
-          cmds.toArray(new DatanodeCommand[cmds.size()]))));
+      queue.put(() -> processCommand(
+          cmds.toArray(new DatanodeCommand[cmds.size()])));
       dn.getMetrics().incrActorCmdQueueLength(1);
     }
 
     void enqueue(DatanodeCommand[] cmds) throws InterruptedException {
       if (cmds.length != 0) {
-        queue.put(traced(() -> processCommand(cmds)));
+        queue.put(() -> processCommand(cmds));
         dn.getMetrics().incrActorCmdQueueLength(1);
       }
-    }
-
-    private Runnable traced(Runnable command) {
-      return CausynthMessagePropagation.async(command);
     }
   }
 

@@ -61,7 +61,7 @@ import org.apache.hadoop.hdfs.security.token.block.BlockKey;
 import org.apache.hadoop.hdfs.security.token.block.BlockTokenIdentifier;
 import org.apache.hadoop.hdfs.security.token.block.BlockTokenSecretManager;
 import org.apache.hadoop.hdfs.security.token.block.DataEncryptionKey;
-import org.apache.hadoop.hdfs.server.datanode.CausynthDataNodeKeys;
+import org.apache.hadoop.hdfs.server.datanode.CausynthCluster;
 import org.apache.hadoop.hdfs.server.datanode.DataNode;
 import org.apache.hadoop.hdfs.server.namenode.NameNodeRpcServer;
 import org.apache.hadoop.hdfs.server.protocol.NamenodeProtocol;
@@ -134,11 +134,11 @@ public class TestCausynthBalancerCachedKey {
     // closes the gap this case is about.  Only a SYMBOLIC clock move may
     // expire it.
     conf.setLong(DFSConfigKeys.DFS_BLOCK_ACCESS_TOKEN_LIFETIME_KEY, 600);
-    // No automatic heartbeat inside the recorded window: a refresh the
-    // workload did not ask for would close the rotation gap behind its back.
-    conf.setLong(DFSConfigKeys.DFS_HEARTBEAT_INTERVAL_KEY, 3600);
-    // ...but suppressed heartbeats make every DataNode look STALE after the
-    // default 30s, and placement then avoids them.
+    // A concolic replay is slow, and one held to its schedule prefix can
+    // hold a heartbeat until its turn: placement must not read a slow node
+    // as a stale one.  Daemon heartbeats themselves run as in production:
+    // the rotations below are explicit and mark no node for a key update,
+    // so only the nodes this workload marks refresh.
     conf.setLong(DFSConfigKeys.DFS_NAMENODE_STALE_DATANODE_INTERVAL_KEY,
         TimeUnit.HOURS.toMillis(6));
     conf.setBoolean(
@@ -174,31 +174,22 @@ public class TestCausynthBalancerCachedKey {
       String blockPoolId = block.getBlockPoolId();
       NameNodeRpcServer namenode =
           (NameNodeRpcServer) cluster.getNameNodeRpc();
-      CausynthMessagePropagation.registerSource(
-          namenode.getClientRpcServer(), "CLUSTER_NODE", "NAMENODE",
-          "hdfs-17899/nn0", 0);
-      CausynthMessagePropagation.registerSource(proxy.getDatanodeId(),
-          "CLUSTER_NODE", "DATANODE", "hdfs-17899/proxy-dn", 0);
-      CausynthMessagePropagation.registerSource(target.getDatanodeId(),
-          "CLUSTER_NODE", "DATANODE", "hdfs-17899/target-dn", 0);
-      CausynthMessagePropagation.registerSource(rest.get(1).getDatanodeId(),
-          "CLUSTER_NODE", "DATANODE", "hdfs-17899/spare-dn", 0);
+      // Every node, registered whole, before any traffic the recording
+      // depends on (CausynthCluster); the balancer is this case's own.
+      CausynthCluster.registerNameNode(cluster, 0, "hdfs-17899/nn0");
+      CausynthCluster.registerDataNode(proxy, "hdfs-17899/proxy-dn");
+      CausynthCluster.registerDataNode(target, "hdfs-17899/target-dn");
+      CausynthCluster.registerDataNode(rest.get(1), "hdfs-17899/spare-dn");
+      CausynthCluster.registerOtherDataNodes(cluster, "hdfs-17899");
       CausynthMessagePropagation.registerSource(this, "EXTERNAL_APP",
           "BALANCER", "hdfs-17899/balancer", 0);
-      CausynthMessagePropagation.registerSourceAlias(master,
-          namenode.getClientRpcServer());
-      for (DataNode node : nodes) {
-        CausynthMessagePropagation.registerSourceAlias(
-            node.getBlockPoolTokenSecretManager().get(blockPoolId),
-            node.getDatanodeId());
-      }
 
       NamenodeProtocol rpc = NameNodeProxies.createProxy(conf, fs.getUri(),
           NamenodeProtocol.class).getProxy();
       KeyManager keyManager = null;
       long balance = 0L;
       try {
-        CausynthMessagePropagation.startRecording();
+        CausynthCluster.startRecording();
 
         // The Balancer takes its keys, and its ONE cached encryption key,
         // while the master's current key is still the pinned one.  This is
@@ -399,15 +390,10 @@ public class TestCausynthBalancerCachedKey {
     }
   }
 
-  /**
-   * One key-refresh heartbeat, so the node can verify fresh block tokens.
-   * BPOfferService and BPServiceActor are package-private to
-   * {@code ...server.datanode} and this workload is not, so the synchronous
-   * heartbeat lives in {@link CausynthDataNodeKeys} there.
-   */
+  /** One key-refresh heartbeat: the one shared helper's (CausynthCluster). */
   private static void refreshKeysFromNameNode(DataNode datanode, String api)
       throws IOException {
-    CausynthDataNodeKeys.refreshKeysFromNameNode(datanode, api);
+    CausynthCluster.refreshKeysFromNameNode(datanode, api);
   }
 
   /** The private allKeys map; BlockTokenSecretManager has no test accessor. */
