@@ -199,14 +199,28 @@ public class TestCausynthBalancerCachedKey {
       long balance = 0L;
       try {
         CausynthMessagePropagation.startRecording();
-        balance = CausynthMessagePropagation.beginRequest(this,
-            "balance-block");
 
         // The Balancer takes its keys, and its ONE cached encryption key,
-        // while the master's current key is still the pinned one.
-        keyManager = new KeyManager(blockPoolId, rpc, true, conf);
-        CausynthMessagePropagation.registerSourceAlias(keyManager, this);
-        DataEncryptionKey cached = keyManager.newDataEncryptionKey();
+        // while the master's current key is still the pinned one.  This is
+        // its OWN request, not part of the move: everything between here and
+        // the move -- the rotations and the DataNodes' heartbeats -- has to
+        // be rooted where it actually happens.  Nested inside one long
+        // balance-block scope, two of the three DataNodes' key-refresh
+        // regions never opened at all (they came back as ROLE.CLIENT with
+        // ctx Root:CLIENT/balance-block), the corpus had no writer that
+        // could take a key out of the target's allKeys, and wave 0 produced
+        // ONE obligation, UNSAT: "no world of this corpus takes the other
+        // arm at retrieveDataEncryptionKey#u8#1".  Measured 2026-09-22.
+        long fetch = CausynthMessagePropagation.beginRequest(this,
+            "fetch-block-keys");
+        DataEncryptionKey cached;
+        try {
+          keyManager = new KeyManager(blockPoolId, rpc, true, conf);
+          CausynthMessagePropagation.registerSourceAlias(keyManager, this);
+          cached = keyManager.newDataEncryptionKey();
+        } finally {
+          CausynthMessagePropagation.endRequest(fetch, "fetch-block-keys");
+        }
         assertNotNull(cached, "the balancer must cache an encryption key");
         assertEquals(SERIAL_NO + 1, cached.keyId,
             "the cache must be taken from the pinned key");
@@ -237,6 +251,11 @@ public class TestCausynthBalancerCachedKey {
         for (DataNode node : nodes) {
           refreshKeysFromNameNode(node, "heartbeat");
         }
+
+        // From here on the balancer is moving a block, and the whole of it
+        // -- its own refresh and the move -- is that one request.
+        balance = CausynthMessagePropagation.beginRequest(this,
+            "balance-block");
 
         // The Balancer's own refresh.  This is the RPC the case's fault
         // marker lives on: it SUCCEEDS in the recording, and a witness may
