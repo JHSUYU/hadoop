@@ -61,7 +61,8 @@ public class TestCausynthDataTransferRpcFailure {
   @Timeout(120)
   public void testReplicationAfterModeledKeyRefreshRpcFailure()
       throws Exception {
-    Configuration conf = new HdfsConfiguration();
+    // Nothing set up before the window expires on the wall clock.
+    Configuration conf = CausynthCluster.configure(new HdfsConfiguration());
     conf.setBoolean(DFSConfigKeys.DFS_ENCRYPT_DATA_TRANSFER_KEY, true);
     conf.setBoolean(DFSConfigKeys.DFS_BLOCK_ACCESS_TOKEN_ENABLE_KEY, true);
     conf.setInt(
