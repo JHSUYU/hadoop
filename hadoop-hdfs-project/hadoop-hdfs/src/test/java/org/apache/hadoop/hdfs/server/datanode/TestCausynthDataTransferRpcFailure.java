@@ -135,7 +135,7 @@ public class TestCausynthDataTransferRpcFailure {
           .getBlockPoolTokenSecretManager().get(block.getBlockPoolId());
       if (refreshKeysFromNameNode(target)) {
         GenericTestUtils.waitFor(
-            () -> currentKeyId(targetKeys) == currentKeyId, 100, 15000);
+            () -> currentKeyId(targetKeys) == currentKeyId, 100, CausynthCluster.WINDOW_WAIT_MS);
       }
 
       // The SOURCE is deliberately NOT refreshed.  Refreshing it here gave
@@ -157,7 +157,7 @@ public class TestCausynthDataTransferRpcFailure {
                 .setNodeID(target.getDatanodeId()).build()},
             new StorageType[]{StorageType.DISK}, new String[0]);
         GenericTestUtils.waitFor(
-            () -> target.getFSDataset().isValidBlock(block), 20, 20000);
+            () -> target.getFSDataset().isValidBlock(block), 20, CausynthCluster.WINDOW_WAIT_MS);
         assertTrue(target.getFSDataset().isValidBlock(block));
       } finally {
         CausynthMessagePropagation.endRequest(request, "replicate-block");
