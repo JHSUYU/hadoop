@@ -1243,22 +1243,30 @@ public class Client implements AutoCloseable {
               CausynthMessagePropagation.IPC, correlationId,
               Integer.toString(call.retry), "REQUEST", Client.this,
               call.causynthScope);
-      // HDFS-17899's IPC fault marker is deliberately NOT here.  It is that
-      // case's mechanism, not this one's: HDFS-17967 is a block key the peer
-      // can no longer resolve, and the fix PR 8698 adds is a retry that
-      // clears the cached key.  Left in, the marker gave the composer a
-      // MARKER_FLIPPED formula satisfiable with every root at its recorded
-      // value -- FORMULA_SAT_AT_RECORDED_VALUATION, one blocking gap, and a
-      // NO_SUPPORTED_WITNESS claim -- measured on the path A campaign of
-      // 2026-09-22 06:07.
+      // The symbolized RPC failure, and it STAYS.  HDFS-17967 is the same
+      // family as HDFS-17899 -- the upstream fix branch is literally
+      // HDFS-17899-followup-invalid-encryption-key -- and a key-refresh RPC
+      // that fails is what leaves a party holding a key its peer can no
+      // longer resolve.  Removing it is exactly the root the case needs.
       //
-      // Removing it was tried once before and blamed for the replay losing
-      // the target (REPLAY exit 2, campaigns 7 and 8).  That was the
-      // CLIENT-driven workload, whose target occurrence anchored on a
-      // DFSClient chain running through this very method, so any bytecode
-      // change here moved the anchor.  The workloads now drive every path
-      // from DataNodes and anchor on HDFS_SASL, not on an IPC exchange.
-      // hdfs-17897 and hdfs-11741 carry no marker at all and both pass.
+      // It WAS removed on 2026-09-22, blamed for a
+      // FORMULA_SAT_AT_RECORDED_VALUATION / MARKER_FLIPPED blocker on path
+      // A.  That was a misdiagnosis: the identical blocker appeared with the
+      // marker gone, because ClaimPolicy#mechanism reports MARKER_FLIPPED
+      // for ANY declared root moved inside its domain and the one moving was
+      // HDFS.BLOCK_KEY.SERIAL_NO.  The real cause was an unattested producer
+      // occurrence on the relay hop, fixed in DataXceiver.
+      //
+      // Minted on every path through this method, not only when the outbound
+      // context happens to be active: Java's && short-circuits, so a replay
+      // reaching the send with no active context materialized no marker at
+      // all and the MARKER_FLIPPED witness could never be asked for.  The
+      // THROW still needs an active context; only the mint is unconditional.
+      boolean hadoopIpcRequestFails =
+          Debug.makeSymbolicBoolean("hadoopIpcRequestFails");
+      if (causynth.active() && hadoopIpcRequestFails) {
+        throw new IOException("symbolic Hadoop IPC transport failure");
+      }
       RpcRequestHeaderProto.Builder header = ProtoUtil.makeRpcRequestHeader(
           call.rpcKind, OperationProto.RPC_FINAL_PACKET, call.id, call.retry,
           clientId, call.alignmentContext).toBuilder();
