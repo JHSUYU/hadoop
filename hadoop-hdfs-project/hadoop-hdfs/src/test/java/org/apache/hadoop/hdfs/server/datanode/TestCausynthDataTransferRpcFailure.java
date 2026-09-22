@@ -72,7 +72,6 @@ public class TestCausynthDataTransferRpcFailure {
         10 * 60 * 1000);
     conf.setLong(DFSConfigKeys.DFS_BLOCK_ACCESS_KEY_UPDATE_INTERVAL_KEY, 60);
     conf.setLong(DFSConfigKeys.DFS_BLOCK_ACCESS_TOKEN_LIFETIME_KEY, 1);
-    conf.setLong(DFSConfigKeys.DFS_HEARTBEAT_INTERVAL_KEY, 3600);
     try (MiniDFSCluster cluster = new MiniDFSCluster.Builder(conf)
         .numDataNodes(2).build();
          DistributedFileSystem fs = cluster.getFileSystem()) {
@@ -92,25 +91,35 @@ public class TestCausynthDataTransferRpcFailure {
 
       BlockTokenSecretManager master = cluster.getNamesystem()
           .getBlockManager().getBlockTokenSecretManager();
-      CausynthMessagePropagation.registerSourceAlias(master,
-          ((NameNodeRpcServer) cluster.getNameNodeRpc()).getClientRpcServer());
-      CausynthMessagePropagation.registerSourceAlias(
-          source.getBlockPoolTokenSecretManager().get(block.getBlockPoolId()),
-          source.getDatanodeId());
-      CausynthMessagePropagation.registerSourceAlias(
-          target.getBlockPoolTokenSecretManager().get(block.getBlockPoolId()),
-          target.getDatanodeId());
-      CausynthMessagePropagation.startRecording();
+      CausynthCluster.startRecording();
 
       int initialKeyId = currentKeyId(master);
-      master.setKeyUpdateIntervalForTesting(1);
-      GenericTestUtils.waitFor(
-          () -> currentKeyId(master) != initialKeyId, 100, 15000);
-      int firstRotatedKeyId = currentKeyId(master);
-      GenericTestUtils.waitFor(
-          () -> currentKeyId(master) != firstRotatedKeyId, 100, 15000);
-      master.setKeyUpdateIntervalForTesting(TimeUnit.MINUTES.toMillis(60));
+      // Two rotations, driven explicitly as the NameNode's own request.  An
+      // explicit rotation marks no DataNode for a key update -- the key
+      // updater's does -- so with daemon heartbeats running as in
+      // production only the node this workload marks takes the new keys,
+      // and the source keeps the stale one the case is about.
+      long rotations = CausynthMessagePropagation.beginRequest(
+          ((NameNodeRpcServer) cluster.getNameNodeRpc()).getClientRpcServer(),
+          "rotate-block-keys");
+      try {
+        for (int rotation = 0; rotation < 2; rotation++) {
+          long causynthRotation = CausynthMessagePropagation.beginTick(
+              master, "KEY_MANAGER_TICK");
+          try {
+            master.updateKeys(Long.MAX_VALUE);
+          } finally {
+            CausynthMessagePropagation.endTick(causynthRotation);
+          }
+        }
+      } finally {
+        CausynthMessagePropagation.endRequest(rotations, "rotate-block-keys");
+      }
+      assertEquals(initialKeyId + 2, currentKeyId(master),
+          "the recorded window must rotate the master twice");
       int currentKeyId = currentKeyId(master);
+      cluster.getNamesystem().getBlockManager().getDatanodeManager()
+          .getDatanode(target.getDatanodeId()).setNeedKeyUpdate(true);
 
       BlockTokenSecretManager targetKeys = target
           .getBlockPoolTokenSecretManager().get(block.getBlockPoolId());
@@ -238,31 +247,13 @@ public class TestCausynthDataTransferRpcFailure {
   }
 
   /**
-   * Returns true when the key-refresh heartbeat completed. A modeled transport
-   * failure returns false so the caller can skip waiting for keys that will
-   * never arrive and proceed straight to the transfer.
+   * One key-refresh heartbeat: the one shared helper's (CausynthCluster).
+   * False when a modeled transport failure left the node's keys as they
+   * were, so the caller skips waiting for keys that will never arrive.
    */
   private static boolean refreshKeysFromNameNode(DataNode datanode)
       throws IOException {
-    BPOfferService service = datanode.getAllBpOs().get(0);
-    BPServiceActor actor = service.getBPServiceActors().get(0);
-    long request = CausynthMessagePropagation.beginRequest(
-        datanode.getDatanodeId(), "heartbeat");
-    try {
-      HeartbeatResponse response = actor.sendHeartBeat(false);
-      DatanodeCommand[] commands = response.getCommands();
-      if (commands != null) {
-        for (DatanodeCommand command : commands) {
-          service.processCommandFromActor(command, actor);
-        }
-      }
-      return true;
-    } catch (IOException expected) {
-      // A transport failure deliberately leaves the prior keys intact.
-      return false;
-    } finally {
-      CausynthMessagePropagation.endRequest(request, "heartbeat");
-    }
+    return CausynthCluster.refreshKeysFromNameNode(datanode, "heartbeat");
   }
 
   private static DataNode find(List<DataNode> nodes, DatanodeInfo location) {
@@ -273,14 +264,11 @@ public class TestCausynthDataTransferRpcFailure {
 
   private static void registerSources(MiniDFSCluster cluster,
       DataNode source, DataNode target) {
-    NameNodeRpcServer namenode =
-        (NameNodeRpcServer) cluster.getNameNodeRpc();
-    CausynthMessagePropagation.registerSource(
-        namenode.getClientRpcServer(), "CLUSTER_NODE", "NAMENODE",
-        "hdfs-17899/nn0", 0);
-    CausynthMessagePropagation.registerSource(source.getDatanodeId(),
-        "CLUSTER_NODE", "DATANODE", "hdfs-17899/source-dn", 0);
-    CausynthMessagePropagation.registerSource(target.getDatanodeId(),
-        "CLUSTER_NODE", "DATANODE", "hdfs-17899/target-dn", 0);
+    // Every node, registered whole, before any traffic the recording depends
+    // on (CausynthCluster).
+    CausynthCluster.registerNameNode(cluster, 0, "hdfs-17899/nn0");
+    CausynthCluster.registerDataNode(source, "hdfs-17899/source-dn");
+    CausynthCluster.registerDataNode(target, "hdfs-17899/target-dn");
+    CausynthCluster.registerOtherDataNodes(cluster, "hdfs-17899");
   }
 }
