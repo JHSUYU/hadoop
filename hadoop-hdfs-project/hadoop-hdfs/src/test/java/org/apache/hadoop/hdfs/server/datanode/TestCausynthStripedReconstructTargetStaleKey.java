@@ -138,8 +138,11 @@ public class TestCausynthStripedReconstructTargetStaleKey {
 
     ErasureCodingPolicy policy =
         new ErasureCodingPolicy(new ECSchema("xor", 2, 1), CELL_SIZE);
+    // Each DataNode has IPC connections of its own, as a DataNode process
+    // does (CausynthCluster.dataNodeOverlays).
     try (MiniDFSCluster cluster = new MiniDFSCluster.Builder(conf)
-        .numDataNodes(4).build();
+        .numDataNodes(4)
+        .dataNodeConfOverlays(CausynthCluster.dataNodeOverlays(4)).build();
          DistributedFileSystem fs = cluster.getFileSystem()) {
       cluster.waitActive();
       policy = fs.addErasureCodingPolicies(
