@@ -132,6 +132,26 @@ public class TestCausynthWriteBlockMirrorStaleKey {
       DataNode mirror = rest.get(1);
 
       pinBlockKeys(cluster);
+      // No DAEMON heartbeat may fire inside the recorded window.  The
+      // interval is already 3600 s, but a node still has stray turns left
+      // over from start-up, and their NameNode-side registration
+      // conversions land on an IPC handler with no inbound context: two of
+      // them then share ONE address -- a BLOCKING OCCURRENCE_ADDRESS_SHARED
+      // over REGION.16ba41cf that withholds the candidate.  It is timing
+      // dependent (the recorded root calls differ every run), which is why
+      // it comes and goes.  Every heartbeat this case needs is driven
+      // explicitly below, so the daemon has nothing left to do.
+      //
+      // Handing the node its source anchor instead -- what hdfs-11741 does
+      // -- was tried and is worse HERE: it turns those stray turns into
+      // ANCHORED offer-service occurrences that a focused replay then has
+      // to reproduce, and path A came back with 18 REPLAY
+      // TOPOLOGY_DIVERGENCE rows.  11741 tolerates that because its
+      // heartbeats fire once a second and the corpus is dense with them;
+      // this workload has a handful of strays, which is the worst case.
+      for (DataNode node : cluster.getDataNodes()) {
+        DataNodeTestUtils.setHeartbeatsDisabledForTests(node, true);
+      }
       registerSources(cluster, source, head, mirror);
 
       BlockTokenSecretManager master = cluster.getNamesystem()
