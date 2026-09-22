@@ -1190,9 +1190,9 @@ public class Client implements AutoCloseable {
       String correlationId = CausynthMessagePropagation.rpcCorrelation(
           clientId, call.id);
       CausynthMessagePropagation.Outbound causynth =
-          CausynthMessagePropagation.outbound(correlationId,
-              Integer.toString(call.retry), "REQUEST", Client.this,
-              call.causynthScope);
+          CausynthMessagePropagation.outbound(CausynthMessagePropagation.IPC,
+              correlationId, Integer.toString(call.retry), "REQUEST",
+              Client.this, call.causynthScope);
       RpcRequestHeaderProto.Builder header = ProtoUtil.makeRpcRequestHeader(
           call.rpcKind, OperationProto.RPC_FINAL_PACKET, call.id, call.retry,
           clientId, call.alignmentContext).toBuilder();
@@ -1631,7 +1631,7 @@ public class Client implements AutoCloseable {
       return;
     }
     CausynthMessagePropagation.inbound(call.causynthTrace,
-        call.causynthSymbolic,
+        call.causynthSymbolic, CausynthMessagePropagation.IPC,
         CausynthMessagePropagation.rpcCorrelation(clientId, call.id),
         Integer.toString(call.retry), "RESPONSE", this);
   }

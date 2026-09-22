@@ -680,7 +680,7 @@ class BPServiceActor implements Runnable {
       // One offer-service turn is one lineage root: nothing
       // requested it. // causynth-d3-lineage
       long causynthTick = CausynthMessagePropagation.beginTick(
-          dn.getDatanodeId(), "BP_SERVICE_ACTOR");
+          dn, "BP_SERVICE_ACTOR");
       try {
         DataNodeFaultInjector.get().startOfferService();
         final long startTime = scheduler.monotonicNow();

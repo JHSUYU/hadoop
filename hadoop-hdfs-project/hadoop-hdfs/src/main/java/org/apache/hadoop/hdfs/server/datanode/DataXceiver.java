@@ -301,7 +301,7 @@ class DataXceiver extends Receiver implements Runnable {
         // handshake opened ends with the op rather than with the
         // handshake. // causynth-d3-lineage
         long causynthOp = CausynthMessagePropagation.beginTick(
-            datanode.getDatanodeId(), "DATA_XCEIVER");
+            datanode, "DATA_XCEIVER");
         try {
           processOp(op);
         } finally {

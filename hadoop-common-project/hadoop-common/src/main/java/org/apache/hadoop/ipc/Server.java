@@ -1254,7 +1254,7 @@ public abstract class Server {
           .enterCarriedScope(causynthScope, "IPC_HANDLER", null);
       CausynthMessagePropagation.Inbound causynth =
           CausynthMessagePropagation.inbound(causynthTrace,
-              causynthSymbolic,
+              causynthSymbolic, CausynthMessagePropagation.IPC,
               CausynthMessagePropagation.rpcCorrelation(clientId, callId),
               Integer.toString(retryCount), "REQUEST", Server.this);
 
@@ -3559,7 +3559,7 @@ public abstract class Server {
     headerBuilder.setStatus(status);
     headerBuilder.setServerIpcVersionNum(CURRENT_VERSION);
     CausynthMessagePropagation.Outbound causynth =
-        CausynthMessagePropagation.outbound(
+        CausynthMessagePropagation.outbound(CausynthMessagePropagation.IPC,
             CausynthMessagePropagation.rpcCorrelation(call.clientId,
                 call.callId), Integer.toString(call.retryCount),
             "RESPONSE", this);
