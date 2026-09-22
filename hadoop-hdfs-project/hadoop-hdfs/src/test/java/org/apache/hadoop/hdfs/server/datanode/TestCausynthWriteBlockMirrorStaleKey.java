@@ -151,6 +151,19 @@ public class TestCausynthWriteBlockMirrorStaleKey {
       // this workload has a handful of strays, which is the worst case.
       for (DataNode node : cluster.getDataNodes()) {
         DataNodeTestUtils.setHeartbeatsDisabledForTests(node, true);
+        // And no incremental block report either.  When the transfer lands,
+        // the head and the mirror each call notifyNamenodeReceivedBlock,
+        // which sends blockReceivedAndDeleted(registration, ...) on the
+        // block-pool actor thread with no request scope open.  The
+        // NameNode then converts that DatanodeRegistration on an IPC
+        // handler with a LOST context, and the TWO of them -- one per node
+        // -- share ONE address: the BLOCKING OCCURRENCE_ADDRESS_SHARED over
+        // REGION.16ba41cf that has withheld this candidate through three
+        // earlier attempts (source anchor, which made it 18 divergences;
+        // daemon heartbeats off, which changed nothing).  The workload's
+        // own assertion reads mirror.getFSDataset() directly, so nothing
+        // here needs the NameNode to learn about the new replica.
+        DataNodeTestUtils.pauseIBR(node);
       }
       registerSources(cluster, source, head, mirror);
 
