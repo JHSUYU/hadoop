@@ -130,21 +130,30 @@ public class TestCausynthReplaceBlockProxyStaleKey {
         DFSConfigKeys.DFS_NAMENODE_AVOID_STALE_DATANODE_FOR_WRITE_KEY, false);
     conf.setBoolean(
         DFSConfigKeys.DFS_NAMENODE_AVOID_STALE_DATANODE_FOR_READ_KEY, false);
+    // Each DataNode has IPC connections of its own, as a DataNode process
+    // does (CausynthCluster.dataNodeOverlays).
     try (MiniDFSCluster cluster = new MiniDFSCluster.Builder(conf)
-        .numDataNodes(3).build();
+        .numDataNodes(3)
+        .dataNodeConfOverlays(CausynthCluster.dataNodeOverlays(3)).build();
          DistributedFileSystem fs = cluster.getFileSystem()) {
       cluster.waitActive();
 
       // The block is written BEFORE anything is recorded, at replication 1,
       // purely so one DataNode holds a replica the others can be told to take.
       Path path = new Path("/causynth-hdfs-17967-b");
-      try (FSDataOutputStream out = fs.create(path, (short) 1)) {
+      // Pinned to the first DataNode: the case's roles are read off this
+      // block, and random placement would make a different started node play
+      // them in every run (CausynthCluster.createOnNode).
+      try (FSDataOutputStream out = CausynthCluster.createOnNode(fs, path,
+          cluster.getDataNodes().get(0))) {
         out.write(new byte[]{1, 2, 3, 4});
       }
       LocatedBlock located = DFSTestUtil.getAllBlocks(fs, path).get(0);
       ExtendedBlock block = located.getBlock();
       List<DataNode> nodes = cluster.getDataNodes();
       DataNode proxy = find(nodes, located.getLocations()[0]);
+      assertEquals(nodes.get(0), proxy,
+          "the block must be on the DataNode the workload pinned it to");
       List<DataNode> rest = new ArrayList<>();
       for (DataNode node : nodes) {
         if (node != proxy) {
