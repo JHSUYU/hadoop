@@ -844,9 +844,27 @@ class DataXceiver extends Receiver implements Runnable {
                 .get(bpid).getCurrentKey();
             secretKey = blockKey.getKey();
           }
-          IOStreamPair saslStreams = datanode.saslClient.socketSend(
-              mirrorSock, unbufMirrorOut, unbufMirrorIn, keyFactory,
-              blockToken, targets[0], secretKey);
+          // The relay hop is its own request.  Without a scope here the
+          // DataXceiver thread has only its synthetic ROLE.DATA_XCEIVER
+          // root, the SASL client region folds into it, and no session
+          // states the rows of the occurrence that PRODUCED the key the
+          // mirror has to resolve: every path through the target came back
+          // UNATTESTED_ARM on a HandoffLeafCarrier, the read could not be
+          // pinned, the clocks were not NECESSARY and the claim fell to
+          // NO_SUPPORTED_WITNESS.  Weaving DataXceiver instead was tried and
+          // is worse -- run() then becomes the region root and swallows the
+          // anchored SASL occurrence entirely.  // causynth-d3-lineage
+          IOStreamPair saslStreams;
+          long causynthMirror = CausynthMessagePropagation.beginRequest(
+              datanode.getDatanodeId(), "mirror-write");
+          try {
+            saslStreams = datanode.saslClient.socketSend(
+                mirrorSock, unbufMirrorOut, unbufMirrorIn, keyFactory,
+                blockToken, targets[0], secretKey);
+          } finally {
+            CausynthMessagePropagation.endRequest(
+                causynthMirror, "mirror-write");
+          }
           unbufMirrorOut = saslStreams.out;
           unbufMirrorIn = saslStreams.in;
           mirrorOut = new DataOutputStream(new BufferedOutputStream(unbufMirrorOut,
