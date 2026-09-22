@@ -1239,8 +1239,26 @@ class DataXceiver extends Receiver implements Runnable {
         InputStream unbufProxyIn = NetUtils.getInputStream(proxySock);
         DataEncryptionKeyFactory keyFactory =
             datanode.getDataEncryptionKeyFactoryForBlock(block);
-        IOStreamPair saslStreams = datanode.saslClient.socketSend(proxySock,
-            unbufProxyOut, unbufProxyIn, keyFactory, blockToken, proxySource);
+        // The proxy hop is its own request.  Without a scope here the
+        // DataXceiver thread has only its synthetic ROLE.DATA_XCEIVER root,
+        // the SASL client region folds into it, and no session states the
+        // rows of the occurrence that PRODUCED the key the proxy has to
+        // resolve -- the recorded attach names the producer as
+        //   hdfs-17967/target-dn ROLE.DATA_XCEIVER {form: ROOT}
+        // and every path through the target came back UNATTESTED_ARM.
+        // Weaving DataXceiver instead was tried and is worse: run() then
+        // becomes the region root and swallows the anchored SASL
+        // occurrence.  // causynth-d3-lineage
+        IOStreamPair saslStreams;
+        long causynthProxy = CausynthMessagePropagation.beginRequest(
+            datanode.getDatanodeId(), "proxy-copy");
+        try {
+          saslStreams = datanode.saslClient.socketSend(proxySock,
+              unbufProxyOut, unbufProxyIn, keyFactory, blockToken,
+              proxySource);
+        } finally {
+          CausynthMessagePropagation.endRequest(causynthProxy, "proxy-copy");
+        }
         unbufProxyOut = saslStreams.out;
         unbufProxyIn = saslStreams.in;
         

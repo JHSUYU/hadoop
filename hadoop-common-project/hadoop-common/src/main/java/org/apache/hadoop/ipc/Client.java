@@ -1243,20 +1243,22 @@ public class Client implements AutoCloseable {
               CausynthMessagePropagation.IPC, correlationId,
               Integer.toString(call.retry), "REQUEST", Client.this,
               call.causynthScope);
-      // The marker stays, and its removal is recorded as a MISTAKE.  It is
-      // HDFS-17899's mechanism, not this case's, and it does give the
-      // composer a MARKER_FLIPPED that decides nothing -- but deleting it
-      // changed this method's bytecode and with it the identity of the
-      // client's own SASL exchange, and the replay then stopped reaching the
-      // target at all (REPLAY exit 2).  Campaign 6, with the marker present,
-      // composed a claim; campaigns 7 and 8 without it did not.  The
-      // MARKER_FLIPPED route is dealt with in the case declarations instead,
-      // where it costs no instrumentation change.
-      boolean hadoopIpcRequestFails =
-          Debug.makeSymbolicBoolean("hadoopIpcRequestFails");
-      if (causynth.active() && hadoopIpcRequestFails) {
-        throw new IOException("symbolic Hadoop IPC transport failure");
-      }
+      // HDFS-17899's IPC fault marker is deliberately NOT here.  It is that
+      // case's mechanism, not this one's: HDFS-17967 is a block key the peer
+      // can no longer resolve, and the fix PR 8698 adds is a retry that
+      // clears the cached key.  Left in, the marker gave the composer a
+      // MARKER_FLIPPED formula satisfiable with every root at its recorded
+      // value -- FORMULA_SAT_AT_RECORDED_VALUATION, one blocking gap, and a
+      // NO_SUPPORTED_WITNESS claim -- measured on the path A campaign of
+      // 2026-09-22 06:07.
+      //
+      // Removing it was tried once before and blamed for the replay losing
+      // the target (REPLAY exit 2, campaigns 7 and 8).  That was the
+      // CLIENT-driven workload, whose target occurrence anchored on a
+      // DFSClient chain running through this very method, so any bytecode
+      // change here moved the anchor.  The workloads now drive every path
+      // from DataNodes and anchor on HDFS_SASL, not on an IPC exchange.
+      // hdfs-17897 and hdfs-11741 carry no marker at all and both pass.
       RpcRequestHeaderProto.Builder header = ProtoUtil.makeRpcRequestHeader(
           call.rpcKind, OperationProto.RPC_FINAL_PACKET, call.id, call.retry,
           clientId, call.alignmentContext).toBuilder();
