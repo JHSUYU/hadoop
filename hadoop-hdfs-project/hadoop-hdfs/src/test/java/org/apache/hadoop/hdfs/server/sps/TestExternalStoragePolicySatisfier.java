@@ -275,9 +275,13 @@ public class TestExternalStoragePolicySatisfier {
         capacities[i][j] = nodeCapacity;
       }
     }
+    // Each DataNode has IPC connections of its own, as a DataNode process
+    // does (CausynthCluster.dataNodeOverlays).
     final MiniDFSCluster cluster = new MiniDFSCluster.Builder(conf)
         .numDataNodes(numberOfDatanodes).storagesPerDatanode(storagesPerDn)
-        .storageTypes(storageTypes).storageCapacities(capacities).build();
+        .storageTypes(storageTypes).storageCapacities(capacities)
+        .dataNodeConfOverlays(
+            CausynthCluster.dataNodeOverlays(numberOfDatanodes)).build();
     cluster.waitActive();
 
     if (startSPS) {

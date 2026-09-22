@@ -19,6 +19,7 @@ package org.apache.hadoop.hdfs.server.datanode;
 
 import java.io.IOException;
 import java.lang.reflect.Method;
+import java.net.InetSocketAddress;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.IdentityHashMap;
@@ -28,6 +29,10 @@ import java.util.concurrent.TimeUnit;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.CommonConfigurationKeysPublic;
+import org.apache.hadoop.fs.FSDataOutputStream;
+import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.fs.permission.FsPermission;
+import org.apache.hadoop.hdfs.DistributedFileSystem;
 import org.apache.hadoop.hdfs.MiniDFSCluster;
 import org.apache.hadoop.hdfs.client.HdfsClientConfigKeys;
 import org.apache.hadoop.hdfs.security.token.block.BlockPoolTokenSecretManager;
@@ -65,7 +70,12 @@ import org.apache.hadoop.ipc.CausynthMessagePropagation;
  * open when one opens its window is gone when the other does; and a per-node
  * loop inside the window visits the nodes in the order of their NAMES
  * ({@link #dataNodes}), because which physical node plays which role is the
- * cluster's random choice.</p>
+ * cluster's random choice; and each DataNode has IPC connections of its
+ * own ({@link #dataNodeOverlays}), because in one JVM they would share one,
+ * whose threads belong to whichever node opened it first; and a block a case
+ * reads its roles off is written to a node the workload names ({@link
+ * #createOnNode}), because random placement would make a different started
+ * node play each role in every run.</p>
  */
 public final class CausynthCluster {
   private static final String NODE = "CLUSTER_NODE";
@@ -99,6 +109,54 @@ public final class CausynthCluster {
     conf.setLong(HdfsClientConfigKeys.DFS_CLIENT_SOCKET_CACHE_EXPIRY_MSEC_KEY,
         NEVER_MS);
     return conf;
+  }
+
+  /**
+   * One configuration overlay per DataNode, for {@link
+   * MiniDFSCluster.Builder#dataNodeConfOverlays}: each DataNode gets IPC
+   * connections of its own, as a DataNode process does.
+   *
+   * <p>In one JVM the IPC client shares a connection among every caller
+   * whose connection id is equal, so the DataNodes of a MiniDFSCluster
+   * heartbeat over ONE connection to the NameNode, and that connection's
+   * threads -- the reader and the request sender -- are attributed to
+   * whichever DataNode opened it first: a race decided before the window,
+   * so a different node from run to run, and every WAKE and RECV those
+   * threads make with it.  hdfs-17899-bug3's focused replays waited for
+   * target-dn's connection wake where the run's connection was
+   * source-dn's.  The connection id includes the idle time, so a DataNode's
+   * own idle time -- never, plus its index -- is its own connection.</p>
+   */
+  public static Configuration[] dataNodeOverlays(int numDataNodes) {
+    Configuration[] overlays = new Configuration[numDataNodes];
+    for (int index = 0; index < numDataNodes; index++) {
+      Configuration overlay = new Configuration(false);
+      overlay.setInt(
+          CommonConfigurationKeysPublic.IPC_CLIENT_CONNECTION_MAXIDLETIME_KEY,
+          NEVER_MS + 1 + index);
+      overlays[index] = overlay;
+    }
+    return overlays;
+  }
+
+  /**
+   * Creates {@code path} with its one replica on {@code holder}: the node a
+   * case reads its roles off is then the same started node in every run.
+   *
+   * <p>A replication-1 block lands on a random DataNode, and the roles a
+   * block-key case names -- source, proxy, head -- are read off where it
+   * landed.  Names keep the WINDOW's events in order ({@link #dataNodes}),
+   * but everything physical about the node still differs between the
+   * recording and a replay: its start-up frames, its connections, its place
+   * in the NameNode's lists.  hdfs-17899-bug1's seed replays held or broke
+   * their prefix depending on where the block went.  A favored node makes
+   * it the node the workload names, and the caller asserts it did.</p>
+   */
+  public static FSDataOutputStream createOnNode(DistributedFileSystem fs,
+      Path path, DataNode holder) throws IOException {
+    return fs.create(path, FsPermission.getFileDefault(), true, 4096,
+        (short) 1, fs.getDefaultBlockSize(path), null,
+        new InetSocketAddress[] {holder.getXferAddress()});
   }
 
   /**
