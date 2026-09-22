@@ -228,6 +228,15 @@ public final class CausynthMessagePropagation {
     }
   }
 
+  /**
+   * Marks a queued unit of work as carrying the scope it was made in, for a
+   * pool thread that inherits none of it.
+   */
+  public static Runnable async(Runnable action) {
+    CausynthTraceRecorder.captureAsync(action);
+    return action;
+  }
+
   public static void endRequest(long request, String api) {
     endInbound();
     CausynthTraceRecorder.endSourceRequest(request, api);

@@ -1498,11 +1498,25 @@ class BPServiceActor implements Runnable {
       return true;
     }
 
+    /**
+     * The scope a command was ENQUEUED in, carried to the command-processing
+     * thread that later runs it: that thread inherits none of it, so a
+     * KeyUpdateCommand's addKeys -- and the declared block-key ports it
+     * delivers -- ran on a thread naming no node.  That is this case's
+     * 59 BLOCKING REPLAY LINEAGE_LOST rows, "a declared port arrived on a
+     * thread naming no node, so the delivery has no consumer address".
+     * hdfs-17899 bug1 carries this and its candidate is not withheld.
+     * // causynth-d3-lineage
+     */
+    private Runnable traced(Runnable command) {
+      return CausynthMessagePropagation.async(command);
+    }
+
     void enqueue(DatanodeCommand cmd) throws InterruptedException {
       if (cmd == null) {
         return;
       }
-      queue.put(() -> processCommand(new DatanodeCommand[]{cmd}));
+      queue.put(traced(() -> processCommand(new DatanodeCommand[]{cmd})));
       dn.getMetrics().incrActorCmdQueueLength(1);
     }
 
@@ -1516,7 +1530,7 @@ class BPServiceActor implements Runnable {
         return;
       }
       ((LinkedBlockingDeque<Runnable>) queue).putFirst(
-          () -> processCommand(new DatanodeCommand[]{cmd}));
+          traced(() -> processCommand(new DatanodeCommand[]{cmd})));
 
       LOG.info("Enqueue command: {} to the head of queue", cmd);
       dn.getMetrics().incrActorCmdQueueLength(1);
@@ -1526,14 +1540,14 @@ class BPServiceActor implements Runnable {
       if (cmds == null) {
         return;
       }
-      queue.put(() -> processCommand(
-          cmds.toArray(new DatanodeCommand[cmds.size()])));
+      queue.put(traced(() -> processCommand(
+          cmds.toArray(new DatanodeCommand[cmds.size()]))));
       dn.getMetrics().incrActorCmdQueueLength(1);
     }
 
     void enqueue(DatanodeCommand[] cmds) throws InterruptedException {
       if (cmds.length != 0) {
-        queue.put(() -> processCommand(cmds));
+        queue.put(traced(() -> processCommand(cmds)));
         dn.getMetrics().incrActorCmdQueueLength(1);
       }
     }
