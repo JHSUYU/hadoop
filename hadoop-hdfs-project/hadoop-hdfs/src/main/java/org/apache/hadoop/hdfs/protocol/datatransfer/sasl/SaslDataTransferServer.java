@@ -58,7 +58,6 @@ import org.apache.hadoop.hdfs.security.token.block.BlockPoolTokenSecretManager;
 import org.apache.hadoop.hdfs.security.token.block.BlockTokenIdentifier;
 import org.apache.hadoop.hdfs.security.token.block.InvalidBlockTokenException;
 import org.apache.hadoop.hdfs.server.datanode.DNConf;
-import org.apache.hadoop.ipc.CausynthMessagePropagation;
 import org.apache.hadoop.security.CustomizedCallbackHandler;
 import org.apache.hadoop.security.SaslPropertiesResolver;
 import org.apache.hadoop.security.SecurityUtil;
@@ -122,12 +121,13 @@ public class SaslDataTransferServer {
       LOG.debug(
         "SASL server doing encrypted handshake for peer = {}, datanodeId = {}",
         peer, datanodeId);
-      CausynthMessagePropagation.setLocalOwner(datanodeId);
-      try {
-        return getEncryptedStreams(peer, underlyingOut, underlyingIn);
-      } finally {
-        CausynthMessagePropagation.clearLocalOwnerKeepingScope();
-      }
+      // The connection's thread is stamped for the WHOLE of
+      // DataXceiver.run() (see there), which is where 11741 and 17897 do it.
+      // Stamping only the handshake here and clearing it on the way out left
+      // every later event of the connection -- the declared
+      // data-encryption-key-id delivery among them -- on a thread naming no
+      // node.
+      return getEncryptedStreams(peer, underlyingOut, underlyingIn);
     } else if (!UserGroupInformation.isSecurityEnabled()) {
       LOG.debug(
         "SASL server skipping handshake in unsecured configuration for "
