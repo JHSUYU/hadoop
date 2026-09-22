@@ -172,6 +172,7 @@ import org.apache.hadoop.hdfs.server.datanode.checker.StorageLocationChecker;
 import org.apache.hadoop.hdfs.server.datanode.fsdataset.impl.BlockPoolSlice;
 import org.apache.hadoop.hdfs.server.datanode.fsdataset.impl.FsVolumeImpl;
 import org.apache.hadoop.hdfs.util.DataTransferThrottler;
+import org.apache.hadoop.ipc.CausynthMessagePropagation;
 import org.apache.hadoop.ipc.Server;
 import org.apache.hadoop.util.*;
 import org.apache.hadoop.hdfs.client.BlockReportOptions;
@@ -3017,6 +3018,20 @@ public class DataNode extends ReconfigurableBase
     private DataTransferThrottler throttler;
 
     /**
+     * The scope this transfer was BUILT in, carried to the Daemon that later
+     * runs it: a new thread inherits none of it, exactly as the IPC handler
+     * pool does not (see {@code Server.Call#causynthScope}).  Without this
+     * the composition sees the delivery but not the occurrence it came from,
+     * and every path is an UNATTESTED_ARM on a HandoffLeafCarrier -- "what
+     * was delivered is stated and why is not".  Measured on hdfs-17967 path
+     * A, 2026-09-22: 37 of them, and the clocks then were not NECESSARY, so
+     * no CLOCK_SKEW witness could be reached.
+     * // causynth-d3-lineage
+     */
+    private final Object causynthScope =
+        CausynthMessagePropagation.captureScope();
+
+    /**
      * Connect to the first item in the target list.  Pass along the 
      * entire target list, the block, and the data.
      */
@@ -3052,6 +3067,12 @@ public class DataNode extends ReconfigurableBase
      */
     @Override
     public void run() {
+      // Stamp this thread with the DataNode for the WHOLE transfer and enter
+      // the scope the transfer was created in.  Same placement, and the same
+      // reason, as DataXceiver.run().  // causynth-d3-lineage
+      CausynthMessagePropagation.setLocalOwner(getDatanodeId());
+      long causynthTransfer = CausynthMessagePropagation.enterCarriedScope(
+          causynthScope, "DATA_TRANSFER", null);
       incrementXmitsInProgress();
       Socket sock = null;
       DataOutputStream out = null;
@@ -3140,6 +3161,8 @@ public class DataNode extends ReconfigurableBase
         IOUtils.closeStream(out);
         IOUtils.closeStream(in);
         IOUtils.closeSocket(sock);
+        CausynthMessagePropagation.exitCarriedScope(causynthTransfer);
+        CausynthMessagePropagation.clearLocalOwner();
       }
     }
 
