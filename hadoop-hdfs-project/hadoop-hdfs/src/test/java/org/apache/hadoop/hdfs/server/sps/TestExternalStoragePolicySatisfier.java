@@ -1103,6 +1103,8 @@ public class TestExternalStoragePolicySatisfier {
         DFSConfigKeys.DFS_STORAGE_POLICY_SATISFIER_MOVE_TASK_MAX_RETRY_ATTEMPTS_KEY,
         0);
     config.setLong("dfs.block.size", DEFAULT_BLOCK_SIZE);
+    // Nothing set up before the window expires on the wall clock.
+    CausynthCluster.configure(config);
     try {
       hdfsCluster = startCluster(config, diskTypes, 1, 2, CAPACITY,
           true, false);
