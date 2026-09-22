@@ -49,7 +49,8 @@ public class TestCausynthStripedChecksum {
 
   @Test
   public void testStaleEncryptionKeyFailsStripedChecksum() throws Exception {
-    Configuration conf = new HdfsConfiguration();
+    // Nothing set up before the window expires on the wall clock.
+    Configuration conf = CausynthCluster.configure(new HdfsConfiguration());
     conf.setBoolean(DFSConfigKeys.DFS_ENCRYPT_DATA_TRANSFER_KEY, true);
     conf.setBoolean(DFSConfigKeys.DFS_BLOCK_ACCESS_TOKEN_ENABLE_KEY, true);
     // Keep the block-key lifecycle inside a realistic clock window.  With the
@@ -217,7 +218,10 @@ public class TestCausynthStripedChecksum {
         conf, fs.getUri(), NamenodeProtocol.class).getProxy();
     try {
       String blockPoolId = cluster.getNamesystem().getBlockPoolId();
-      for (DataNode node : cluster.getDataNodes()) {
+      // In the order of the nodes' names, not the cluster's: dn<i> is the
+      // i-th location of an erasure-coded group the cluster lays out at
+      // random.
+      for (DataNode node : CausynthCluster.dataNodes()) {
         BlockTokenSecretManager manager =
             node.getBlockPoolTokenSecretManager().get(blockPoolId);
         long request = CausynthMessagePropagation.beginRequest(
