@@ -63,8 +63,11 @@ public class TestCausynthStripedChecksum {
     // recorded checksum clock.
     conf.setLong(DFSConfigKeys.DFS_BLOCK_ACCESS_KEY_UPDATE_INTERVAL_KEY, 1L);
     conf.setLong(DFSConfigKeys.DFS_BLOCK_ACCESS_TOKEN_LIFETIME_KEY, 1L);
+    // Each DataNode has IPC connections of its own, as a DataNode process
+    // does (CausynthCluster.dataNodeOverlays).
     try (MiniDFSCluster cluster = new MiniDFSCluster.Builder(conf)
-        .numDataNodes(3).build();
+        .numDataNodes(3)
+        .dataNodeConfOverlays(CausynthCluster.dataNodeOverlays(3)).build();
          DistributedFileSystem fs = cluster.getFileSystem()) {
       cluster.waitActive();
       DFSClient client = DFSClientAdapter.getDFSClient(fs);
