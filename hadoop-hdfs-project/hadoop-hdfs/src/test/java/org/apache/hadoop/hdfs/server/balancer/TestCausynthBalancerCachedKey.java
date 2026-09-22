@@ -121,7 +121,8 @@ public class TestCausynthBalancerCachedKey {
   @Test
   @Timeout(180)
   public void testBlockMoveWithCachedKeyAfterRotations() throws Exception {
-    Configuration conf = new HdfsConfiguration();
+    // Nothing set up before the window expires on the wall clock.
+    Configuration conf = CausynthCluster.configure(new HdfsConfiguration());
     conf.setBoolean(DFSConfigKeys.DFS_ENCRYPT_DATA_TRANSFER_KEY, true);
     conf.setBoolean(DFSConfigKeys.DFS_BLOCK_ACCESS_TOKEN_ENABLE_KEY, true);
     conf.setInt(DFSConfigKeys.DFS_CLIENT_SOCKET_TIMEOUT_KEY, 10 * 60 * 1000);
@@ -239,7 +240,8 @@ public class TestCausynthBalancerCachedKey {
           cluster.getNamesystem().getBlockManager().getDatanodeManager()
               .getDatanode(node.getDatanodeId()).setNeedKeyUpdate(true);
         }
-        for (DataNode node : nodes) {
+        // In the order of the nodes' names, not the cluster's.
+        for (DataNode node : CausynthCluster.dataNodes()) {
           refreshKeysFromNameNode(node, "heartbeat");
         }
 
