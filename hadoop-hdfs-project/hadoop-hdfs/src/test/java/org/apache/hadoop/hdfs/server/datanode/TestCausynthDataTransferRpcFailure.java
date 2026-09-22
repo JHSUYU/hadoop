@@ -119,8 +119,17 @@ public class TestCausynthDataTransferRpcFailure {
             () -> currentKeyId(targetKeys) == currentKeyId, 100, 15000);
       }
 
-      refreshKeysFromNameNode(source);
-
+      // The SOURCE is deliberately NOT refreshed.  Refreshing it here gave
+      // the recording a ZERO ROTATION GAP -- the key it then put on the wire
+      // was the master's current serial -- and with no gap no clock move can
+      // make that key expire, so every composed path asserted a miss the
+      // recording never had and all 63 were unsatisfiable with every root
+      // free (PATH_SELF_CONTRADICTORY).  The two cases that pass record a
+      // gap: hdfs-17897 puts 119992 on the wire against a current 119994,
+      // and hdfs-11741 likewise.  Left unrefreshed the source keeps its
+      // pinned currentKey, two rotations behind the master, which is the
+      // same shape -- and it is also what this case is ABOUT, since the
+      // source's refresh is the RPC whose failure leaves the key stale.
       long request = CausynthMessagePropagation.beginRequest(
           source.getDatanodeId(), "replicate-block");
       try {
