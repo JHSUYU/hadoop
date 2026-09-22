@@ -211,7 +211,7 @@ public class TestCausynthWriteBlockMirrorStaleKey {
             new StorageType[]{StorageType.DISK, StorageType.DISK},
             new String[0]);
         GenericTestUtils.waitFor(
-            () -> mirror.getFSDataset().isValidBlock(block), 20, 20000);
+            () -> mirror.getFSDataset().isValidBlock(block), 20, CausynthCluster.WINDOW_WAIT_MS);
         assertTrue(mirror.getFSDataset().isValidBlock(block),
             "the mirror must receive the block through the head");
       } finally {
