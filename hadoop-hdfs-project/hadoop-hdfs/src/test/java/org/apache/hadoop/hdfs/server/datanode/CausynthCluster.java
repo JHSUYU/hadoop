@@ -85,6 +85,17 @@ public final class CausynthCluster {
   /** Longer than any case runs: an expiry that cannot fire. */
   private static final int NEVER_MS = (int) TimeUnit.HOURS.toMillis(6);
 
+  /**
+   * The bound of every wait a workload makes inside its window for its own
+   * results.  A replay that cannot hold its schedule prefix holds every
+   * thread for the watchdog's timeout (15 s) before it lets the prefix go
+   * and runs free; a workload that gives up first fails for the engine's
+   * reason and not the case's -- hdfs-17899-bug2's 15 s wait for a key
+   * rotation timed out in the very stall that would have released it.
+   */
+  public static final int WINDOW_WAIT_MS =
+      (int) TimeUnit.SECONDS.toMillis(60);
+
   private CausynthCluster() {
   }
 
