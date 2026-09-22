@@ -30,6 +30,7 @@ import org.apache.hadoop.hdfs.NameNodeProxies;
 import org.apache.hadoop.hdfs.client.HdfsClientConfigKeys;
 import org.apache.hadoop.hdfs.security.token.block.BlockKey;
 import org.apache.hadoop.hdfs.security.token.block.BlockTokenSecretManager;
+import org.apache.hadoop.hdfs.server.datanode.CausynthCluster;
 import org.apache.hadoop.hdfs.server.datanode.DataNode;
 import org.apache.hadoop.hdfs.server.namenode.NameNodeRpcServer;
 import org.apache.hadoop.hdfs.server.protocol.NamenodeProtocol;
@@ -82,34 +83,17 @@ public class TestCausynthExpiredBalancerKey {
       KeyManager.testWait = ignored -> { };
       CausynthMessagePropagation.registerSourceAlias(keyManager, workload);
       MiniDFSCluster cluster = workload.getCluster();
-      NameNodeRpcServer namenode = (NameNodeRpcServer) cluster.getNameNodeRpc();
-      CausynthMessagePropagation.registerSource(namenode.getClientRpcServer(),
-          "CLUSTER_NODE", "NAMENODE", "hdfs-11741/nn0", 0);
+      // Every node, registered whole, before any traffic the recording
+      // depends on: the attribution rule names each daemon thread's node
+      // from what it finds registered (CausynthCluster).
+      CausynthCluster.registerNameNode(cluster, 0, "hdfs-11741/nn0");
+      CausynthCluster.registerOtherDataNodes(cluster, "hdfs-11741");
       BlockTokenSecretManager master = cluster.getNamesystem()
           .getBlockManager().getBlockTokenSecretManager();
-      CausynthMessagePropagation.registerSourceAlias(master,
-          namenode.getClientRpcServer());
       String blockPoolId = cluster.getNamesystem().getBlockPoolId();
-      int index = 0;
-      for (DataNode node : cluster.getDataNodes()) {
-        CausynthMessagePropagation.registerSource(node.getDatanodeId(),
-            "CLUSTER_NODE", "DATANODE", "hdfs-11741/dn" + index++, 0);
-        CausynthMessagePropagation.registerSourceAlias(
-            node.getBlockPoolTokenSecretManager().get(blockPoolId),
-            node.getDatanodeId());
-        // This node's block-pool threads -- the offer-service loop and the
-        // command processor that runs a KeyUpdateCommand's addKeys -- were
-        // started inside DataNode initialisation, before this
-        // registration, so they carry no node and every heartbeat
-        // activation of either DataNode was addressed
-        // workload/unregistered#epoch0: dn0's and dn1's collided.  Hand
-        // the node the anchor just registered; from its next turn on each
-        // of those threads runs as this node. // causynth-d3-lineage
-        node.setCausynthSourceAnchor(node.getDatanodeId());
-      }
       NamenodeProtocol rpc = NameNodeProxies.createProxy(conf,
           cluster.getFileSystem().getUri(), NamenodeProtocol.class).getProxy();
-      CausynthMessagePropagation.startRecording();
+      CausynthCluster.startRecording();
       // Refresh once inside the recorded interval. The Balancer cache below
       // then reads the NameNode-delivered key expression instead of the
       // constructor's pre-recording concrete snapshot.

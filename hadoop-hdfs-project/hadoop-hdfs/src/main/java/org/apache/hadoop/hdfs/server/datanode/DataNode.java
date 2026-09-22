@@ -425,17 +425,6 @@ public class DataNode extends ReconfigurableBase
 
   private String hostName;
   private DatanodeID id;
-  /**
-   * The anchor this DataNode's own node is registered under, or null.
-   *
-   * <p>The block-pool threads are created inside DataNode initialisation,
-   * before the workload registers anything, so no scope of this node ever
-   * reaches them and every activation that runs on them is addressed to no
-   * node at all -- two DataNodes of one JVM collide.  Once the workload
-   * hands the anchor over, each of their turns is this node's own action.
-   * // causynth-d3-lineage</p>
-   */
-  private volatile Object causynthSourceAnchor;
   
   final private String fileDescriptorPassingDisabledReason;
   boolean isBlockTokenEnabled;
@@ -4006,23 +3995,6 @@ public class DataNode extends ReconfigurableBase
   @VisibleForTesting
   public DatanodeID getDatanodeId() {
     return id;
-  }
-
-  /**
-   * Hands this DataNode the anchor its node was registered under, for the
-   * block-pool threads that were started before that registration to open
-   * their turns on. // causynth-d3-lineage
-   *
-   * @param anchor the object the workload passed to
-   *               {@code CausynthMessagePropagation.registerSource}
-   */
-  public void setCausynthSourceAnchor(Object anchor) {
-    this.causynthSourceAnchor = anchor;
-  }
-
-  /** The anchor {@link #setCausynthSourceAnchor} handed over, or null. */
-  public Object getCausynthSourceAnchor() {
-    return causynthSourceAnchor;
   }
   
   @VisibleForTesting
