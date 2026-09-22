@@ -119,8 +119,21 @@ class StripedWriter {
     checksumBuf = new byte[tmpLen];
 
     if (initTargetStreams() == 0) {
+      // NOT annotated, although this IS where path C's failure surfaces.
+      // @CausynthExceptionTarget has to sit on a throw whose backward slice
+      // reaches the state the mechanism turns on, and this one's only operand
+      // is a String: nothing then classifies the BlockTokenSecretManager
+      // methods as writers of tracked state, they lose STATE_WRITER_ENTRY,
+      // and the whole recording is refused --
+      //   region skeleton has no authoritative execution context root:
+      //   <...BlockTokenSecretManager: boolean updateKeys()>
+      // (measured, path C campaign 2026-09-22 06:26, SEED, 34s).  Path C is
+      // declared at the shared site instead -- the allKeys miss in
+      // retrieveDataEncryptionKey, on the reconstruction TARGET -- and told
+      // apart from paths A and B by its occurrence, which is how this whole
+      // family's cases are told apart.
       String error = "All targets are failed.";
-      throw new @CausynthExceptionTarget("hdfs-17967-c") IOException(error);
+      throw new IOException(error);
     }
   }
 

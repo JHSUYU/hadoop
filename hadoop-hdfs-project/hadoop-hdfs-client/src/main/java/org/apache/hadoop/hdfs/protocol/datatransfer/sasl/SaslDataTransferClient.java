@@ -168,11 +168,25 @@ public class SaslDataTransferClient {
   public Peer peerSend(Peer peer, DataEncryptionKeyFactory encryptionKeyFactory,
       Token<BlockTokenIdentifier> accessToken, DatanodeID datanodeId)
       throws IOException {
-    IOStreamPair ios = checkTrustAndSend(getPeerAddress(peer),
-        peer.getOutputStream(), peer.getInputStream(), encryptionKeyFactory,
-        accessToken, datanodeId, null);
-    // TODO: Consider renaming EncryptedPeer to SaslPeer.
-    return ios != null ? new EncryptedPeer(peer, ios) : peer;
+    // The same SASL scope socketSend opens.  Without it this handshake puts
+    // no causal context on the wire, the peer's SaslDataTransferServer.receive
+    // becomes the region root with a LOST context and no node, and two such
+    // handshakes then share ONE address -- OCCURRENCE_ADDRESS_SHARED, and
+    // BLOCKING, because that region is a member of the published closure.
+    // Measured on hdfs-17967 path C, 2026-09-22: the erasure-coding source
+    // reads reach a peer through DFSUtilClient, which calls THIS method,
+    // while the reconstruction's write to its target calls socketSend and was
+    // attributed correctly.
+    CausynthMessagePropagation.beginSasl();
+    try {
+      IOStreamPair ios = checkTrustAndSend(getPeerAddress(peer),
+          peer.getOutputStream(), peer.getInputStream(), encryptionKeyFactory,
+          accessToken, datanodeId, null);
+      // TODO: Consider renaming EncryptedPeer to SaslPeer.
+      return ios != null ? new EncryptedPeer(peer, ios) : peer;
+    } finally {
+      CausynthMessagePropagation.endSasl();
+    }
   }
 
   /**
