@@ -52,8 +52,6 @@ import org.apache.hadoop.hdfs.server.protocol.DatanodeCommand;
 import org.apache.hadoop.hdfs.server.protocol.HeartbeatResponse;
 import org.apache.hadoop.ipc.CausynthMessagePropagation;
 import org.junit.jupiter.api.Test;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.junit.jupiter.api.Timeout;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -85,9 +83,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * precisely because neither is refreshed.</p>
  */
 public class TestCausynthWriteBlockMirrorStaleKey {
-  private static final Logger LOG =
-      LoggerFactory.getLogger(TestCausynthWriteBlockMirrorStaleKey.class);
-
   /** Block-key serial number pinned by {@link #pinBlockKeys}. */
   private static final int SERIAL_NO = Integer.MAX_VALUE / 17967 + 2;
 
@@ -137,7 +132,6 @@ public class TestCausynthWriteBlockMirrorStaleKey {
       DataNode mirror = rest.get(1);
 
       pinBlockKeys(cluster);
-      stageRefreshGap(cluster, head);
       registerSources(cluster, source, head, mirror);
 
       BlockTokenSecretManager master = cluster.getNamesystem()
@@ -179,55 +173,30 @@ public class TestCausynthWriteBlockMirrorStaleKey {
       }
       assertEquals(initialKeyId + 2, currentKeyId(master),
           "the recorded window must rotate the master twice");
-      // The MIRROR refreshes normally.  The SOURCE deliberately does NOT: it
-      // is the head's upstream partner, and if it moved forward the head
-      // would have to resolve a key it only gets from its own refresh --
-      // which is the very RPC a witness flips, so the flip would break the
-      // source->head hop BEFORE the mirror is ever contacted.  Leaving the
-      // source on the staged key keeps that hop healthy in both worlds.
-      cluster.getNamesystem().getBlockManager().getDatanodeManager()
-          .getDatanode(mirror.getDatanodeId()).setNeedKeyUpdate(true);
-      refreshKeysFromNameNode(mirror, "heartbeat");
-      cluster.getNamesystem().getBlockManager().getDatanodeManager()
-          .getDatanode(head.getDatanodeId()).setNeedKeyUpdate(true);
-
-      // THE TRIGGER.  This is the head's own key-refresh RPC, and its
-      // failure is SWALLOWED -- which is not a convenience, it is the bug:
-      // the production code ignores a failed refresh and keeps using the
-      // keys it already holds.  Left uncaught, a flipped
-      // hadoopIpcRequestFails throws straight out of the workload and the
-      // declared occurrence is never reached at all, so no MARKER_FLIPPED
-      // witness could ever be asked for.
-      try {
-        refreshKeysFromNameNode(head, "heartbeat");
-      } catch (IOException refreshFailed) {
-        LOG.info("the head's key refresh failed; it keeps the keys it has",
-            refreshFailed);
+      for (DataNode node : nodes) {
+        cluster.getNamesystem().getBlockManager().getDatanodeManager()
+            .getDatanode(node.getDatanodeId()).setNeedKeyUpdate(true);
       }
 
+      // Only the HEAD is skewed: it derives the key it presents to the mirror
+      // from its current key, and the mirror still RETAINS that key, so the
+      // recording is healthy and a witness has to move the clock past its
+      // expiry.  The mirror stays current, so the two are not symmetric.
+      for (DataNode node : nodes) {
+        refreshKeysFromNameNode(node, "heartbeat");
+      }
       BlockTokenSecretManager headKeys =
           head.getBlockPoolTokenSecretManager().get(blockPoolId);
       BlockTokenSecretManager mirrorKeys =
           mirror.getBlockPoolTokenSecretManager().get(blockPoolId);
-      BlockTokenSecretManager sourceKeys =
-          source.getBlockPoolTokenSecretManager().get(blockPoolId);
-      // The RECORDING is healthy in every respect: the refresh succeeded, so
-      // the head stands on the master's current key and the mirror holds it.
-      // The whole difference between this run and the failing one is the one
-      // RPC above.
-      assertEquals(currentKeyId(master), currentKeyId(headKeys),
-          "the head's refresh must SUCCEED in the recording");
-      assertTrue(mirrorKeys.hasKey(currentKeyId(headKeys)),
-          "the mirror must resolve what the head presents, or the recording"
-              + " is already the failure");
-      // ...and the failing world is reachable by that flip alone: the key
-      // the head would fall back on is one the mirror has never held.
-      assertTrue(!mirrorKeys.hasKey(SERIAL_NO + 1),
-          "the mirror must NEVER have held the head's fallback key, or a"
-              + " failed refresh changes nothing and only a clock can");
-      assertTrue(headKeys.hasKey(currentKeyId(sourceKeys)),
-          "the head must hold the SOURCE's key whatever happens to its own"
-              + " refresh, or the flip breaks the upstream hop first");
+      rollCurrentKeyBackTo(headKeys, SERIAL_NO + 1);
+      assertEquals(SERIAL_NO + 1, currentKeyId(headKeys),
+          "the head must present the pinned key, or there is no gap");
+      assertEquals(currentKeyId(master), currentKeyId(mirrorKeys),
+          "the mirror must be current, or the two are symmetric");
+      assertTrue(mirrorKeys.hasKey(SERIAL_NO + 1),
+          "the mirror must still RETAIN the head's key, or the recording is"
+              + " already the failure");
 
       long request = CausynthMessagePropagation.beginRequest(
           source.getDatanodeId(), "transfer-block");
@@ -287,63 +256,6 @@ public class TestCausynthWriteBlockMirrorStaleKey {
       assertEquals(SERIAL_NO + 1, manager.getCurrentKey().getKeyId());
       assertTrue(manager.hasKey(SERIAL_NO + 1)
           && manager.hasKey(SERIAL_NO + 2));
-    }
-  }
-
-  /**
-   * Stages the ONE asymmetry a failed key-refresh RPC needs in order to be
-   * the trigger, and nothing else.
-   *
-   * <p>{@code addKeys} MERGES -- {@code allKeys.put} per received key -- and
-   * only {@code removeExpiredKeys()} ever removes, driven by a clock.  So if
-   * the head and the mirror start from the same key set, a failed refresh
-   * only makes the head present an OLDER key the mirror still holds, the
-   * flip cannot reach the fatal, and the only witness left is a clock move.
-   * That is exactly why this family kept reporting CLOCK_SKEW while carrying
-   * the marker.</p>
-   *
-   * <p>So: roll the master once more and drop the pinned first key from its
-   * EXPORT, then hand that export to everyone EXCEPT the head.  The mirror
-   * has therefore never held {@code SERIAL_NO + 1}, while the head still
-   * stands on it -- and still holds {@code SERIAL_NO + 2}, which is what its
-   * upstream partner presents, so a flipped refresh cannot break that hop
-   * first.  The head's in-window refresh is then the only thing between the
-   * healthy run and the failing one.</p>
-   */
-  private static void stageRefreshGap(MiniDFSCluster cluster, DataNode head)
-      throws Exception {
-    BlockTokenSecretManager master = cluster.getNamesystem()
-        .getBlockManager().getBlockTokenSecretManager();
-    long causynthRotation = CausynthMessagePropagation.beginTick(
-        master, "KEY_MANAGER_TICK");
-    try {
-      master.updateKeys(Long.MAX_VALUE);
-    } finally {
-      CausynthMessagePropagation.endTick(causynthRotation);
-    }
-    assertEquals(SERIAL_NO + 2, master.getCurrentKey().getKeyId());
-    Set<Integer> staged =
-        new TreeSet<>(Arrays.asList(SERIAL_NO + 2, SERIAL_NO + 3));
-    retainKeys(master, staged);
-    assertEquals(staged, keyIds(master),
-        "the master must no longer EXPORT the head's fallback key");
-    String blockPoolId = cluster.getNamesystem().getBlockPoolId();
-    for (DataNode node : cluster.getDataNodes()) {
-      BlockTokenSecretManager manager =
-          node.getBlockPoolTokenSecretManager().get(blockPoolId);
-      if (node == head) {
-        assertEquals(SERIAL_NO + 1, currentKeyId(manager),
-            "the head must stand on the fallback key");
-        assertTrue(manager.hasKey(SERIAL_NO + 2),
-            "the head must hold its upstream partner's key");
-        continue;
-      }
-      manager.addKeys(master.exportKeys());
-      retainKeys(manager, staged);
-      assertEquals(SERIAL_NO + 2, currentKeyId(manager));
-      assertTrue(!manager.hasKey(SERIAL_NO + 1),
-          "DataNode " + node.getDatanodeId() + " must never have held the"
-              + " head's fallback key");
     }
   }
 
