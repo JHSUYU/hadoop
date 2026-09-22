@@ -61,7 +61,6 @@ import org.apache.hadoop.hdfs.server.datanode.ShortCircuitRegistry.NewShmInfo;
 import org.apache.hadoop.hdfs.server.protocol.DatanodeRegistration;
 import org.apache.hadoop.hdfs.shortcircuit.ShortCircuitShm.SlotId;
 import org.apache.hadoop.io.IOUtils;
-import org.apache.hadoop.ipc.CausynthMessagePropagation;
 import org.apache.hadoop.net.NetUtils;
 import org.apache.hadoop.net.unix.DomainSocket;
 import org.apache.hadoop.security.token.SecretManager.InvalidToken;
@@ -99,6 +98,7 @@ import static org.apache.hadoop.hdfs.protocol.proto.DataTransferProtos.Status.ER
 import static org.apache.hadoop.hdfs.protocol.proto.DataTransferProtos.Status.SUCCESS;
 import static org.apache.hadoop.hdfs.server.datanode.DataNode.DN_CLIENTTRACE_FORMAT;
 import static org.apache.hadoop.util.Time.monotonicNow;
+import org.apache.hadoop.ipc.CausynthMessagePropagation;
 
 
 /**
@@ -226,7 +226,6 @@ class DataXceiver extends Receiver implements Runnable {
     Op op = null;
     Op firstOp = null;
 
-    CausynthMessagePropagation.setLocalOwner(datanode.getDatanodeId());
     try {
       synchronized(this) {
         xceiver = Thread.currentThread();
@@ -298,20 +297,16 @@ class DataXceiver extends Receiver implements Runnable {
           firstOp = op;
           incrReadWriteOpMetrics(op);
         }
-        // One op is one hop, and the message scope a SASL
-        // handshake opened ends with the op rather than with the
-        // handshake. // causynth-d3-lineage
+        // One op is one turn of this connection's loop, owned by this
+        // DataNode, and the message scope a SASL handshake opened ends with
+        // the op rather than with the handshake (GraphChecker).
         long causynthOp = CausynthMessagePropagation.beginTick(
-            datanode.getDatanodeId(), "DATA_XCEIVER");
+            datanode, "DATA_XCEIVER");
         try {
           processOp(op);
         } finally {
           CausynthMessagePropagation.endTick(causynthOp);
-          try {
-            CausynthMessagePropagation.endInbound();
-          } catch (RuntimeException scopeAlreadyEnded) {
-            // Ending twice is not a workload error.
-          }
+          CausynthMessagePropagation.endInbound();
         }
         ++opsProcessed;
       } while ((peer != null) &&
@@ -349,7 +344,6 @@ class DataXceiver extends Receiver implements Runnable {
         LOG.error(s, t);
       }
     } finally {
-      CausynthMessagePropagation.clearLocalOwner();
       collectThreadLocalStates();
       LOG.debug("{}:Number of active connections is: {}",
           datanode.getDisplayName(), datanode.getXceiverCount());

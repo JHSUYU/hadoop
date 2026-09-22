@@ -31,6 +31,7 @@ import org.apache.hadoop.hdfs.protocol.SystemErasureCodingPolicies;
 import org.apache.hadoop.hdfs.security.token.block.BlockKey;
 import org.apache.hadoop.hdfs.security.token.block.BlockTokenSecretManager;
 import org.apache.hadoop.hdfs.security.token.block.ExportedBlockKeys;
+import org.apache.hadoop.hdfs.server.datanode.CausynthCluster;
 import org.apache.hadoop.hdfs.server.datanode.DataNode;
 import org.apache.hadoop.hdfs.server.namenode.NameNodeRpcServer;
 import org.apache.hadoop.hdfs.server.protocol.NamenodeProtocol;
@@ -51,7 +52,6 @@ public class TestCausynthStripedChecksum {
     Configuration conf = new HdfsConfiguration();
     conf.setBoolean(DFSConfigKeys.DFS_ENCRYPT_DATA_TRANSFER_KEY, true);
     conf.setBoolean(DFSConfigKeys.DFS_BLOCK_ACCESS_TOKEN_ENABLE_KEY, true);
-    conf.setInt(DFSConfigKeys.DFS_HEARTBEAT_INTERVAL_KEY, 3600);
     // Keep the block-key lifecycle inside a realistic clock window.  With the
     // 600-minute defaults every key in this workload expires 20-40 hours after
     // the recorded checksum, so removeExpiredKeys() can never fire.  One minute
@@ -83,9 +83,7 @@ public class TestCausynthStripedChecksum {
       BlockTokenSecretManager master = cluster.getNamesystem()
           .getBlockManager().getBlockTokenSecretManager();
       pinBlockKeys(cluster, master);
-      CausynthMessagePropagation.registerSourceAlias(master,
-          ((NameNodeRpcServer) cluster.getNameNodeRpc()).getClientRpcServer());
-      CausynthMessagePropagation.startRecording();
+      CausynthCluster.startRecording();
       client.clearDataEncryptionKey();
       long cacheRequest = CausynthMessagePropagation.beginRequest(
           client, "cache-encryption-key");
@@ -222,8 +220,6 @@ public class TestCausynthStripedChecksum {
       for (DataNode node : cluster.getDataNodes()) {
         BlockTokenSecretManager manager =
             node.getBlockPoolTokenSecretManager().get(blockPoolId);
-        CausynthMessagePropagation.registerSourceAlias(
-            manager, node.getDatanodeId());
         long request = CausynthMessagePropagation.beginRequest(
             node.getDatanodeId(), "refresh-block-keys");
         try {
@@ -240,12 +236,12 @@ public class TestCausynthStripedChecksum {
 
   private static void registerSources(MiniDFSCluster cluster,
       DFSClient client, Path file) throws Exception {
-    NameNodeRpcServer namenode = (NameNodeRpcServer) cluster.getNameNodeRpc();
     CausynthMessagePropagation.registerSource(
         client, "EXTERNAL_APP", "DFS_CLIENT", "hdfs-17897/client", 0);
-    CausynthMessagePropagation.registerSource(
-        namenode.getClientRpcServer(), "CLUSTER_NODE", "NAMENODE",
-        "hdfs-17897/nn0", 0);
+    // Every node, registered whole, before any traffic the recording
+    // depends on (CausynthCluster).  dn<i> is the i-th location of the
+    // block group, so dn0 is the checksum leader the case is about.
+    CausynthCluster.registerNameNode(cluster, 0, "hdfs-17897/nn0");
     DatanodeInfo[] locations = client.getLocatedBlocks(
         file.toString(), 0).get(0).getLocations();
     int nextIndex = locations.length;
@@ -262,9 +258,7 @@ public class TestCausynthStripedChecksum {
       if (index < 0) {
         index = nextIndex++;
       }
-      CausynthMessagePropagation.registerSource(
-          node.getDatanodeId(), "CLUSTER_NODE", "DATANODE",
-          "hdfs-17897/dn" + index, 0);
+      CausynthCluster.registerDataNode(node, "hdfs-17897/dn" + index);
     }
   }
 }
