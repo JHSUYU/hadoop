@@ -28,6 +28,7 @@ import org.apache.hadoop.hdfs.server.datanode.DataNode;
 import org.apache.hadoop.util.DataChecksum;
 import org.slf4j.Logger;
 
+import edu.uva.liftlab.graphchecker.annotation.CausynthExceptionTarget;
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
@@ -119,7 +120,7 @@ class StripedWriter {
 
     if (initTargetStreams() == 0) {
       String error = "All targets are failed.";
-      throw new IOException(error);
+      throw new @CausynthExceptionTarget("hdfs-17967-c") IOException(error);
     }
   }
 
