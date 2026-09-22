@@ -147,12 +147,21 @@ public class SaslDataTransferClient {
       InputStream underlyingIn, DataEncryptionKeyFactory encryptionKeyFactory,
       Token<BlockTokenIdentifier> accessToken, DatanodeID datanodeId)
       throws IOException {
-    // The encryption key factory only returns a key if encryption is enabled.
-    DataEncryptionKey encryptionKey = !trustedChannelResolver.isTrusted() ?
-        encryptionKeyFactory.newDataEncryptionKey() : null;
-    IOStreamPair ios = send(socket.getInetAddress(), underlyingOut,
-        underlyingIn, encryptionKey, accessToken, datanodeId, null);
-    return ios != null ? ios : new IOStreamPair(underlyingIn, underlyingOut);
+    // The same SASL scope socketSend opens.  Without it this handshake puts
+    // no causal context on the wire and the peer cannot tell it apart from
+    // the client's own handshake to the same node.
+    CausynthMessagePropagation.beginSasl();
+    try {
+      // The encryption key factory only returns a key if encryption is
+      // enabled.
+      DataEncryptionKey encryptionKey = !trustedChannelResolver.isTrusted() ?
+          encryptionKeyFactory.newDataEncryptionKey() : null;
+      IOStreamPair ios = send(socket.getInetAddress(), underlyingOut,
+          underlyingIn, encryptionKey, accessToken, datanodeId, null);
+      return ios != null ? ios : new IOStreamPair(underlyingIn, underlyingOut);
+    } finally {
+      CausynthMessagePropagation.endSasl();
+    }
   }
 
   /**

@@ -172,6 +172,7 @@ import org.apache.hadoop.hdfs.server.datanode.checker.StorageLocationChecker;
 import org.apache.hadoop.hdfs.server.datanode.fsdataset.impl.BlockPoolSlice;
 import org.apache.hadoop.hdfs.server.datanode.fsdataset.impl.FsVolumeImpl;
 import org.apache.hadoop.hdfs.util.DataTransferThrottler;
+import org.apache.hadoop.ipc.CausynthMessagePropagation;
 import org.apache.hadoop.ipc.Server;
 import org.apache.hadoop.util.*;
 import org.apache.hadoop.hdfs.client.BlockReportOptions;
@@ -4147,9 +4148,24 @@ public class DataNode extends ReconfigurableBase
                            Token<BlockTokenIdentifier> blockToken)
       throws IOException {
 
-    return DFSUtilClient.connectToDN(datanodeID, timeout, getConf(),
-        saslClient, NetUtils.getDefaultSocketFactory(getConf()), false,
-        getDataEncryptionKeyFactoryForBlock(block), blockToken);
+    // A DataNode computing a striped block-group checksum reads its PEERS'
+    // internal blocks, and that relay is its own request.  Without a scope
+    // here the peer serves two handshakes under one rpcSite -- the client's
+    // and this one -- and nothing tells them apart, so the closure held one
+    // anchor at a code point and the replay ran the other: six BLOCKING
+    // REPLAY TOPOLOGY_DIVERGENCE rows and a withheld candidate, measured
+    // 2026-09-22.  Same shape as the mirror and proxy hops in hdfs-17967.
+    // // causynth-d3-lineage
+    long causynthChecksum = CausynthMessagePropagation.beginRequest(
+        getDatanodeId(), "block-checksum");
+    try {
+      return DFSUtilClient.connectToDN(datanodeID, timeout, getConf(),
+          saslClient, NetUtils.getDefaultSocketFactory(getConf()), false,
+          getDataEncryptionKeyFactoryForBlock(block), blockToken);
+    } finally {
+      CausynthMessagePropagation.endRequest(causynthChecksum,
+          "block-checksum");
+    }
   }
 
   /**
