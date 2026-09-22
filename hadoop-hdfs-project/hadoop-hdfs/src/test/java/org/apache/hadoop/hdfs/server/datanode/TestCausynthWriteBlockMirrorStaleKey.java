@@ -89,7 +89,8 @@ public class TestCausynthWriteBlockMirrorStaleKey {
   @Test
   @Timeout(120)
   public void testWritePipelineAfterKeyRotations() throws Exception {
-    Configuration conf = new HdfsConfiguration();
+    // Nothing set up before the window expires on the wall clock.
+    Configuration conf = CausynthCluster.configure(new HdfsConfiguration());
     conf.setBoolean(DFSConfigKeys.DFS_ENCRYPT_DATA_TRANSFER_KEY, true);
     conf.setBoolean(DFSConfigKeys.DFS_BLOCK_ACCESS_TOKEN_ENABLE_KEY, true);
     conf.setInt(DFSConfigKeys.DFS_CLIENT_SOCKET_TIMEOUT_KEY, 10 * 60 * 1000);
@@ -172,7 +173,8 @@ public class TestCausynthWriteBlockMirrorStaleKey {
       // from its current key, and the mirror still RETAINS that key, so the
       // recording is healthy and a witness has to move the clock past its
       // expiry.  The mirror stays current, so the two are not symmetric.
-      for (DataNode node : nodes) {
+      // In the order of the nodes' names, not the cluster's.
+      for (DataNode node : CausynthCluster.dataNodes()) {
         refreshKeysFromNameNode(node, "heartbeat");
       }
       BlockTokenSecretManager headKeys =

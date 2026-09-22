@@ -20,12 +20,16 @@ package org.apache.hadoop.hdfs.server.datanode;
 import java.io.IOException;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
-import java.util.Collections;
+import java.util.Comparator;
 import java.util.IdentityHashMap;
 import java.util.List;
-import java.util.Set;
+import java.util.Map;
+import java.util.concurrent.TimeUnit;
 
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.CommonConfigurationKeysPublic;
 import org.apache.hadoop.hdfs.MiniDFSCluster;
+import org.apache.hadoop.hdfs.client.HdfsClientConfigKeys;
 import org.apache.hadoop.hdfs.security.token.block.BlockPoolTokenSecretManager;
 import org.apache.hadoop.hdfs.server.blockmanagement.BlockManager;
 import org.apache.hadoop.hdfs.server.namenode.FSNamesystem;
@@ -52,14 +56,66 @@ import org.apache.hadoop.ipc.CausynthMessagePropagation;
  * Heartbeats and block reports run as they do in production; the schedule
  * prefix makes them reproducible and the attribution rule makes them
  * attributable.</p>
+ *
+ * <p>Two more properties are about the world the window starts from, which
+ * the schedule prefix cannot reach because it only orders the window
+ * itself: nothing set up before the window may EXPIRE on the wall clock
+ * ({@link #configure}), because the recording runs on a JIT and every replay
+ * on an interpreter many times slower, so an idle connection that is still
+ * open when one opens its window is gone when the other does; and a per-node
+ * loop inside the window visits the nodes in the order of their NAMES
+ * ({@link #dataNodes}), because which physical node plays which role is the
+ * cluster's random choice.</p>
  */
 public final class CausynthCluster {
   private static final String NODE = "CLUSTER_NODE";
-  /** The DataNodes this run has registered, by identity. */
-  private static final Set<DataNode> REGISTERED =
-      Collections.newSetFromMap(new IdentityHashMap<DataNode, Boolean>());
+  /** The DataNodes this run has registered, by identity, and their names. */
+  private static final Map<DataNode, String> REGISTERED =
+      new IdentityHashMap<>();
+  /** Longer than any case runs: an expiry that cannot fire. */
+  private static final int NEVER_MS = (int) TimeUnit.HOURS.toMillis(6);
 
   private CausynthCluster() {
+  }
+
+  /**
+   * Makes the set-up the window starts from the same in every run: nothing
+   * the workload opens before its window expires on the wall clock.
+   *
+   * <p>An IPC client connection closes after {@code
+   * ipc.client.connection.maxidletime} without a call (the server side
+   * after twice that), and the client keeps a DataNode peer for {@code
+   * dfs.client.socketcache.expiryMsec}.  The recording reaches its window
+   * in a few seconds; a replay on the concolic VM takes many times longer,
+   * so a connection the recording's window still used was gone when the
+   * replay's opened -- hdfs-17899-bug3's first held event was that
+   * connection's idle wait, which the replay never made -- or the other way
+   * round.  Called on the configuration the cluster is built from.</p>
+   */
+  public static Configuration configure(Configuration conf) {
+    conf.setInt(
+        CommonConfigurationKeysPublic.IPC_CLIENT_CONNECTION_MAXIDLETIME_KEY,
+        NEVER_MS);
+    conf.setLong(HdfsClientConfigKeys.DFS_CLIENT_SOCKET_CACHE_EXPIRY_MSEC_KEY,
+        NEVER_MS);
+    return conf;
+  }
+
+  /**
+   * Every DataNode this run registered, in the order of the names it
+   * registered them by: THE order a per-node loop inside the window takes.
+   *
+   * <p>The cluster's own list is in start-up order, and which of those
+   * nodes plays which role is the cluster's choice -- a replication-1 block
+   * lands on a random node, an erasure-coded group's locations come out in
+   * a random order -- so a loop over it refreshes the ROLES in a different
+   * order from run to run, and a replay held to the recording's schedule
+   * waits for a node that is not next.  The names are the case's.</p>
+   */
+  public static List<DataNode> dataNodes() {
+    List<DataNode> nodes = new ArrayList<>(REGISTERED.keySet());
+    nodes.sort(Comparator.comparing(REGISTERED::get));
+    return nodes;
   }
 
   /**
@@ -111,7 +167,7 @@ public final class CausynthCluster {
     }
     CausynthMessagePropagation.registerNode(datanode.getDatanodeId(), NODE,
         "DATANODE", sourceId, dedupe(aliases).toArray());
-    REGISTERED.add(datanode);
+    REGISTERED.put(datanode, sourceId);
   }
 
   /**
@@ -124,7 +180,7 @@ public final class CausynthCluster {
     List<DataNode> nodes = cluster.getDataNodes();
     for (int index = 0; index < nodes.size(); index++) {
       DataNode node = nodes.get(index);
-      if (!REGISTERED.contains(node)) {
+      if (!REGISTERED.containsKey(node)) {
         registerDataNode(node, prefix + "/dn" + index);
       }
     }
