@@ -120,12 +120,9 @@ public class TestCausynthReplaceBlockProxyStaleKey {
         10 * 60 * 1000);
     conf.setLong(DFSConfigKeys.DFS_BLOCK_ACCESS_KEY_UPDATE_INTERVAL_KEY, 60);
     conf.setLong(DFSConfigKeys.DFS_BLOCK_ACCESS_TOKEN_LIFETIME_KEY, 1);
-    // No automatic heartbeat inside the recorded window: a refresh the
-    // workload did not ask for would close the rotation gap behind its back.
-    conf.setLong(DFSConfigKeys.DFS_HEARTBEAT_INTERVAL_KEY, 3600);
-    // ...but suppressed heartbeats make every DataNode look STALE after the
-    // default 30s, and placement then avoids them.  The native run is too
-    // quick to notice; the concolic replay is not.
+    // A concolic replay is slow, and one held to its schedule prefix can
+    // hold a heartbeat until its turn: placement must not read a slow node
+    // as a stale one.
     conf.setLong(DFSConfigKeys.DFS_NAMENODE_STALE_DATANODE_INTERVAL_KEY,
         TimeUnit.HOURS.toMillis(6));
     conf.setBoolean(
@@ -163,14 +160,7 @@ public class TestCausynthReplaceBlockProxyStaleKey {
       String blockPoolId = block.getBlockPoolId();
       NameNodeRpcServer namenode =
           (NameNodeRpcServer) cluster.getNameNodeRpc();
-      CausynthMessagePropagation.registerSourceAlias(master,
-          namenode.getClientRpcServer());
-      for (DataNode node : nodes) {
-        CausynthMessagePropagation.registerSourceAlias(
-            node.getBlockPoolTokenSecretManager().get(blockPoolId),
-            node.getDatanodeId());
-      }
-      CausynthMessagePropagation.startRecording();
+      CausynthCluster.startRecording();
 
       int initialKeyId = currentKeyId(master);
       long rotations = CausynthMessagePropagation.beginRequest(
@@ -367,24 +357,10 @@ public class TestCausynthReplaceBlockProxyStaleKey {
     }
   }
 
-  /** One key-refresh heartbeat, so the node can verify fresh block tokens. */
+  /** One key-refresh heartbeat: the one shared helper's (CausynthCluster). */
   private static void refreshKeysFromNameNode(DataNode datanode, String api)
       throws IOException {
-    BPOfferService service = datanode.getAllBpOs().get(0);
-    BPServiceActor actor = service.getBPServiceActors().get(0);
-    long request = CausynthMessagePropagation.beginRequest(
-        datanode.getDatanodeId(), api);
-    try {
-      HeartbeatResponse response = actor.sendHeartBeat(false);
-      DatanodeCommand[] commands = response.getCommands();
-      if (commands != null) {
-        for (DatanodeCommand command : commands) {
-          service.processCommandFromActor(command, actor);
-        }
-      }
-    } finally {
-      CausynthMessagePropagation.endRequest(request, api);
-    }
+    CausynthCluster.refreshKeysFromNameNode(datanode, api);
   }
 
   /** The private allKeys map; BlockTokenSecretManager has no test accessor. */
@@ -424,15 +400,12 @@ public class TestCausynthReplaceBlockProxyStaleKey {
 
   private static void registerSources(MiniDFSCluster cluster,
       DataNode proxy, DataNode target, DataNode spare) {
-    NameNodeRpcServer namenode = (NameNodeRpcServer) cluster.getNameNodeRpc();
-    CausynthMessagePropagation.registerSource(
-        namenode.getClientRpcServer(), "CLUSTER_NODE", "NAMENODE",
-        "hdfs-17967/nn0", 0);
-    CausynthMessagePropagation.registerSource(proxy.getDatanodeId(),
-        "CLUSTER_NODE", "DATANODE", "hdfs-17967/proxy-dn", 0);
-    CausynthMessagePropagation.registerSource(target.getDatanodeId(),
-        "CLUSTER_NODE", "DATANODE", "hdfs-17967/target-dn", 0);
-    CausynthMessagePropagation.registerSource(spare.getDatanodeId(),
-        "CLUSTER_NODE", "DATANODE", "hdfs-17967/spare-dn", 0);
+    // Every node, registered whole, before any traffic the recording
+    // depends on (CausynthCluster).
+    CausynthCluster.registerNameNode(cluster, 0, "hdfs-17967/nn0");
+    CausynthCluster.registerDataNode(proxy, "hdfs-17967/proxy-dn");
+    CausynthCluster.registerDataNode(target, "hdfs-17967/target-dn");
+    CausynthCluster.registerDataNode(spare, "hdfs-17967/spare-dn");
+    CausynthCluster.registerOtherDataNodes(cluster, "hdfs-17967");
   }
 }

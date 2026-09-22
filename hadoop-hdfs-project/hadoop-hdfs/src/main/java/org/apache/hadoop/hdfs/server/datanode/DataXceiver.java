@@ -226,7 +226,6 @@ class DataXceiver extends Receiver implements Runnable {
     Op op = null;
     Op firstOp = null;
 
-    CausynthMessagePropagation.setLocalOwner(datanode.getDatanodeId());
     try {
       synchronized(this) {
         xceiver = Thread.currentThread();
@@ -298,20 +297,16 @@ class DataXceiver extends Receiver implements Runnable {
           firstOp = op;
           incrReadWriteOpMetrics(op);
         }
-        // One op is one hop, and the message scope a SASL
-        // handshake opened ends with the op rather than with the
-        // handshake. // causynth-d3-lineage
+        // One op is one turn of this connection's loop, owned by this
+        // DataNode, and the message scope a SASL handshake opened ends with
+        // the op rather than with the handshake (GraphChecker).
         long causynthOp = CausynthMessagePropagation.beginTick(
-            datanode.getDatanodeId(), "DATA_XCEIVER");
+            datanode, "DATA_XCEIVER");
         try {
           processOp(op);
         } finally {
           CausynthMessagePropagation.endTick(causynthOp);
-          try {
-            CausynthMessagePropagation.endInbound();
-          } catch (RuntimeException scopeAlreadyEnded) {
-            // Ending twice is not a workload error.
-          }
+          CausynthMessagePropagation.endInbound();
         }
         ++opsProcessed;
       } while ((peer != null) &&
@@ -349,7 +344,6 @@ class DataXceiver extends Receiver implements Runnable {
         LOG.error(s, t);
       }
     } finally {
-      CausynthMessagePropagation.clearLocalOwner();
       collectThreadLocalStates();
       LOG.debug("{}:Number of active connections is: {}",
           datanode.getDisplayName(), datanode.getXceiverCount());
@@ -1239,26 +1233,8 @@ class DataXceiver extends Receiver implements Runnable {
         InputStream unbufProxyIn = NetUtils.getInputStream(proxySock);
         DataEncryptionKeyFactory keyFactory =
             datanode.getDataEncryptionKeyFactoryForBlock(block);
-        // The proxy hop is its own request.  Without a scope here the
-        // DataXceiver thread has only its synthetic ROLE.DATA_XCEIVER root,
-        // the SASL client region folds into it, and no session states the
-        // rows of the occurrence that PRODUCED the key the proxy has to
-        // resolve -- the recorded attach names the producer as
-        //   hdfs-17967/target-dn ROLE.DATA_XCEIVER {form: ROOT}
-        // and every path through the target came back UNATTESTED_ARM.
-        // Weaving DataXceiver instead was tried and is worse: run() then
-        // becomes the region root and swallows the anchored SASL
-        // occurrence.  // causynth-d3-lineage
-        IOStreamPair saslStreams;
-        long causynthProxy = CausynthMessagePropagation.beginRequest(
-            datanode.getDatanodeId(), "proxy-copy");
-        try {
-          saslStreams = datanode.saslClient.socketSend(proxySock,
-              unbufProxyOut, unbufProxyIn, keyFactory, blockToken,
-              proxySource);
-        } finally {
-          CausynthMessagePropagation.endRequest(causynthProxy, "proxy-copy");
-        }
+        IOStreamPair saslStreams = datanode.saslClient.socketSend(proxySock,
+            unbufProxyOut, unbufProxyIn, keyFactory, blockToken, proxySource);
         unbufProxyOut = saslStreams.out;
         unbufProxyIn = saslStreams.in;
         
