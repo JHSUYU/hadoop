@@ -233,7 +233,7 @@ public class TestCausynthReplaceBlockProxyStaleKey {
             "the recorded move must SUCCEED: the proxy still retains the"
                 + " target's key, and the failure is what a witness buys");
         GenericTestUtils.waitFor(
-            () -> target.getFSDataset().isValidBlock(block), 20, 20000);
+            () -> target.getFSDataset().isValidBlock(block), 20, CausynthCluster.WINDOW_WAIT_MS);
         assertTrue(target.getFSDataset().isValidBlock(block),
             "the target must receive the block through the proxy");
       } finally {
