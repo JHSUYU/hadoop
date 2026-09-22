@@ -226,6 +226,7 @@ class DataXceiver extends Receiver implements Runnable {
     Op op = null;
     Op firstOp = null;
 
+    CausynthMessagePropagation.setLocalOwner(datanode.getDatanodeId());
     try {
       synchronized(this) {
         xceiver = Thread.currentThread();
@@ -348,6 +349,7 @@ class DataXceiver extends Receiver implements Runnable {
         LOG.error(s, t);
       }
     } finally {
+      CausynthMessagePropagation.clearLocalOwner();
       collectThreadLocalStates();
       LOG.debug("{}:Number of active connections is: {}",
           datanode.getDisplayName(), datanode.getXceiverCount());
