@@ -569,26 +569,17 @@ class BPServiceActor implements Runnable {
             SlowDiskReports.create(dn.getDiskMetrics().getDiskOutliersStats()) :
             SlowDiskReports.EMPTY_REPORT;
 
-    long request = CausynthMessagePropagation.beginRequestIfRegistered(
-        dn.getDatanodeId(), "heartbeat");
-    HeartbeatResponse response;
-    try {
-      response = bpNamenode.sendHeartbeat(bpRegistration,
-          reports,
-          dn.getFSDataset().getCacheCapacity(),
-          dn.getFSDataset().getCacheUsed(),
-          dn.getXmitsInProgress(),
-          dn.getActiveTransferThreadCount(),
-          numFailedVolumes,
-          volumeFailureSummary,
-          requestBlockReportLease,
-          slowPeers,
-          slowDisks);
-    } finally {
-      if (request != 0L) {
-        CausynthMessagePropagation.endRequest(request, "heartbeat");
-      }
-    }
+    HeartbeatResponse response = bpNamenode.sendHeartbeat(bpRegistration,
+        reports,
+        dn.getFSDataset().getCacheCapacity(),
+        dn.getFSDataset().getCacheUsed(),
+        dn.getXmitsInProgress(),
+        dn.getActiveTransferThreadCount(),
+        numFailedVolumes,
+        volumeFailureSummary,
+        requestBlockReportLease,
+        slowPeers,
+        slowDisks);
 
     scheduler.updateLastHeartbeatResponseTime(monotonicNow());
 
@@ -694,10 +685,10 @@ class BPServiceActor implements Runnable {
     // Now loop for a long time....
     //
     while (shouldRun()) {
-      // One offer-service turn is one lineage root: nothing
-      // requested it. // causynth-d3-lineage
+      // One offer-service turn is one root, owned by this DataNode: a tick,
+      // the special case of a service-loop turn (GraphChecker).
       long causynthTick = CausynthMessagePropagation.beginTick(
-          dn.getDatanodeId(), "BP_SERVICE_ACTOR");
+          dn, "BP_SERVICE_ACTOR");
       try {
         DataNodeFaultInjector.get().startOfferService();
         final long startTime = scheduler.monotonicNow();
@@ -1092,7 +1083,14 @@ class BPServiceActor implements Runnable {
           if (lifelineNamenode == null) {
             lifelineNamenode = dn.connectToLifelineNN(lifelineNnAddr);
           }
-          sendLifelineIfDue();
+          // One lifeline turn is one root of this DataNode's (GraphChecker).
+          long causynthTick = CausynthMessagePropagation.beginTick(
+              dn, "BP_LIFELINE_SENDER");
+          try {
+            sendLifelineIfDue();
+          } finally {
+            CausynthMessagePropagation.endTick(causynthTick);
+          }
           Thread.sleep(scheduler.getLifelineWaitTime());
         } catch (InterruptedException e) {
           Thread.currentThread().interrupt();
@@ -1498,25 +1496,11 @@ class BPServiceActor implements Runnable {
       return true;
     }
 
-    /**
-     * The scope a command was ENQUEUED in, carried to the command-processing
-     * thread that later runs it: that thread inherits none of it, so a
-     * KeyUpdateCommand's addKeys -- and the declared block-key ports it
-     * delivers -- ran on a thread naming no node.  That is this case's
-     * 59 BLOCKING REPLAY LINEAGE_LOST rows, "a declared port arrived on a
-     * thread naming no node, so the delivery has no consumer address".
-     * hdfs-17899 bug1 carries this and its candidate is not withheld.
-     * // causynth-d3-lineage
-     */
-    private Runnable traced(Runnable command) {
-      return CausynthMessagePropagation.async(command);
-    }
-
     void enqueue(DatanodeCommand cmd) throws InterruptedException {
       if (cmd == null) {
         return;
       }
-      queue.put(traced(() -> processCommand(new DatanodeCommand[]{cmd})));
+      queue.put(() -> processCommand(new DatanodeCommand[]{cmd}));
       dn.getMetrics().incrActorCmdQueueLength(1);
     }
 
@@ -1530,7 +1514,7 @@ class BPServiceActor implements Runnable {
         return;
       }
       ((LinkedBlockingDeque<Runnable>) queue).putFirst(
-          traced(() -> processCommand(new DatanodeCommand[]{cmd})));
+          () -> processCommand(new DatanodeCommand[]{cmd}));
 
       LOG.info("Enqueue command: {} to the head of queue", cmd);
       dn.getMetrics().incrActorCmdQueueLength(1);
@@ -1540,14 +1524,14 @@ class BPServiceActor implements Runnable {
       if (cmds == null) {
         return;
       }
-      queue.put(traced(() -> processCommand(
-          cmds.toArray(new DatanodeCommand[cmds.size()]))));
+      queue.put(() -> processCommand(
+          cmds.toArray(new DatanodeCommand[cmds.size()])));
       dn.getMetrics().incrActorCmdQueueLength(1);
     }
 
     void enqueue(DatanodeCommand[] cmds) throws InterruptedException {
       if (cmds.length != 0) {
-        queue.put(traced(() -> processCommand(cmds)));
+        queue.put(() -> processCommand(cmds));
         dn.getMetrics().incrActorCmdQueueLength(1);
       }
     }

@@ -85,6 +85,7 @@ import org.apache.hadoop.hdfs.protocol.LocatedBlocks;
 import org.apache.hadoop.hdfs.protocol.HdfsConstants.StoragePolicySatisfierMode;
 import org.apache.hadoop.hdfs.server.balancer.NameNodeConnector;
 import org.apache.hadoop.hdfs.server.common.HdfsServerConstants;
+import org.apache.hadoop.hdfs.server.datanode.CausynthCluster;
 import org.apache.hadoop.hdfs.server.datanode.DataNode;
 import org.apache.hadoop.hdfs.server.datanode.DataNodeTestUtils;
 import org.apache.hadoop.hdfs.server.datanode.InternalDataNodeTestUtils;
@@ -1098,7 +1099,6 @@ public class TestExternalStoragePolicySatisfier {
         10 * 60 * 1000);
     config.setLong(DFSConfigKeys.DFS_BLOCK_ACCESS_KEY_UPDATE_INTERVAL_KEY, 60);
     config.setLong(DFSConfigKeys.DFS_BLOCK_ACCESS_TOKEN_LIFETIME_KEY, 1);
-    config.setLong(DFSConfigKeys.DFS_HEARTBEAT_INTERVAL_KEY, 3600);
     config.setInt(
         DFSConfigKeys.DFS_STORAGE_POLICY_SATISFIER_MOVE_TASK_MAX_RETRY_ATTEMPTS_KEY,
         0);
@@ -1137,13 +1137,10 @@ public class TestExternalStoragePolicySatisfier {
 
       BlockTokenSecretManager master = hdfsCluster.getNamesystem()
           .getBlockManager().getBlockTokenSecretManager();
-      CausynthMessagePropagation.registerSourceAlias(master,
-          ((NameNodeRpcServer) hdfsCluster.getNameNodeRpc())
-              .getClientRpcServer());
 
       dfs.setStoragePolicy(new Path(FILE), ONE_SSD);
       dfs.satisfyStoragePolicy(new Path(FILE));
-      CausynthMessagePropagation.startRecording();
+      CausynthCluster.startRecording();
 
       // The SPS refreshes BEFORE the rotations, so the key it carries into
       // the move is two serials behind the master's current one.  It used to
@@ -1295,55 +1292,16 @@ public class TestExternalStoragePolicySatisfier {
   }
 
   private void registerCausynthSources(DataNode target) {
-    // Disabling the DAEMON heartbeat here was tried on 2026-09-22 and
-    // REVERTED: unlike hdfs-17967 path A, whose every refresh is driven
-    // explicitly, THIS workload leans on the daemon to deliver the pinned
-    // keys, and without it the move dies in the workload itself --
-    //   InvalidEncryptionKeyException: required block key (keyID=1386616075)
-    //   doesn't exist. Current key: 119979
-    // where 1386616075 is a constructor-time, pre-pin SecureRandom id.  The
-    // BLOCKING OCCURRENCE_ADDRESS_SHARED over REGION.16ba41cf remains OPEN,
-    // and both ways of closing it are ruled out BY MEASUREMENT here:
-    //
-    //   setHeartbeatsDisabledForTests -- the move dies inside the workload,
-    //     InvalidEncryptionKeyException keyID=1386616075 (a constructor-time
-    //     pre-pin SecureRandom id), because unlike hdfs-17967 path A, whose
-    //     every refresh is driven explicitly, THIS workload leans on the
-    //     daemon to deliver the pinned keys;
-    //   pauseIBR -- which DID close the identical row on path A -- hangs the
-    //     test to its timeout, because path A asserts on
-    //     mirror.getFSDataset() locally while the SPS waits for the NameNode
-    //     to accept the move, and the NameNode learns of the new replica
-    //     through exactly that incremental report.
-    //
-    // So the two stray DatanodeRegistration conversions cannot be removed
-    // from this window; they have to be ATTRIBUTED instead, which is the
-    // source-anchor handover -- and that one is measured worse on path A
-    // (18 REPLAY TOPOLOGY_DIVERGENCE rows).  Left open deliberately.
-    NameNodeRpcServer namenode =
-        (NameNodeRpcServer) hdfsCluster.getNameNodeRpc();
-    CausynthMessagePropagation.registerSource(
-        namenode.getClientRpcServer(), "CLUSTER_NODE", "NAMENODE",
-        "hdfs-17899/nn0", 0);
+    // Every node, registered whole, before any traffic the recording depends
+    // on (CausynthCluster); the SPS and its key manager are this case's own.
+    CausynthCluster.registerNameNode(hdfsCluster, 0, "hdfs-17899/nn0");
+    CausynthCluster.registerDataNode(target, "hdfs-17899/target-dn");
+    CausynthCluster.registerOtherDataNodes(hdfsCluster, "hdfs-17899");
     CausynthMessagePropagation.registerSource(
         nnc, "EXTERNAL_APP", "SPS", "hdfs-17899/sps", 0);
-    CausynthMessagePropagation.registerSource(
-        target.getDatanodeId(), "CLUSTER_NODE", "DATANODE",
-        "hdfs-17899/target-dn", 0);
     CausynthMessagePropagation.registerSourceAlias(nnc.getKeyManager(), nnc);
-    String blockPoolId = hdfsCluster.getNamesystem().getBlockPoolId();
-    CausynthMessagePropagation.registerSourceAlias(
-        target.getBlockPoolTokenSecretManager().get(blockPoolId),
-        target.getDatanodeId());
-    // Registering the OTHER DataNodes was tried on 2026-09-22 and REVERTED:
-    // it does not clear the BLOCKING OCCURRENCE_ADDRESS_SHARED over
-    // REGION.16ba41cf (the colliding activations stay on
-    // workload/unregistered) and it brought back four ASSIGNMENT_UNPLANTED
-    // rows, taking the run from 59 BLOCKING gaps to 64.  Unlike hdfs-17899
-    // bug1 and the hdfs-17967 paths, this workload's extra DataNodes carry
-    // storage types the case is about, and naming them changes what the plan
-    // addresses.
   }
+
 
   /**
    * Tests that moving block storage with in the same datanode and remote node.
