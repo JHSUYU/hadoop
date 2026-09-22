@@ -244,8 +244,26 @@ public class TestCausynthWriteBlockMirrorStaleKey {
       // head -> mirror.
       DataNode head = cluster.getDataNodes().get(0);
       DataNode mirror = cluster.getDataNodes().get(1);
+      // Each refresh under its OWN request api.  Both DataNodes must take the
+      // rotated keys so block tokens verify, but two heartbeats named alike
+      // give the NameNode two key-conversion activations that nothing
+      // distinguishes -- same node, same (lost) context, same execution index
+      // -- and one address then holds two occurrences
+      // (BLOCKING OCCURRENCE_ADDRESS_SHARED), which also lets one consumer be
+      // paired with two producers across sessions (TOPOLOGY_DIVERGENCE).
+      // Both refreshes share one request api, and that is NOT an oversight.
+      // Naming them apart ("heartbeat-head"/"heartbeat-mirror") is the
+      // obvious fix for the NameNode's two indistinguishable key-conversion
+      // activations, and it was tried: it changed the request structure of
+      // the recorded window, the anchor chain shifted with it, and the replay
+      // stopped reaching the target altogether (REPLAY exit 2).  The same
+      // happened when 17899's fault marker was deleted from ipc/Client.  The
+      // anchor chain is fragile to ANY change in the shape of the recorded
+      // requests, which is the engine-level defect this case is left on;
+      // until that is fixed, the workload must not be restructured to work
+      // around identity problems.
       for (DataNode node : cluster.getDataNodes()) {
-        refreshKeysFromNameNode(node);
+        refreshKeysFromNameNode(node, "heartbeat");
       }
       BlockTokenSecretManager headKeys =
           head.getBlockPoolTokenSecretManager().get(blockPoolId);
@@ -363,12 +381,12 @@ public class TestCausynthWriteBlockMirrorStaleKey {
   }
 
   /** One key-refresh heartbeat, so the node can verify fresh block tokens. */
-  private static void refreshKeysFromNameNode(DataNode datanode)
+  private static void refreshKeysFromNameNode(DataNode datanode, String api)
       throws IOException {
     BPOfferService service = datanode.getAllBpOs().get(0);
     BPServiceActor actor = service.getBPServiceActors().get(0);
     long request = CausynthMessagePropagation.beginRequest(
-        datanode.getDatanodeId(), "heartbeat");
+        datanode.getDatanodeId(), api);
     try {
       HeartbeatResponse response = actor.sendHeartBeat(false);
       DatanodeCommand[] commands = response.getCommands();
@@ -378,7 +396,7 @@ public class TestCausynthWriteBlockMirrorStaleKey {
         }
       }
     } finally {
-      CausynthMessagePropagation.endRequest(request, "heartbeat");
+      CausynthMessagePropagation.endRequest(request, api);
     }
   }
 

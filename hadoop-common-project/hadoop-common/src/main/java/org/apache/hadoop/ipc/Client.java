@@ -1243,13 +1243,20 @@ public class Client implements AutoCloseable {
               CausynthMessagePropagation.IPC, correlationId,
               Integer.toString(call.retry), "REQUEST", Client.this,
               call.causynthScope);
-      // No RPC fault marker in this case.  It belongs to HDFS-17899, whose
-      // mechanism is a key-refresh RPC that fails; HDFS-17967's is a
-      // clock-driven expiry, and an extra symbolic boolean here only gives
-      // the composer a MARKER it can flip without deciding the recording --
-      // which is exactly what it did: "the formula shows MARKER_FLIPPED, and
-      // it is satisfiable with every declared root at its recorded value
-      // too, so the recording does not decide the arm".
+      // The marker stays, and its removal is recorded as a MISTAKE.  It is
+      // HDFS-17899's mechanism, not this case's, and it does give the
+      // composer a MARKER_FLIPPED that decides nothing -- but deleting it
+      // changed this method's bytecode and with it the identity of the
+      // client's own SASL exchange, and the replay then stopped reaching the
+      // target at all (REPLAY exit 2).  Campaign 6, with the marker present,
+      // composed a claim; campaigns 7 and 8 without it did not.  The
+      // MARKER_FLIPPED route is dealt with in the case declarations instead,
+      // where it costs no instrumentation change.
+      boolean hadoopIpcRequestFails =
+          Debug.makeSymbolicBoolean("hadoopIpcRequestFails");
+      if (causynth.active() && hadoopIpcRequestFails) {
+        throw new IOException("symbolic Hadoop IPC transport failure");
+      }
       RpcRequestHeaderProto.Builder header = ProtoUtil.makeRpcRequestHeader(
           call.rpcKind, OperationProto.RPC_FINAL_PACKET, call.id, call.retry,
           clientId, call.alignmentContext).toBuilder();
