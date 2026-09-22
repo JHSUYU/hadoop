@@ -97,12 +97,9 @@ public class TestCausynthWriteBlockMirrorStaleKey {
         10 * 60 * 1000);
     conf.setLong(DFSConfigKeys.DFS_BLOCK_ACCESS_KEY_UPDATE_INTERVAL_KEY, 60);
     conf.setLong(DFSConfigKeys.DFS_BLOCK_ACCESS_TOKEN_LIFETIME_KEY, 1);
-    // No automatic heartbeat inside the recorded window: a refresh the
-    // workload did not ask for would close the rotation gap behind its back.
-    conf.setLong(DFSConfigKeys.DFS_HEARTBEAT_INTERVAL_KEY, 3600);
-    // ...but suppressed heartbeats make every DataNode look STALE after the
-    // default 30s and placement then avoids them.  The native run is too
-    // quick to notice; the concolic replay is not.
+    // A concolic replay is slow, and one held to its schedule prefix can
+    // hold a heartbeat until its turn: placement must not read a slow node
+    // as a stale one.
     conf.setLong(DFSConfigKeys.DFS_NAMENODE_STALE_DATANODE_INTERVAL_KEY,
         TimeUnit.HOURS.toMillis(6));
     conf.setBoolean(
@@ -132,39 +129,6 @@ public class TestCausynthWriteBlockMirrorStaleKey {
       DataNode mirror = rest.get(1);
 
       pinBlockKeys(cluster);
-      // No DAEMON heartbeat may fire inside the recorded window.  The
-      // interval is already 3600 s, but a node still has stray turns left
-      // over from start-up, and their NameNode-side registration
-      // conversions land on an IPC handler with no inbound context: two of
-      // them then share ONE address -- a BLOCKING OCCURRENCE_ADDRESS_SHARED
-      // over REGION.16ba41cf that withholds the candidate.  It is timing
-      // dependent (the recorded root calls differ every run), which is why
-      // it comes and goes.  Every heartbeat this case needs is driven
-      // explicitly below, so the daemon has nothing left to do.
-      //
-      // Handing the node its source anchor instead -- what hdfs-11741 does
-      // -- was tried and is worse HERE: it turns those stray turns into
-      // ANCHORED offer-service occurrences that a focused replay then has
-      // to reproduce, and path A came back with 18 REPLAY
-      // TOPOLOGY_DIVERGENCE rows.  11741 tolerates that because its
-      // heartbeats fire once a second and the corpus is dense with them;
-      // this workload has a handful of strays, which is the worst case.
-      for (DataNode node : cluster.getDataNodes()) {
-        DataNodeTestUtils.setHeartbeatsDisabledForTests(node, true);
-        // And no incremental block report either.  When the transfer lands,
-        // the head and the mirror each call notifyNamenodeReceivedBlock,
-        // which sends blockReceivedAndDeleted(registration, ...) on the
-        // block-pool actor thread with no request scope open.  The
-        // NameNode then converts that DatanodeRegistration on an IPC
-        // handler with a LOST context, and the TWO of them -- one per node
-        // -- share ONE address: the BLOCKING OCCURRENCE_ADDRESS_SHARED over
-        // REGION.16ba41cf that has withheld this candidate through three
-        // earlier attempts (source anchor, which made it 18 divergences;
-        // daemon heartbeats off, which changed nothing).  The workload's
-        // own assertion reads mirror.getFSDataset() directly, so nothing
-        // here needs the NameNode to learn about the new replica.
-        DataNodeTestUtils.pauseIBR(node);
-      }
       registerSources(cluster, source, head, mirror);
 
       BlockTokenSecretManager master = cluster.getNamesystem()
@@ -172,14 +136,7 @@ public class TestCausynthWriteBlockMirrorStaleKey {
       String blockPoolId = block.getBlockPoolId();
       NameNodeRpcServer namenode =
           (NameNodeRpcServer) cluster.getNameNodeRpc();
-      CausynthMessagePropagation.registerSourceAlias(master,
-          namenode.getClientRpcServer());
-      for (DataNode node : nodes) {
-        CausynthMessagePropagation.registerSourceAlias(
-            node.getBlockPoolTokenSecretManager().get(blockPoolId),
-            node.getDatanodeId());
-      }
-      CausynthMessagePropagation.startRecording();
+      CausynthCluster.startRecording();
 
       // NO CLIENT IN THE RECORDED WINDOW.  An earlier version drove this with
       // a client write, and the client's own SASL exchange dragged its whole
@@ -314,24 +271,10 @@ public class TestCausynthWriteBlockMirrorStaleKey {
     }
   }
 
-  /** One key-refresh heartbeat, so the node can verify fresh block tokens. */
+  /** One key-refresh heartbeat: the one shared helper's (CausynthCluster). */
   private static void refreshKeysFromNameNode(DataNode datanode, String api)
       throws IOException {
-    BPOfferService service = datanode.getAllBpOs().get(0);
-    BPServiceActor actor = service.getBPServiceActors().get(0);
-    long request = CausynthMessagePropagation.beginRequest(
-        datanode.getDatanodeId(), api);
-    try {
-      HeartbeatResponse response = actor.sendHeartBeat(false);
-      DatanodeCommand[] commands = response.getCommands();
-      if (commands != null) {
-        for (DatanodeCommand command : commands) {
-          service.processCommandFromActor(command, actor);
-        }
-      }
-    } finally {
-      CausynthMessagePropagation.endRequest(request, api);
-    }
+    CausynthCluster.refreshKeysFromNameNode(datanode, api);
   }
 
   /** The private allKeys map; BlockTokenSecretManager has no test accessor. */
@@ -371,15 +314,12 @@ public class TestCausynthWriteBlockMirrorStaleKey {
 
   private static void registerSources(MiniDFSCluster cluster,
       DataNode source, DataNode head, DataNode mirror) {
-    NameNodeRpcServer namenode = (NameNodeRpcServer) cluster.getNameNodeRpc();
-    CausynthMessagePropagation.registerSource(
-        namenode.getClientRpcServer(), "CLUSTER_NODE", "NAMENODE",
-        "hdfs-17967/nn0", 0);
-    CausynthMessagePropagation.registerSource(source.getDatanodeId(),
-        "CLUSTER_NODE", "DATANODE", "hdfs-17967/source-dn", 0);
-    CausynthMessagePropagation.registerSource(head.getDatanodeId(),
-        "CLUSTER_NODE", "DATANODE", "hdfs-17967/head-dn", 0);
-    CausynthMessagePropagation.registerSource(mirror.getDatanodeId(),
-        "CLUSTER_NODE", "DATANODE", "hdfs-17967/mirror-dn", 0);
+    // Every node, registered whole, before any traffic the recording
+    // depends on (CausynthCluster).
+    CausynthCluster.registerNameNode(cluster, 0, "hdfs-17967/nn0");
+    CausynthCluster.registerDataNode(source, "hdfs-17967/source-dn");
+    CausynthCluster.registerDataNode(head, "hdfs-17967/head-dn");
+    CausynthCluster.registerDataNode(mirror, "hdfs-17967/mirror-dn");
+    CausynthCluster.registerOtherDataNodes(cluster, "hdfs-17967");
   }
 }
