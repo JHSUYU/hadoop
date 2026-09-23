@@ -145,6 +145,8 @@ public class TestCausynthWriteBlockMirrorStaleKey {
       String blockPoolId = block.getBlockPoolId();
       NameNodeRpcServer namenode =
           (NameNodeRpcServer) cluster.getNameNodeRpc();
+      // Every heartbeat of the window is the workload's (CausynthCluster).
+      CausynthCluster.driveHeartbeats();
       CausynthCluster.startRecording();
 
       // NO CLIENT IN THE RECORDED WINDOW.  An earlier version drove this with
