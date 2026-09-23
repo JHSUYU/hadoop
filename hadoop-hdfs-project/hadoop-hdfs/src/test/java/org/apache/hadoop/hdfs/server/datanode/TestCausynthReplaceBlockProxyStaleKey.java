@@ -174,6 +174,8 @@ public class TestCausynthReplaceBlockProxyStaleKey {
       String blockPoolId = block.getBlockPoolId();
       NameNodeRpcServer namenode =
           (NameNodeRpcServer) cluster.getNameNodeRpc();
+      // Every heartbeat of the window is the workload's (CausynthCluster).
+      CausynthCluster.driveHeartbeats();
       CausynthCluster.startRecording();
 
       int initialKeyId = currentKeyId(master);
