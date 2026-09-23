@@ -52,7 +52,11 @@ import org.junit.jupiter.api.Timeout;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-/** Real NN -> source DN -> target DN stale-key workload for HDFS-17899. */
+/**
+ * HDFS-17899 bug3, NameNode -> source DataNode -> target DataNode: the source
+ * replicates a block to a target whose key delivery failed, and the target
+ * cannot resolve the encryption key the source presents.
+ */
 public class TestCausynthDataTransferRpcFailure {
   /** Block-key serial number pinned by {@link #pinBlockKeys}. */
   private static final int SERIAL_NO = Integer.MAX_VALUE / 17899 + 2;
@@ -104,11 +108,10 @@ public class TestCausynthDataTransferRpcFailure {
       CausynthCluster.startRecording();
 
       int initialKeyId = currentKeyId(master);
-      // Two rotations, driven explicitly as the NameNode's own request.  An
-      // explicit rotation marks no DataNode for a key update -- the key
-      // updater's does -- so with daemon heartbeats running as in
-      // production only the node this workload marks takes the new keys,
-      // and the source keeps the stale one the case is about.
+      // THE KEY FLOWS THE RPC'S WAY (experiments/hadoop/lib/README.md).  The
+      // master rotates twice, as the NameNode's own request; an explicit
+      // rotation marks no DataNode for a key update, so the workload marks
+      // the two it drives.
       long rotations = CausynthMessagePropagation.beginRequest(
           ((NameNodeRpcServer) cluster.getNameNodeRpc()).getClientRpcServer(),
           "rotate-block-keys");
@@ -129,27 +132,42 @@ public class TestCausynthDataTransferRpcFailure {
           () -> currentKeyId(master) == initialKeyId + 2,
           "the recorded window must rotate the master twice");
       int currentKeyId = currentKeyId(master);
-      cluster.getNamesystem().getBlockManager().getDatanodeManager()
-          .getDatanode(target.getDatanodeId()).setNeedKeyUpdate(true);
+      for (DataNode node : new DataNode[]{target, source}) {
+        cluster.getNamesystem().getBlockManager().getDatanodeManager()
+            .getDatanode(node.getDatanodeId()).setNeedKeyUpdate(true);
+      }
 
+      // The verifier first, then the consumer: each takes the master's new
+      // keys over ITS OWN heartbeat, one each, the KeyUpdateCommand in the
+      // answer.  The target's is the delivery a witness fails -- its
+      // request never reaching the NameNode, or the NameNode's answer lost
+      // after it cleared the node's key-update mark -- and nothing else in
+      // the window delivers the key again.
       BlockTokenSecretManager targetKeys = target
+          .getBlockPoolTokenSecretManager().get(block.getBlockPoolId());
+      BlockTokenSecretManager sourceKeys = source
           .getBlockPoolTokenSecretManager().get(block.getBlockPoolId());
       if (refreshKeysFromNameNode(target)) {
         GenericTestUtils.waitFor(
-            () -> currentKeyId(targetKeys) == currentKeyId, 100, CausynthCluster.WINDOW_WAIT_MS);
+            () -> currentKeyId(targetKeys) == currentKeyId, 100,
+            CausynthCluster.WINDOW_WAIT_MS);
       }
+      if (refreshKeysFromNameNode(source)) {
+        GenericTestUtils.waitFor(
+            () -> currentKeyId(sourceKeys) == currentKeyId, 100,
+            CausynthCluster.WINDOW_WAIT_MS);
+      }
+      // The source signs the transfer's encryption key with the master's
+      // CURRENT key, which the target holds only because its own
+      // heartbeat delivered it.
+      CausynthCluster.recordingPrecondition(
+          () -> currentKeyId(sourceKeys) == currentKeyId,
+          "the source must present the master's current key");
+      CausynthCluster.recordingPrecondition(
+          () -> targetKeys.hasKey(currentKeyId),
+          "the target must hold the key the source presents, or the"
+              + " recording is already the failure");
 
-      // The SOURCE is deliberately NOT refreshed.  Refreshing it here gave
-      // the recording a ZERO ROTATION GAP -- the key it then put on the wire
-      // was the master's current serial -- and with no gap no clock move can
-      // make that key expire, so every composed path asserted a miss the
-      // recording never had and all 63 were unsatisfiable with every root
-      // free (PATH_SELF_CONTRADICTORY).  The two cases that pass record a
-      // gap: hdfs-17897 puts 119992 on the wire against a current 119994,
-      // and hdfs-11741 likewise.  Left unrefreshed the source keeps its
-      // pinned currentKey, two rotations behind the master, which is the
-      // same shape -- and it is also what this case is ABOUT, since the
-      // source's refresh is the RPC whose failure leaves the key stale.
       long request = CausynthMessagePropagation.beginRequest(
           source.getDatanodeId(), "replicate-block");
       try {
@@ -173,8 +191,7 @@ public class TestCausynthDataTransferRpcFailure {
    * this the replay groups of one campaign mint unrelated ids.  setSerialNo
    * only moves the counter, so the two constructor-time keys keep their
    * random ids; two rotations retire them: the first mints SERIAL_NO + 1 as
-   * nextKey, the second makes it currentKey (the stale key of this workload)
-   * and mints SERIAL_NO + 2.  DataNodes mint nothing themselves (they only
+   * nextKey, the second makes it currentKey and mints SERIAL_NO + 2.  DataNodes mint nothing themselves (they only
    * addKeys what the NameNode exports), so delivering the master's export
    * in-process here is the same state a KeyUpdateCommand delivers; it stays
    * out of the trace because nothing is recorded yet.  The recorded window's
