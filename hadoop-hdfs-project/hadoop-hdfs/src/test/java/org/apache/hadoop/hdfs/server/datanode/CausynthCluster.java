@@ -26,6 +26,7 @@ import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
+import java.util.function.BooleanSupplier;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.CommonConfigurationKeysPublic;
@@ -42,6 +43,8 @@ import org.apache.hadoop.hdfs.server.namenode.NameNodeRpcServer;
 import org.apache.hadoop.hdfs.server.protocol.DatanodeCommand;
 import org.apache.hadoop.hdfs.server.protocol.HeartbeatResponse;
 import org.apache.hadoop.ipc.CausynthMessagePropagation;
+
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * THE registration helper every GraphChecker workload uses: one node, one
@@ -294,6 +297,29 @@ public final class CausynthCluster {
   /** Opens the recorded window: the one recording boundary. */
   public static void startRecording() {
     CausynthMessagePropagation.startRecording();
+  }
+
+  /**
+   * A check the workload makes inside its window of the RECORDING's world:
+   * asserted in the recording and in a native run, and not at all in a
+   * concolic replay.
+   *
+   * <p>A replay runs a world the engine chose -- a clock moved, a branch
+   * flipped -- and the state a witness exists to change is exactly what such
+   * a check states: the key a node must still retain, the rotation gap that
+   * must still be open.  Asserted in a replay, it ends the witness before the
+   * workload reaches its anchor: hdfs-17967 path B's "the proxy must still
+   * RETAIN" check killed all 22 admitted replays that way.  The condition is
+   * a supplier, so a replay does not even read the state.  Only reads belong
+   * in it: a call that acts on the system -- mints or presents a key,
+   * refreshes, sends -- is recorded behaviour, and stays in the workload in
+   * every run with only its result checked here.</p>
+   */
+  public static void recordingPrecondition(BooleanSupplier holds,
+      String message) {
+    if (!CausynthMessagePropagation.replaying()) {
+      assertTrue(holds.getAsBoolean(), message);
+    }
   }
 
   /** A NameNode RPC server the class keeps package-private, or null. */
