@@ -1243,28 +1243,10 @@ public class Client implements AutoCloseable {
               CausynthMessagePropagation.IPC, correlationId,
               Integer.toString(call.retry), "REQUEST", Client.this,
               call.causynthScope);
-      // The symbolized RPC failure, and it STAYS.  HDFS-17967 is the same
-      // family as HDFS-17899 -- the upstream fix branch is literally
-      // HDFS-17899-followup-invalid-encryption-key -- and a key-refresh RPC
-      // that fails is what leaves a party holding a key its peer can no
-      // longer resolve.  Removing it is exactly the root the case needs.
-      //
-      // It WAS removed on 2026-09-22, blamed for a
-      // FORMULA_SAT_AT_RECORDED_VALUATION / MARKER_FLIPPED blocker on path
-      // A.  That was a misdiagnosis: the identical blocker appeared with the
-      // marker gone, because ClaimPolicy#mechanism reports MARKER_FLIPPED
-      // for ANY declared root moved inside its domain and the one moving was
-      // HDFS.BLOCK_KEY.SERIAL_NO.  The real cause was an unattested producer
-      // occurrence on the relay hop, fixed in DataXceiver.
-      //
-      // Minted on every path through this method, not only when the outbound
-      // context happens to be active: Java's && short-circuits, so a replay
-      // reaching the send with no active context materialized no marker at
-      // all and the MARKER_FLIPPED witness could never be asked for.  The
-      // THROW still needs an active context; only the mint is unconditional.
-      boolean hadoopIpcRequestFails =
-          Debug.makeSymbolicBoolean("hadoopIpcRequestFails");
-      if (causynth.active() && hadoopIpcRequestFails) {
+      // The door's fault point: minted unconditionally, false is the
+      // recorded polarity, true is the transport's failure and the request
+      // does not leave.
+      if (Debug.makeSymbolicBoolean("FAULT:HADOOP_IPC:REQUEST")) {
         throw new IOException("symbolic Hadoop IPC transport failure");
       }
       RpcRequestHeaderProto.Builder header = ProtoUtil.makeRpcRequestHeader(
