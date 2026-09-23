@@ -1149,6 +1149,8 @@ public class TestExternalStoragePolicySatisfier {
 
       dfs.setStoragePolicy(new Path(FILE), ONE_SSD);
       dfs.satisfyStoragePolicy(new Path(FILE));
+      // Every heartbeat of the window is the workload's (CausynthCluster).
+      CausynthCluster.driveHeartbeats();
       CausynthCluster.startRecording();
 
       // THE KEY FLOWS THE RPC'S WAY (experiments/hadoop/lib/README.md).
@@ -1212,7 +1214,6 @@ public class TestExternalStoragePolicySatisfier {
           nnc, "satisfy-storage-policy");
       try {
         startExternalSps();
-        hdfsCluster.triggerHeartbeats();
         DFSTestUtil.waitExpectedStorageType(
             FILE, StorageType.SSD, 1, 30000, dfs);
       } finally {
