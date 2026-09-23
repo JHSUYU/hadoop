@@ -96,7 +96,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  *
  * <p>Nothing about the defect is given up.  The mover here IS a real
  * {@link KeyManager}: it takes its keys from the NameNode over the recorded
- * RPC (where the {@code hadoopIpcRequestFails} marker lives), caches its
+ * RPC (where the {@code FAULT:HADOOP_IPC:REQUEST} fault point lives), caches its
  * encryption key in {@link KeyManager#newDataEncryptionKey()}, and signs the
  * move's access token with {@link KeyManager#getAccessToken}, exactly as
  * {@code Dispatcher.PendingMove.dispatch} does.  What is left out is the
