@@ -70,17 +70,16 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * {@code writeBlock} gives the whole write up instead of clearing the cached
  * key and retrying once, which is what PR 8698 adds.</p>
  *
- * <p>THE RECORDING MUST LEAVE A ROTATION GAP.  Neither DataNode is refreshed
- * inside the recorded window, so both keep the pinned pair while the master
- * moves two serials ahead.  The recording stays HEALTHY -- the mirror still
- * holds the key the head presents, because a DataNode retains its older keys
- * until they expire -- and that expiry is exactly what a witness has to buy
- * with a clock move.  Refreshing either node here would put the master's
- * CURRENT serial on the wire, and with a zero gap no clock assignment can
- * make it expire: on hdfs-17899 that left every composed path either
- * self-contradictory or satisfied at the recorded valuation, and no witness.
- * Which of the two nodes the NameNode picks as the head does not matter
- * precisely because neither is refreshed.</p>
+ * <p>THE KEY FLOWS THE RPC'S WAY (experiments/hadoop/lib/README.md).  The
+ * master rotates twice inside the window, and every DataNode takes the new
+ * keys over ONE heartbeat of its own -- the NameNode answers with the
+ * KeyUpdateCommand.  The head then derives the key it presents to the mirror
+ * from its CURRENT key, the master's newest, and the mirror verifies it with
+ * the keys its own heartbeat delivered: the recording is healthy.  Lose the
+ * mirror's heartbeat answer (the NameNode has already cleared its
+ * needKeyUpdate) or its request, and the mirror holds only the pinned pair
+ * while the head presents a serial two ahead: ERROR_UNKNOWN_KEY at the
+ * annotated site.  No key expires; the clocks stay at the recording.</p>
  */
 public class TestCausynthWriteBlockMirrorStaleKey {
   /** Block-key serial number pinned by {@link #pinBlockKeys}. */
@@ -179,11 +178,8 @@ public class TestCausynthWriteBlockMirrorStaleKey {
             .getDatanode(node.getDatanodeId()).setNeedKeyUpdate(true);
       }
 
-      // Only the HEAD is skewed: it derives the key it presents to the mirror
-      // from its current key, and the mirror still RETAINS that key, so the
-      // recording is healthy and a witness has to move the clock past its
-      // expiry.  The mirror stays current, so the two are not symmetric.
-      // In the order of the nodes' names, not the cluster's.
+      // Every DataNode takes the new keys over one heartbeat of its own, in
+      // the order of the nodes' names, not the cluster's.
       for (DataNode node : CausynthCluster.dataNodes()) {
         refreshKeysFromNameNode(node, "heartbeat");
       }
@@ -191,17 +187,12 @@ public class TestCausynthWriteBlockMirrorStaleKey {
           head.getBlockPoolTokenSecretManager().get(blockPoolId);
       BlockTokenSecretManager mirrorKeys =
           mirror.getBlockPoolTokenSecretManager().get(blockPoolId);
-      rollCurrentKeyBackTo(headKeys, SERIAL_NO + 1);
       CausynthCluster.recordingPrecondition(
-          () -> currentKeyId(headKeys) == SERIAL_NO + 1,
-          "the head must present the pinned key, or there is no gap");
+          () -> currentKeyId(headKeys) == currentKeyId(master),
+          "the head must present the master's current key");
       CausynthCluster.recordingPrecondition(
-          () -> currentKeyId(master) == currentKeyId(mirrorKeys),
-          "the mirror must be current, or the two are symmetric");
-      CausynthCluster.recordingPrecondition(
-          () -> mirrorKeys.hasKey(SERIAL_NO + 1),
-          "the mirror must still RETAIN the head's key, or the recording is"
-              + " already the failure");
+          () -> mirrorKeys.hasKey(currentKeyId(master)),
+          "the mirror must hold the key its heartbeat delivered");
 
       long request = CausynthMessagePropagation.beginRequest(
           source.getDatanodeId(), "transfer-block");
@@ -261,28 +252,6 @@ public class TestCausynthWriteBlockMirrorStaleKey {
       assertEquals(SERIAL_NO + 1, manager.getCurrentKey().getKeyId());
       assertTrue(manager.hasKey(SERIAL_NO + 1)
           && manager.hasKey(SERIAL_NO + 2));
-    }
-  }
-
-  /**
-   * Points the manager's current key back at {@code keyId}, which it must
-   * still hold.
-   *
-   * <p>{@code addKeys} moves allKeys and currentKey together, and this case
-   * needs them apart: the node has to VERIFY tokens signed with the master's
-   * newest key while still DERIVING its own data-encryption key from an older
-   * one.  BlockTokenSecretManager exposes no setter, so the field is set the
-   * same way {@link #allKeys} is read.</p>
-   */
-  private static void rollCurrentKeyBackTo(BlockTokenSecretManager manager,
-      int keyId) throws ReflectiveOperationException {
-    synchronized (manager) {
-      BlockKey key = allKeys(manager).get(keyId);
-      assertTrue(key != null, "the manager no longer holds key " + keyId);
-      Field field =
-          BlockTokenSecretManager.class.getDeclaredField("currentKey");
-      field.setAccessible(true);
-      field.set(manager, key);
     }
   }
 
