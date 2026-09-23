@@ -1243,16 +1243,10 @@ public class Client implements AutoCloseable {
               CausynthMessagePropagation.IPC, correlationId,
               Integer.toString(call.retry), "REQUEST", Client.this,
               call.causynthScope);
-      // Minted on every path through this method, not only when the
-      // outbound context happens to be active: the declared fault marker is
-      // this region's one symbolic input, and Java's && short-circuits, so a
-      // replay reaching the send with no active context materialized no
-      // marker at all and the case's only MARKER_FLIPPED witness could never
-      // be asked for.  The THROW still needs an active context; only the
-      // mint is unconditional.
-      boolean hadoopIpcRequestFails =
-          Debug.makeSymbolicBoolean("hadoopIpcRequestFails");
-      if (causynth.active() && hadoopIpcRequestFails) {
+      // The door's fault point: minted unconditionally, false is the
+      // recorded polarity, true is the transport's failure and the request
+      // does not leave.
+      if (Debug.makeSymbolicBoolean("FAULT:HADOOP_IPC:REQUEST")) {
         throw new IOException("symbolic Hadoop IPC transport failure");
       }
       RpcRequestHeaderProto.Builder header = ProtoUtil.makeRpcRequestHeader(
