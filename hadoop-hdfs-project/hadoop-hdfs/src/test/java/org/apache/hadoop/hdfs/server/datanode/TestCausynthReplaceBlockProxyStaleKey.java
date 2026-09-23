@@ -188,7 +188,8 @@ public class TestCausynthReplaceBlockProxyStaleKey {
       } finally {
         CausynthMessagePropagation.endRequest(rotations, "rotate-block-keys");
       }
-      assertEquals(initialKeyId + 2, currentKeyId(master),
+      CausynthCluster.recordingPrecondition(
+          () -> currentKeyId(master) == initialKeyId + 2,
           "the recorded window must rotate the master twice");
       for (DataNode node : nodes) {
         cluster.getNamesystem().getBlockManager().getDatanodeManager()
@@ -204,11 +205,14 @@ public class TestCausynthReplaceBlockProxyStaleKey {
       BlockTokenSecretManager proxyKeys =
           proxy.getBlockPoolTokenSecretManager().get(blockPoolId);
       rollCurrentKeyBackTo(targetKeys, SERIAL_NO + 1);
-      assertEquals(SERIAL_NO + 1, currentKeyId(targetKeys),
+      CausynthCluster.recordingPrecondition(
+          () -> currentKeyId(targetKeys) == SERIAL_NO + 1,
           "the target must present the pinned key, or there is no gap");
-      assertEquals(currentKeyId(master), currentKeyId(proxyKeys),
+      CausynthCluster.recordingPrecondition(
+          () -> currentKeyId(master) == currentKeyId(proxyKeys),
           "the proxy must be current, or the two are symmetric");
-      assertTrue(proxyKeys.hasKey(SERIAL_NO + 1),
+      CausynthCluster.recordingPrecondition(
+          () -> proxyKeys.hasKey(SERIAL_NO + 1),
           "the proxy must still RETAIN the target's key, or the recording is"
               + " already the failure");
 
