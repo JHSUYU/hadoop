@@ -1102,7 +1102,10 @@ public class TestExternalStoragePolicySatisfier {
     config.setInt(DFSConfigKeys.DFS_NAMENODE_HEARTBEAT_RECHECK_INTERVAL_KEY,
         10 * 60 * 1000);
     config.setLong(DFSConfigKeys.DFS_BLOCK_ACCESS_KEY_UPDATE_INTERVAL_KEY, 60);
-    config.setLong(DFSConfigKeys.DFS_BLOCK_ACCESS_TOKEN_LIFETIME_KEY, 1);
+    // No key and no cached encryption key may lapse on the wall clock inside
+    // the window: a replay on an interpreter-only JVM runs far longer than
+    // the native run.
+    config.setLong(DFSConfigKeys.DFS_BLOCK_ACCESS_TOKEN_LIFETIME_KEY, 600);
     config.setInt(
         DFSConfigKeys.DFS_STORAGE_POLICY_SATISFIER_MOVE_TASK_MAX_RETRY_ATTEMPTS_KEY,
         0);
@@ -1148,48 +1151,63 @@ public class TestExternalStoragePolicySatisfier {
       dfs.satisfyStoragePolicy(new Path(FILE));
       CausynthCluster.startRecording();
 
-      // The SPS refreshes BEFORE the rotations, so the key it carries into
-      // the move is two serials behind the master's current one.  It used to
-      // refresh after them and so presented the CURRENT key: a zero rotation
-      // gap, and with no gap no clock move can make that key expire -- the
-      // fatal was then satisfied at the recorded valuation and refuted
-      // nothing (FORMULA_SAT_AT_RECORDED_VALUATION).  The two cases that
-      // pass both record a gap: hdfs-17897 puts 119992 on the wire against a
-      // current 119994.  The recording stays HEALTHY because a DataNode
-      // retains its older keys until they expire, which is exactly what the
-      // witness has to move the clock past.  The request scope is unchanged,
-      // so the fault marker still governs this refresh.
+      // THE KEY FLOWS THE RPC'S WAY (experiments/hadoop/lib/README.md).
+      // 1. The master rotates twice: its current key is two serials past
+      //    what the DataNode and the SPS hold.
+      int initialKeyId = currentKeyId(master);
+      NameNodeRpcServer namenode =
+          (NameNodeRpcServer) hdfsCluster.getNameNodeRpc();
+      long rotations = CausynthMessagePropagation.beginRequest(
+          namenode.getClientRpcServer(), "rotate-block-keys");
+      try {
+        for (int rotation = 0; rotation < 2; rotation++) {
+          long causynthRotation = CausynthMessagePropagation.beginTick(
+              master, "KEY_MANAGER_TICK");
+          try {
+            master.updateKeys(Long.MAX_VALUE);
+          } finally {
+            CausynthMessagePropagation.endTick(causynthRotation);
+          }
+        }
+      } finally {
+        CausynthMessagePropagation.endRequest(rotations, "rotate-block-keys");
+      }
+      CausynthCluster.recordingPrecondition(
+          () -> currentKeyId(master) == initialKeyId + 2,
+          "the recorded window must rotate the master twice");
+
+      // 2. The DataNode takes the new keys over its OWN heartbeat, once: the
+      //    answer carries the KeyUpdateCommand, and the IPC doors' fault
+      //    points on this RPC are what a witness flips.
+      hdfsCluster.getNamesystem().getBlockManager().getDatanodeManager()
+          .getDatanode(target.getDatanodeId()).setNeedKeyUpdate(true);
+      CausynthCluster.refreshKeysFromNameNode(target, "heartbeat");
+
+      // 3. The SPS takes the NameNode's keys over its own RPC.  A refresh
+      //    whose RPC fails leaves the SPS on the keys it had, as its
+      //    BlockKeyUpdater does.
       long refreshRequest = CausynthMessagePropagation.beginRequest(
           nnc, "refresh-block-keys");
       try {
         try {
           nnc.getKeyManager().updateBlockKeys();
-        } catch (IOException expected) {
+        } catch (IOException failed) {
           LOG.info("SPS retained its prior block keys after RPC failure",
-              expected);
+              failed);
         }
       } finally {
         CausynthMessagePropagation.endRequest(
             refreshRequest, "refresh-block-keys");
       }
-
-      int initialKeyId = currentKeyId(master);
-      master.setKeyUpdateIntervalForTesting(1);
-      GenericTestUtils.waitFor(
-          () -> currentKeyId(master) != initialKeyId, 100, CausynthCluster.WINDOW_WAIT_MS);
-      int firstRotatedKeyId = currentKeyId(master);
-      GenericTestUtils.waitFor(
-          () -> currentKeyId(master) != firstRotatedKeyId, 100, CausynthCluster.WINDOW_WAIT_MS);
-      master.setKeyUpdateIntervalForTesting(TimeUnit.MINUTES.toMillis(60));
-      int currentKeyId = currentKeyId(master);
-
-      hdfsCluster.triggerHeartbeats();
       BlockTokenSecretManager targetKeys =
           target.getBlockPoolTokenSecretManager().get(
               hdfsCluster.getNamesystem().getBlockPoolId());
-      GenericTestUtils.waitFor(
-          () -> targetKeys.hasKey(currentKeyId), 100, CausynthCluster.WINDOW_WAIT_MS);
+      CausynthCluster.recordingPrecondition(
+          () -> targetKeys.hasKey(currentKeyId(master)),
+          "the DataNode must hold the master's current key, delivered by its"
+              + " heartbeat, or the recording is already the failure");
 
+      // 4. The move: the SPS presents the master's current key.
       long request = CausynthMessagePropagation.beginRequest(
           nnc, "satisfy-storage-policy");
       try {
@@ -1213,7 +1231,7 @@ public class TestExternalStoragePolicySatisfier {
    * this the replay groups of one campaign mint unrelated ids.  setSerialNo
    * only moves the counter, so the two constructor-time keys keep their
    * random ids; two rotations retire them: the first mints SERIAL_NO + 1 as
-   * nextKey, the second makes it currentKey (the stale key of this workload)
+   * nextKey, the second makes it currentKey (the key every node holds when the window opens)
    * and mints SERIAL_NO + 2.  DataNodes and the SPS KeyManager mint nothing themselves (they only
    * addKeys what the NameNode exports), so delivering the master's export
    * in-process here is the same state a KeyUpdateCommand delivers; it stays
