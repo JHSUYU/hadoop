@@ -1632,6 +1632,12 @@ public class Client implements AutoCloseable {
       throws IOException {
     try {
       Writable response = call.rpcResponseFuture.get();
+      // The door's receive-side fault point: minted unconditionally, false is
+      // the recorded polarity, true is the answer lost after the server
+      // applied the request, and the caller sees the transport's failure.
+      if (Debug.makeSymbolicBoolean("FAULT:HADOOP_IPC:RESPONSE")) {
+        throw new IOException("symbolic Hadoop IPC response failure");
+      }
       installCausynthResponse(call);
       return response;
     } catch (InterruptedException ie) {
