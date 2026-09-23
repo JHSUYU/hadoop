@@ -22,6 +22,7 @@ import static org.apache.hadoop.hdfs.client.HdfsClientConfigKeys.DFS_ENCRYPT_DAT
 import static org.apache.hadoop.hdfs.protocol.datatransfer.sasl.DataTransferSaslUtil.*;
 
 import org.apache.hadoop.classification.VisibleForTesting;
+import edu.uva.liftlab.graphchecker.annotation.Debug;
 import java.io.ByteArrayInputStream;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
@@ -523,6 +524,12 @@ public class SaslDataTransferClient {
     SaslParticipant sasl= SaslParticipant.createClientSaslParticipant(userName,
         saslProps, callbackHandler);
 
+    // The door's fault point: minted unconditionally, false is the
+    // recorded polarity, true is the transport's failure and the handshake
+    // does not leave.
+    if (Debug.makeSymbolicBoolean("FAULT:HDFS_SASL:REQUEST")) {
+      throw new IOException("symbolic HDFS SASL transport failure");
+    }
     out.writeInt(SASL_TRANSFER_MAGIC_NUMBER);
     out.flush();
 
