@@ -205,6 +205,8 @@ public class TestCausynthStripedReconstructTargetStaleKey {
       String blockPoolId = blockGroup.getBlockPoolId();
       NameNodeRpcServer namenode =
           (NameNodeRpcServer) cluster.getNameNodeRpc();
+      // Every heartbeat of the window is the workload's (CausynthCluster).
+      CausynthCluster.driveHeartbeats();
       CausynthCluster.startRecording();
 
       int initialKeyId = currentKeyId(master);
