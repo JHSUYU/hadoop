@@ -103,15 +103,14 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * balancer's block-selection machinery, which no part of the mechanism
  * touches.
  *
- * <p>THE RECORDING MUST LEAVE A ROTATION GAP.  The cache is taken while the
- * master's current key is the pinned one, the master then rotates twice and
- * both DataNodes take the new keys, and the KeyManager refreshes too -- yet
- * its CACHED encryption key is still the pinned one, two serials behind.  The
- * destination still RETAINS that key, so the recorded move SUCCEEDS; a
- * witness has to buy its expiry with a clock move, or flip the refresh RPC's
- * fault marker.  A zero gap leaves every composed path either
- * self-contradictory or satisfied at the recorded valuation -- measured on
- * this very case's siblings -- and no witness at all.
+ * <p>THE KEY FLOWS THE RPC'S WAY (experiments/hadoop/lib/README.md).  Inside
+ * the window the master rotates twice; every DataNode takes the new keys over
+ * its own heartbeat, one each, whose answer carries the KeyUpdateCommand; the
+ * Balancer then takes the NameNode's keys over its own RPC and presents the
+ * master's CURRENT key in the move.  The recording succeeds.  A world whose
+ * destination did not get that heartbeat's answer -- the request failed, or
+ * the NameNode applied it and the reply was lost -- has the destination
+ * without the presented key, which is the failure: no key has to expire.
  */
 public class TestCausynthBalancerCachedKey {
   /** Block-key serial number pinned by {@link #pinBlockKeys}. */
@@ -128,11 +127,9 @@ public class TestCausynthBalancerCachedKey {
     conf.setInt(DFSConfigKeys.DFS_NAMENODE_HEARTBEAT_RECHECK_INTERVAL_KEY,
         10 * 60 * 1000);
     conf.setLong(DFSConfigKeys.DFS_BLOCK_ACCESS_KEY_UPDATE_INTERVAL_KEY, 60);
-    // The cache is the mechanism, so it must not lapse by wall clock inside
-    // the window: a replay on an interpreter-only JVM takes far longer than
-    // the native run, and a lapsed cache re-mints from the CURRENT key and
-    // closes the gap this case is about.  Only a SYMBOLIC clock move may
-    // expire it.
+    // No key and no cached encryption key may lapse on the wall clock inside
+    // the window: a replay on an interpreter-only JVM runs far longer than
+    // the native run.
     conf.setLong(DFSConfigKeys.DFS_BLOCK_ACCESS_TOKEN_LIFETIME_KEY, 600);
     // A concolic replay is slow, and one held to its schedule prefix can
     // hold a heartbeat until its turn: placement must not read a slow node
@@ -200,33 +197,8 @@ public class TestCausynthBalancerCachedKey {
       try {
         CausynthCluster.startRecording();
 
-        // The Balancer takes its keys, and its ONE cached encryption key,
-        // while the master's current key is still the pinned one.  This is
-        // its OWN request, not part of the move: everything between here and
-        // the move -- the rotations and the DataNodes' heartbeats -- has to
-        // be rooted where it actually happens.  Nested inside one long
-        // balance-block scope, two of the three DataNodes' key-refresh
-        // regions never opened at all (they came back as ROLE.CLIENT with
-        // ctx Root:CLIENT/balance-block), the corpus had no writer that
-        // could take a key out of the target's allKeys, and wave 0 produced
-        // ONE obligation, UNSAT: "no world of this corpus takes the other
-        // arm at retrieveDataEncryptionKey#u8#1".  Measured 2026-09-22.
-        long fetch = CausynthMessagePropagation.beginRequest(this,
-            "fetch-block-keys");
-        DataEncryptionKey cached;
-        try {
-          keyManager = new KeyManager(blockPoolId, rpc, true, conf);
-          CausynthMessagePropagation.registerSourceAlias(keyManager, this);
-          cached = keyManager.newDataEncryptionKey();
-        } finally {
-          CausynthMessagePropagation.endRequest(fetch, "fetch-block-keys");
-        }
-        CausynthCluster.recordingPrecondition(() -> cached != null,
-            "the balancer must cache an encryption key");
-        CausynthCluster.recordingPrecondition(
-            () -> cached.keyId == SERIAL_NO + 1,
-            "the cache must be taken from the pinned key");
-
+        // 1. The master rotates twice: its current key is two serials past
+        //    what every node holds.
         int initialKeyId = currentKeyId(master);
         long rotations = CausynthMessagePropagation.beginRequest(
             namenode.getClientRpcServer(), "rotate-block-keys");
@@ -247,43 +219,44 @@ public class TestCausynthBalancerCachedKey {
         CausynthCluster.recordingPrecondition(
             () -> currentKeyId(master) == initialKeyId + 2,
             "the recorded window must rotate the master twice");
+
+        // 2. Every DataNode takes the new keys over its OWN heartbeat, one
+        //    each, in the order of the nodes' names: the answer carries the
+        //    KeyUpdateCommand, and the IPC doors' fault points on this RPC
+        //    are what a witness flips.
         for (DataNode node : nodes) {
           cluster.getNamesystem().getBlockManager().getDatanodeManager()
               .getDatanode(node.getDatanodeId()).setNeedKeyUpdate(true);
         }
-        // In the order of the nodes' names, not the cluster's.
         for (DataNode node : CausynthCluster.dataNodes()) {
           refreshKeysFromNameNode(node, "heartbeat");
         }
 
-        // From here on the balancer is moving a block, and the whole of it
-        // -- its own refresh and the move -- is that one request.
+        // 3. The Balancer takes the NameNode's keys over its own RPC.  Its
+        //    own request, not part of the move: every request is rooted
+        //    where it happens, one scope each.
+        long fetch = CausynthMessagePropagation.beginRequest(this,
+            "fetch-block-keys");
+        try {
+          keyManager = new KeyManager(blockPoolId, rpc, true, conf);
+          CausynthMessagePropagation.registerSourceAlias(keyManager, this);
+        } finally {
+          CausynthMessagePropagation.endRequest(fetch, "fetch-block-keys");
+        }
+
+        // 4. The move: the Balancer presents the master's current key.
         balance = CausynthMessagePropagation.beginRequest(this,
             "balance-block");
-
-        // The Balancer's own refresh.  This is the RPC the case's fault
-        // marker lives on: it SUCCEEDS in the recording, and a witness may
-        // flip it.  Succeeding changes nothing about the gap -- addKeys
-        // replaces the key SET, never the cached encryption key.
-        keyManager.updateBlockKeys();
-
-        // Presenting the key is the balancer's own call, a recorded
-        // occurrence of KeyManager's: it runs in every run, and only the
-        // check of what it presented is the recording's.
         int presented = keyManager.newDataEncryptionKey().keyId;
         CausynthCluster.recordingPrecondition(
-            () -> presented == SERIAL_NO + 1,
-            "the balancer must still present its CACHED key, or there is no"
-                + " gap");
+            () -> presented == currentKeyId(master),
+            "the balancer must present the master's CURRENT key");
         BlockTokenSecretManager targetKeys =
             target.getBlockPoolTokenSecretManager().get(blockPoolId);
         CausynthCluster.recordingPrecondition(
-            () -> currentKeyId(master) == currentKeyId(targetKeys),
-            "the destination must be current, or there is no gap");
-        CausynthCluster.recordingPrecondition(
-            () -> targetKeys.hasKey(SERIAL_NO + 1),
-            "the destination must still RETAIN the balancer's cached key, or"
-                + " the recording is already the failure");
+            () -> targetKeys.hasKey(presented),
+            "the destination must hold the presented key, delivered by its"
+                + " heartbeat, or the recording is already the failure");
 
         DatanodeInfo proxyInfo = new DatanodeInfoBuilder()
             .setNodeID(proxy.getDatanodeId()).build();
@@ -292,8 +265,8 @@ public class TestCausynthBalancerCachedKey {
         Status status = sendReplaceBlock(conf, keyManager, target, block,
             proxy.getDatanodeUuid(), proxyInfo, accessToken);
         assertEquals(Status.SUCCESS, status,
-            "the recorded move must SUCCEED: the destination still retains"
-                + " the cached key, and the failure is what a witness buys");
+            "the recorded move must SUCCEED: the destination holds the key its"
+                + " heartbeat delivered");
         final DataNode destination = target;
         GenericTestUtils.waitFor(
             () -> destination.getFSDataset().isValidBlock(block), 20, CausynthCluster.WINDOW_WAIT_MS);
