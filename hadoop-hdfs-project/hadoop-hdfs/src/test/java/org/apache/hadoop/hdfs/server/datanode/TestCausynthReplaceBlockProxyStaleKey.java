@@ -97,13 +97,17 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * names it.  Exactly one proxy connection exists per REPLACE_BLOCK, so one
  * rejection is the whole failure -- no conjunction over peers.
  *
- * <p>THE RECORDING MUST LEAVE A ROTATION GAP, and it must be ASYMMETRIC.  Both
- * DataNodes take the master's rotated keys so both can still verify the block
- * token; only the TARGET's currentKey is then rolled back to the pinned one.
- * The proxy still RETAINS that key, so the recorded move SUCCEEDS, and a
- * witness has to buy the proxy's forgetting with a clock move.  A zero gap
- * leaves every composed path either self-contradictory or satisfied at the
- * recorded valuation -- measured on hdfs-17899 -- and no witness at all.
+ * <p>THE KEY FLOWS THE RPC'S WAY (experiments/hadoop/lib/README.md).  The
+ * master rotates twice inside the window, and every DataNode takes the new
+ * keys over ONE heartbeat of its own -- the NameNode answers with the
+ * KeyUpdateCommand.  The target then presents the proxy a key derived from
+ * its CURRENT key, the master's newest, and the proxy verifies it with the
+ * keys its own heartbeat delivered: the recorded move SUCCEEDS.  Lose the
+ * proxy's heartbeat answer (the NameNode has already cleared its
+ * needKeyUpdate) or its request, and the proxy holds only the pinned pair
+ * while the target presents a serial two ahead: ERROR_UNKNOWN_KEY at the
+ * proxy, the declared anchor.  No key expires; the clocks stay at the
+ * recording.
  */
 public class TestCausynthReplaceBlockProxyStaleKey {
   /** Block-key serial number pinned by {@link #pinBlockKeys}. */
@@ -204,22 +208,15 @@ public class TestCausynthReplaceBlockProxyStaleKey {
           target.getBlockPoolTokenSecretManager().get(blockPoolId);
       BlockTokenSecretManager proxyKeys =
           proxy.getBlockPoolTokenSecretManager().get(blockPoolId);
-      rollCurrentKeyBackTo(targetKeys, SERIAL_NO + 1);
       CausynthCluster.recordingPrecondition(
-          () -> currentKeyId(targetKeys) == SERIAL_NO + 1,
-          "the target must present the pinned key, or there is no gap");
+          () -> currentKeyId(targetKeys) == currentKeyId(master),
+          "the target must present the master's current key");
       CausynthCluster.recordingPrecondition(
-          () -> currentKeyId(master) == currentKeyId(proxyKeys),
-          "the proxy must be current, or the two are symmetric");
-      CausynthCluster.recordingPrecondition(
-          () -> proxyKeys.hasKey(SERIAL_NO + 1),
-          "the proxy must still RETAIN the target's key, or the recording is"
-              + " already the failure");
+          () -> proxyKeys.hasKey(currentKeyId(master)),
+          "the proxy must hold the key its heartbeat delivered");
 
-      // The mover is healthy: it takes the master's CURRENT key, which the
-      // target holds, so the FIRST hop succeeds and the only skew in the
-      // recording is between the two DataNodes.  This is what separates
-      // path B from HDFS-11741.
+      // The mover takes the master's CURRENT key too, which the target's
+      // heartbeat delivered, so the FIRST hop succeeds in the recording.
       CausynthMessagePropagation.registerSource(this, "EXTERNAL_APP",
           "BALANCER", "hdfs-17967/mover", 0);
       DatanodeInfo proxyInfo = new DatanodeInfoBuilder()
@@ -234,8 +231,8 @@ public class TestCausynthReplaceBlockProxyStaleKey {
         Status status = sendReplaceBlock(conf, master, target, block,
             proxy.getDatanodeUuid(), proxyInfo, accessToken);
         assertEquals(Status.SUCCESS, status,
-            "the recorded move must SUCCEED: the proxy still retains the"
-                + " target's key, and the failure is what a witness buys");
+            "the recorded move must SUCCEED: the proxy holds the key its"
+                + " heartbeat delivered, and a lost delivery is the witness");
         GenericTestUtils.waitFor(
             () -> target.getFSDataset().isValidBlock(block), 20, CausynthCluster.WINDOW_WAIT_MS);
         assertTrue(target.getFSDataset().isValidBlock(block),
@@ -347,28 +344,6 @@ public class TestCausynthReplaceBlockProxyStaleKey {
       assertEquals(SERIAL_NO + 1, manager.getCurrentKey().getKeyId());
       assertTrue(manager.hasKey(SERIAL_NO + 1)
           && manager.hasKey(SERIAL_NO + 2));
-    }
-  }
-
-  /**
-   * Points the manager's current key back at {@code keyId}, which it must
-   * still hold.
-   *
-   * <p>{@code addKeys} moves allKeys and currentKey together, and this case
-   * needs them apart: the node has to VERIFY tokens signed with the master's
-   * newest key while still DERIVING its own data-encryption key from an older
-   * one.  BlockTokenSecretManager exposes no setter, so the field is set the
-   * same way {@link #allKeys} is read.</p>
-   */
-  private static void rollCurrentKeyBackTo(BlockTokenSecretManager manager,
-      int keyId) throws ReflectiveOperationException {
-    synchronized (manager) {
-      BlockKey key = allKeys(manager).get(keyId);
-      assertTrue(key != null, "the manager no longer holds key " + keyId);
-      Field field =
-          BlockTokenSecretManager.class.getDeclaredField("currentKey");
-      field.setAccessible(true);
-      field.set(manager, key);
     }
   }
 
