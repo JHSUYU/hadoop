@@ -125,7 +125,8 @@ public class TestCausynthDataTransferRpcFailure {
       } finally {
         CausynthMessagePropagation.endRequest(rotations, "rotate-block-keys");
       }
-      assertEquals(initialKeyId + 2, currentKeyId(master),
+      CausynthCluster.recordingPrecondition(
+          () -> currentKeyId(master) == initialKeyId + 2,
           "the recorded window must rotate the master twice");
       int currentKeyId = currentKeyId(master);
       cluster.getNamesystem().getBlockManager().getDatanodeManager()
