@@ -82,13 +82,17 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * carries the request scope into the pool thread and stamps it with the node,
  * the same way {@code Server.Call} does for the IPC handler pool.
  *
- * <p>THE RECORDING MUST LEAVE A ROTATION GAP, and it must be ASYMMETRIC.
- * Every node takes the master's rotated keys so all of them can still verify
- * block tokens; only the RECONSTRUCTING node's currentKey is rolled back.
- * The target still RETAINS that key, so the recorded reconstruction SUCCEEDS
- * and a witness has to buy the target's forgetting with a clock move.  A zero
- * gap leaves every composed path either self-contradictory or satisfied at
- * the recorded valuation -- measured on hdfs-17899 -- and no witness at all.
+ * <p>THE KEY FLOWS THE RPC'S WAY (experiments/hadoop/lib/README.md).  The
+ * master rotates twice inside the window, and every DataNode takes the new
+ * keys over ONE heartbeat of its own -- the NameNode answers with the
+ * KeyUpdateCommand.  The reconstructing node then writes to the target with
+ * a key derived from its CURRENT key, the master's newest, and the target
+ * verifies it with the keys its own heartbeat delivered: the recorded
+ * reconstruction SUCCEEDS.  Lose the target's heartbeat answer (the NameNode
+ * has already cleared its needKeyUpdate) or its request, and the target holds
+ * only the pinned pair while the worker presents a serial two ahead:
+ * ERROR_UNKNOWN_KEY, "All targets are failed.".  No key expires; the clocks
+ * stay at the recording.
  *
  * <p>The policy is a user-defined XOR-2-1 at a 1 KiB cell rather than the
  * 1 MiB system policy: the whole workload, setup included, is replayed on an
@@ -235,18 +239,12 @@ public class TestCausynthStripedReconstructTargetStaleKey {
           worker.getBlockPoolTokenSecretManager().get(blockPoolId);
       BlockTokenSecretManager targetKeys =
           target.getBlockPoolTokenSecretManager().get(blockPoolId);
-      rollCurrentKeyBackTo(workerKeys, SERIAL_NO + 1);
       CausynthCluster.recordingPrecondition(
-          () -> currentKeyId(workerKeys) == SERIAL_NO + 1,
-          "the reconstructing node must present the pinned key, or there is"
-              + " no gap");
+          () -> currentKeyId(workerKeys) == currentKeyId(master),
+          "the reconstructing node must present the master's current key");
       CausynthCluster.recordingPrecondition(
-          () -> currentKeyId(master) == currentKeyId(targetKeys),
-          "the target must be current, or the two are symmetric");
-      CausynthCluster.recordingPrecondition(
-          () -> targetKeys.hasKey(SERIAL_NO + 1),
-          "the target must still RETAIN the worker's key, or the recording is"
-              + " already the failure");
+          () -> targetKeys.hasKey(currentKeyId(master)),
+          "the target must hold the key its heartbeat delivered");
 
       DatanodeInfo targetInfo = new DatanodeInfoBuilder()
           .setNodeID(target.getDatanodeId()).build();
@@ -322,28 +320,6 @@ public class TestCausynthStripedReconstructTargetStaleKey {
       assertEquals(SERIAL_NO + 1, manager.getCurrentKey().getKeyId());
       assertTrue(manager.hasKey(SERIAL_NO + 1)
           && manager.hasKey(SERIAL_NO + 2));
-    }
-  }
-
-  /**
-   * Points the manager's current key back at {@code keyId}, which it must
-   * still hold.
-   *
-   * <p>{@code addKeys} moves allKeys and currentKey together, and this case
-   * needs them apart: the node has to VERIFY tokens signed with the master's
-   * newest key while still DERIVING its own data-encryption key from an older
-   * one.  BlockTokenSecretManager exposes no setter, so the field is set the
-   * same way {@link #allKeys} is read.</p>
-   */
-  private static void rollCurrentKeyBackTo(BlockTokenSecretManager manager,
-      int keyId) throws ReflectiveOperationException {
-    synchronized (manager) {
-      BlockKey key = allKeys(manager).get(keyId);
-      assertTrue(key != null, "the manager no longer holds key " + keyId);
-      Field field =
-          BlockTokenSecretManager.class.getDeclaredField("currentKey");
-      field.setAccessible(true);
-      field.set(manager, key);
     }
   }
 
