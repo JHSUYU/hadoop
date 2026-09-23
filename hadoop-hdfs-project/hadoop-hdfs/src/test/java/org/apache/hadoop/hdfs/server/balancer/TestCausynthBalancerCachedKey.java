@@ -74,7 +74,6 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -222,8 +221,10 @@ public class TestCausynthBalancerCachedKey {
         } finally {
           CausynthMessagePropagation.endRequest(fetch, "fetch-block-keys");
         }
-        assertNotNull(cached, "the balancer must cache an encryption key");
-        assertEquals(SERIAL_NO + 1, cached.keyId,
+        CausynthCluster.recordingPrecondition(() -> cached != null,
+            "the balancer must cache an encryption key");
+        CausynthCluster.recordingPrecondition(
+            () -> cached.keyId == SERIAL_NO + 1,
             "the cache must be taken from the pinned key");
 
         int initialKeyId = currentKeyId(master);
@@ -243,7 +244,8 @@ public class TestCausynthBalancerCachedKey {
           CausynthMessagePropagation.endRequest(rotations,
               "rotate-block-keys");
         }
-        assertEquals(initialKeyId + 2, currentKeyId(master),
+        CausynthCluster.recordingPrecondition(
+            () -> currentKeyId(master) == initialKeyId + 2,
             "the recorded window must rotate the master twice");
         for (DataNode node : nodes) {
           cluster.getNamesystem().getBlockManager().getDatanodeManager()
@@ -265,14 +267,21 @@ public class TestCausynthBalancerCachedKey {
         // replaces the key SET, never the cached encryption key.
         keyManager.updateBlockKeys();
 
-        assertEquals(SERIAL_NO + 1, keyManager.newDataEncryptionKey().keyId,
+        // Presenting the key is the balancer's own call, a recorded
+        // occurrence of KeyManager's: it runs in every run, and only the
+        // check of what it presented is the recording's.
+        int presented = keyManager.newDataEncryptionKey().keyId;
+        CausynthCluster.recordingPrecondition(
+            () -> presented == SERIAL_NO + 1,
             "the balancer must still present its CACHED key, or there is no"
                 + " gap");
         BlockTokenSecretManager targetKeys =
             target.getBlockPoolTokenSecretManager().get(blockPoolId);
-        assertEquals(currentKeyId(master), currentKeyId(targetKeys),
+        CausynthCluster.recordingPrecondition(
+            () -> currentKeyId(master) == currentKeyId(targetKeys),
             "the destination must be current, or there is no gap");
-        assertTrue(targetKeys.hasKey(SERIAL_NO + 1),
+        CausynthCluster.recordingPrecondition(
+            () -> targetKeys.hasKey(SERIAL_NO + 1),
             "the destination must still RETAIN the balancer's cached key, or"
                 + " the recording is already the failure");
 
