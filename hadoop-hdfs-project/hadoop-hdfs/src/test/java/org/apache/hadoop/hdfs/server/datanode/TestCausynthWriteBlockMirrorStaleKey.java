@@ -171,7 +171,8 @@ public class TestCausynthWriteBlockMirrorStaleKey {
       } finally {
         CausynthMessagePropagation.endRequest(rotations, "rotate-block-keys");
       }
-      assertEquals(initialKeyId + 2, currentKeyId(master),
+      CausynthCluster.recordingPrecondition(
+          () -> currentKeyId(master) == initialKeyId + 2,
           "the recorded window must rotate the master twice");
       for (DataNode node : nodes) {
         cluster.getNamesystem().getBlockManager().getDatanodeManager()
@@ -191,11 +192,14 @@ public class TestCausynthWriteBlockMirrorStaleKey {
       BlockTokenSecretManager mirrorKeys =
           mirror.getBlockPoolTokenSecretManager().get(blockPoolId);
       rollCurrentKeyBackTo(headKeys, SERIAL_NO + 1);
-      assertEquals(SERIAL_NO + 1, currentKeyId(headKeys),
+      CausynthCluster.recordingPrecondition(
+          () -> currentKeyId(headKeys) == SERIAL_NO + 1,
           "the head must present the pinned key, or there is no gap");
-      assertEquals(currentKeyId(master), currentKeyId(mirrorKeys),
+      CausynthCluster.recordingPrecondition(
+          () -> currentKeyId(master) == currentKeyId(mirrorKeys),
           "the mirror must be current, or the two are symmetric");
-      assertTrue(mirrorKeys.hasKey(SERIAL_NO + 1),
+      CausynthCluster.recordingPrecondition(
+          () -> mirrorKeys.hasKey(SERIAL_NO + 1),
           "the mirror must still RETAIN the head's key, or the recording is"
               + " already the failure");
 
