@@ -77,8 +77,6 @@ public class TestCausynthStripedChecksum {
       BlockTokenSecretManager master = cluster.getNamesystem()
           .getBlockManager().getBlockTokenSecretManager();
       pinBlockKeys(cluster, master);
-      // Every heartbeat of the window is the workload's (CausynthCluster).
-      CausynthCluster.driveHeartbeats();
       CausynthCluster.startRecording();
 
       // THE KEY FLOWS THE RPC'S WAY (experiments/hadoop/lib/README.md).  The

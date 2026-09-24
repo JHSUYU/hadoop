@@ -1496,11 +1496,29 @@ class BPServiceActor implements Runnable {
       return true;
     }
 
+    /**
+     * The command, carrying the scope it was enqueued in -- the heartbeat
+     * answer that delivered it -- to this thread, which is the actor's and
+     * not the answer's.  // causynth-d3-lineage
+     */
+    private Runnable carried(Runnable action) {
+      final Object causynthScope = CausynthMessagePropagation.captureScope();
+      return () -> {
+        long causynthCarried = CausynthMessagePropagation.enterCarriedScope(
+            causynthScope, "COMMAND_PROCESSOR", null);
+        try {
+          action.run();
+        } finally {
+          CausynthMessagePropagation.exitCarriedScope(causynthCarried);
+        }
+      };
+    }
+
     void enqueue(DatanodeCommand cmd) throws InterruptedException {
       if (cmd == null) {
         return;
       }
-      queue.put(() -> processCommand(new DatanodeCommand[]{cmd}));
+      queue.put(carried(() -> processCommand(new DatanodeCommand[]{cmd})));
       dn.getMetrics().incrActorCmdQueueLength(1);
     }
 
@@ -1514,7 +1532,7 @@ class BPServiceActor implements Runnable {
         return;
       }
       ((LinkedBlockingDeque<Runnable>) queue).putFirst(
-          () -> processCommand(new DatanodeCommand[]{cmd}));
+          carried(() -> processCommand(new DatanodeCommand[]{cmd})));
 
       LOG.info("Enqueue command: {} to the head of queue", cmd);
       dn.getMetrics().incrActorCmdQueueLength(1);
@@ -1524,14 +1542,14 @@ class BPServiceActor implements Runnable {
       if (cmds == null) {
         return;
       }
-      queue.put(() -> processCommand(
-          cmds.toArray(new DatanodeCommand[cmds.size()])));
+      queue.put(carried(() -> processCommand(
+          cmds.toArray(new DatanodeCommand[cmds.size()]))));
       dn.getMetrics().incrActorCmdQueueLength(1);
     }
 
     void enqueue(DatanodeCommand[] cmds) throws InterruptedException {
       if (cmds.length != 0) {
-        queue.put(() -> processCommand(cmds));
+        queue.put(carried(() -> processCommand(cmds)));
         dn.getMetrics().incrActorCmdQueueLength(1);
       }
     }
