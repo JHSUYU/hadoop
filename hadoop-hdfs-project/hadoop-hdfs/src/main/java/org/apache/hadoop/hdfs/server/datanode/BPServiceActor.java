@@ -1497,19 +1497,24 @@ class BPServiceActor implements Runnable {
     }
 
     /**
-     * The command, carrying the scope it was enqueued in -- the heartbeat
-     * answer that delivered it -- to this thread, which is the actor's and
-     * not the answer's.  // causynth-d3-lineage
+     * One command as one turn of this daemon: a tick of its own, the
+     * processor's root, and inside it the scope the command was enqueued in
+     * -- the heartbeat answer that delivered it -- whose message is then the
+     * turn's cause.  A command enqueued outside any scope runs in the tick
+     * alone.  // causynth-d3-lineage
      */
     private Runnable carried(Runnable action) {
       final Object causynthScope = CausynthMessagePropagation.captureScope();
       return () -> {
+        long causynthTick = CausynthMessagePropagation.beginTick(
+            dn, "COMMAND_PROCESSOR");
         long causynthCarried = CausynthMessagePropagation.enterCarriedScope(
             causynthScope, "COMMAND_PROCESSOR", null);
         try {
           action.run();
         } finally {
           CausynthMessagePropagation.exitCarriedScope(causynthCarried);
+          CausynthMessagePropagation.endTick(causynthTick);
         }
       };
     }
