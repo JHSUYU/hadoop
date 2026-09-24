@@ -1496,34 +1496,11 @@ class BPServiceActor implements Runnable {
       return true;
     }
 
-    /**
-     * One command as one turn of this daemon: a tick of its own, the
-     * processor's root, and inside it the scope the command was enqueued in
-     * -- the heartbeat answer that delivered it -- whose message is then the
-     * turn's cause.  A command enqueued outside any scope runs in the tick
-     * alone.  // causynth-d3-lineage
-     */
-    private Runnable carried(Runnable action) {
-      final Object causynthScope = CausynthMessagePropagation.captureScope();
-      return () -> {
-        long causynthTick = CausynthMessagePropagation.beginTick(
-            dn, "COMMAND_PROCESSOR");
-        long causynthCarried = CausynthMessagePropagation.enterCarriedScope(
-            causynthScope, "COMMAND_PROCESSOR", null);
-        try {
-          action.run();
-        } finally {
-          CausynthMessagePropagation.exitCarriedScope(causynthCarried);
-          CausynthMessagePropagation.endTick(causynthTick);
-        }
-      };
-    }
-
     void enqueue(DatanodeCommand cmd) throws InterruptedException {
       if (cmd == null) {
         return;
       }
-      queue.put(carried(() -> processCommand(new DatanodeCommand[]{cmd})));
+      queue.put(() -> processCommand(new DatanodeCommand[]{cmd}));
       dn.getMetrics().incrActorCmdQueueLength(1);
     }
 
@@ -1537,7 +1514,7 @@ class BPServiceActor implements Runnable {
         return;
       }
       ((LinkedBlockingDeque<Runnable>) queue).putFirst(
-          carried(() -> processCommand(new DatanodeCommand[]{cmd})));
+          () -> processCommand(new DatanodeCommand[]{cmd}));
 
       LOG.info("Enqueue command: {} to the head of queue", cmd);
       dn.getMetrics().incrActorCmdQueueLength(1);
@@ -1547,14 +1524,14 @@ class BPServiceActor implements Runnable {
       if (cmds == null) {
         return;
       }
-      queue.put(carried(() -> processCommand(
-          cmds.toArray(new DatanodeCommand[cmds.size()]))));
+      queue.put(() -> processCommand(
+          cmds.toArray(new DatanodeCommand[cmds.size()])));
       dn.getMetrics().incrActorCmdQueueLength(1);
     }
 
     void enqueue(DatanodeCommand[] cmds) throws InterruptedException {
       if (cmds.length != 0) {
-        queue.put(carried(() -> processCommand(cmds)));
+        queue.put(() -> processCommand(cmds));
         dn.getMetrics().incrActorCmdQueueLength(1);
       }
     }
