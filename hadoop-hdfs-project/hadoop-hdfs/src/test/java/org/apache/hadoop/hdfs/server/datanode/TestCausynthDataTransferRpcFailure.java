@@ -105,8 +105,6 @@ public class TestCausynthDataTransferRpcFailure {
 
       BlockTokenSecretManager master = cluster.getNamesystem()
           .getBlockManager().getBlockTokenSecretManager();
-      // Every heartbeat of the window is the workload's (CausynthCluster).
-      CausynthCluster.driveHeartbeats();
       CausynthCluster.startRecording();
 
       int initialKeyId = currentKeyId(master);
