@@ -60,11 +60,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * thread's frames or as a tick's owner, and names the node without any
  * hand-woven scope in the tree.</p>
  *
- * <p>Daemon activity runs as it does in production, with one exception a
- * workload asks for by name: a workload that sends a heartbeat itself sends
- * every heartbeat of its window ({@link #driveHeartbeats}).  Block reports,
- * incremental ones among them, stay the DataNode's own; the schedule prefix
- * makes them reproducible and the attribution rule makes them
+ * <p>What this deliberately does NOT do: suppress daemon activity.
+ * Heartbeats and block reports run as they do in production; the schedule
+ * prefix makes them reproducible and the attribution rule makes them
  * attributable.</p>
  *
  * <p>Two more properties are about the world the window starts from, which
@@ -261,46 +259,24 @@ public final class CausynthCluster {
   }
 
   /**
-   * Hands every heartbeat of every registered DataNode to the workload: from
-   * here on no BPServiceActor sends one of its own, and {@link
-   * #refreshKeysFromNameNode} is the only heartbeat there is.  Called before
-   * the window opens.
-   *
-   * <p>The NameNode answers the FIRST heartbeat of a node it has marked for
-   * a key update with the KeyUpdateCommand, and clears the mark.  With the
-   * daemon still beating, which heartbeat that is is a race: hdfs-17967
-   * path B's recording delivered spare-dn's keys on its daemon heartbeat and
-   * its seed replay delivered proxy-dn's -- the verifier's -- the same way,
-   * applied later by the DataNode's command-processor thread, so the
-   * delivery a witness fails was not the workload's RPC in either run.  A
-   * workload that sends one heartbeat itself therefore sends them all.</p>
-   */
-  public static void driveHeartbeats() {
-    for (DataNode datanode : REGISTERED.keySet()) {
-      datanode.setHeartbeatsDisabledForTests(true);
-    }
-  }
-
-  /**
    * One key-refresh heartbeat of {@code datanode}'s, as the workload's own
    * request on that node ({@code api}): the heartbeat is sent and every
    * command it returns -- a KeyUpdateCommand among them -- is applied before
    * this returns.  One request, one scope.
    *
-   * <p>Which nodes refresh is the workload's to say: a node refreshes only
-   * if the NameNode has it marked for a key update, and only the workload's
-   * own heartbeat can take the mark ({@link #driveHeartbeats}, which this
-   * requires).</p>
+   * <p>A node refreshes only if the NameNode has it marked for a key
+   * update, and whichever heartbeat of the node arrives first takes the
+   * mark: this one, or the node's own daemon heartbeat, whose command the
+   * actor hands to its command processor with the answer's scope carried
+   * ({@code BPServiceActor.CommandProcessingThread#carried}).  Either way
+   * the delivery is a recorded heartbeat answer, and its IPC doors are what
+   * a witness fails.</p>
    *
    * @return false when the heartbeat's transport failed -- a modeled failure
    *         leaves the node's keys as they were
    */
   public static boolean refreshKeysFromNameNode(DataNode datanode,
       String api) throws IOException {
-    if (!datanode.areHeartbeatsDisabledForTests()) {
-      throw new IllegalStateException("a workload that sends a heartbeat"
-          + " sends them all: CausynthCluster.driveHeartbeats() first");
-    }
     BPOfferService service = datanode.getAllBpOs().get(0);
     BPServiceActor actor = service.getBPServiceActors().get(0);
     long request = CausynthMessagePropagation.beginRequest(
