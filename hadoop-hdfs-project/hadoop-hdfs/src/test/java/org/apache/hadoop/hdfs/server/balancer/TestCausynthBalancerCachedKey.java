@@ -195,8 +195,6 @@ public class TestCausynthBalancerCachedKey {
       KeyManager keyManager = null;
       long balance = 0L;
       try {
-        // Every heartbeat of the window is the workload's (CausynthCluster).
-        CausynthCluster.driveHeartbeats();
         CausynthCluster.startRecording();
 
         // 1. The master rotates twice: its current key is two serials past
