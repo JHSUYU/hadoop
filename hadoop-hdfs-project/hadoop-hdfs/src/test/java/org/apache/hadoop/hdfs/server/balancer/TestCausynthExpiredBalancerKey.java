@@ -95,6 +95,22 @@ public class TestCausynthExpiredBalancerKey {
       NamenodeProtocol rpc = NameNodeProxies.createProxy(conf,
           cluster.getFileSystem().getUri(), NamenodeProtocol.class).getProxy();
       CausynthCluster.startRecording();
+      // Rotate once inside the recorded interval, before the Balancer
+      // fetches: updateKeys builds a new currentKey (and retiring and next
+      // keys) whose expiryDate is the recorded NameNode clock plus the
+      // intervals.  pinBlockKeys' rotations ran before recording, so the key
+      // they left current carried an expiry no recorded clock wrote, a
+      // constant that differs in every replay.
+      { // causynth-d3-rotation-scope
+        long causynthRotation = org.apache.hadoop.ipc.CausynthMessagePropagation.beginTick(
+            master, "KEY_MANAGER_TICK");
+        try {
+          master.updateKeys(Long.MAX_VALUE);
+        } finally {
+          org.apache.hadoop.ipc.CausynthMessagePropagation.endTick(
+              causynthRotation);
+        }
+      }
       // Refresh once inside the recorded interval. The Balancer cache below
       // then reads the NameNode-delivered key expression instead of the
       // constructor's pre-recording concrete snapshot.
@@ -158,13 +174,13 @@ public class TestCausynthExpiredBalancerKey {
    * SecureRandom once per JVM and each replay task is its own JVM.
    * setSerialNo only moves the counter, so the two constructor-time keys keep
    * their random ids; two rotations retire them: the first mints
-   * SERIAL_NO + 1 as nextKey, the second makes it currentKey (the key the
-   * Balancer's recorded newDataEncryptionKey is minted from) and mints
-   * SERIAL_NO + 2.  DataNodes and the Balancer mint nothing themselves (they
+   * SERIAL_NO + 1 as nextKey, the second makes it currentKey and mints
+   * SERIAL_NO + 2.  The recorded window's first rotation makes SERIAL_NO + 2
+   * the currentKey the Balancer's recorded newDataEncryptionKey is minted
+   * from.  DataNodes and the Balancer mint nothing themselves (they
    * only addKeys what the NameNode exports), so delivering the master's export
    * in-process here is the same state the recorded RPC refresh delivers later;
-   * it stays out of the trace because nothing is recorded yet.  The recorded
-   * window's own two rotations in testWait are unchanged.
+   * it stays out of the trace because nothing is recorded yet.
    */
   private static void pinBlockKeys(MiniDFSCluster cluster) throws Exception {
     BlockTokenSecretManager master = cluster.getNamesystem()
