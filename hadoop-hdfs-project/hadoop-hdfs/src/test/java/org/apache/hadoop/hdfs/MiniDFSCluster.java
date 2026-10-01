@@ -114,6 +114,7 @@ import org.apache.hadoop.hdfs.server.blockmanagement.DatanodeManager;
 import org.apache.hadoop.hdfs.server.common.HdfsServerConstants.StartupOption;
 import org.apache.hadoop.hdfs.server.common.Storage;
 import org.apache.hadoop.hdfs.server.common.Util;
+import org.apache.hadoop.hdfs.server.datanode.CausynthCluster;
 import org.apache.hadoop.hdfs.server.datanode.DataNode;
 import org.apache.hadoop.hdfs.server.datanode.DataNodeTestUtils;
 import org.apache.hadoop.hdfs.server.datanode.DataStorage;
@@ -558,6 +559,10 @@ public class MiniDFSCluster implements AutoCloseable {
    * Used by builder to create and return an instance of MiniDFSCluster
    */
   protected MiniDFSCluster(Builder builder) throws IOException {
+    if (CausynthCluster.automatic()) {
+      builder.dnConfOverlays = CausynthCluster.automaticSetUp(builder.conf,
+          builder.numDataNodes, builder.dnConfOverlays);
+    }
     if (builder.nnTopology == null) {
       // If no topology is specified, build a single NN. 
       builder.nnTopology = MiniDFSNNTopology.simpleSingleNN(
@@ -617,6 +622,9 @@ public class MiniDFSCluster implements AutoCloseable {
                        builder.useConfiguredTopologyMappingClass,
                        builder.dnHttpPorts,
                        builder.dnIpcPorts);
+    if (CausynthCluster.automatic()) {
+      CausynthCluster.registerAutomatically(this);
+    }
   }
   
   public static class DataNodeProperties {
@@ -1857,6 +1865,9 @@ public class MiniDFSCluster implements AutoCloseable {
     if (storageCapacities != null) {
       storageCap.addAll(Arrays.asList(storageCapacities));
     }
+    if (CausynthCluster.automatic()) {
+      CausynthCluster.registerStartedDataNodes(this);
+    }
   }
 
   private synchronized void setDataNodeStorageCapacities(
@@ -2179,6 +2190,9 @@ public class MiniDFSCluster implements AutoCloseable {
    */
   public void shutdown(boolean deleteDfsDir, boolean closeFileSystem) {
     LOG.info("Shutting down the Mini HDFS Cluster");
+    if (CausynthCluster.automatic()) {
+      CausynthCluster.shutdownAutomatically(this);
+    }
     if (checkExitOnShutdown)  {
       if (ExitUtil.terminateCalled()) {
         Exception cause = ExitUtil.getFirstExitException();
