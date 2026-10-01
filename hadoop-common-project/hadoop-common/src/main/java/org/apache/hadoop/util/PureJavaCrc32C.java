@@ -20,58 +20,47 @@
  */
 package org.apache.hadoop.util;
 
-import java.nio.ByteBuffer;
 import java.util.zip.Checksum;
-import java.util.zip.CRC32C;
 
 import org.apache.hadoop.classification.InterfaceAudience;
 import org.apache.hadoop.classification.InterfaceStability;
 
 /**
- * The legacy PureJavaCrc32C implemented in HADOOP-7443 is
- * much slower than JDK native implementation in modern JDKs,
- * HADOOP-19839 rewrites it to delegate to JDK native CRC32C.
- *
- * @see java.util.zip.CRC32C
+ * A pure-java implementation of CRC32-C.
  */
 @InterfaceAudience.Public
 @InterfaceStability.Stable
 public class PureJavaCrc32C implements Checksum {
-  // Create a delegate instance because CRC32C is a final class
-  private final CRC32C delegate;
+  private int crc;
 
   public PureJavaCrc32C() {
-    delegate = new CRC32C();
+    reset();
   }
 
   @Override
   public void update(int b) {
-    delegate.update(b);
+    crc = (crc >>> 8) ^ T[(crc ^ b) & 0xff];
   }
 
-  @Override
   public void update(byte[] b) {
-    delegate.update(b);
+    update(b, 0, b.length);
   }
 
   @Override
   public void update(byte[] b, int off, int len) {
-    delegate.update(b, off, len);
-  }
-
-  @Override
-  public void update(ByteBuffer buffer) {
-    delegate.update(buffer);
+    for (int end = off + len; off < end; off++) {
+      update(b[off]);
+    }
   }
 
   @Override
   public long getValue() {
-    return delegate.getValue();
+    return (~crc) & 0xffffffffL;
   }
 
   @Override
   public void reset() {
-    delegate.reset();
+    crc = 0xffffffff;
   }
 
   /**
