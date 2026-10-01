@@ -82,7 +82,6 @@ import org.apache.hadoop.hdfs.server.namenode.snapshot.Snapshot.Root;
 import org.apache.hadoop.hdfs.server.namenode.XAttrFeature;
 import org.apache.hadoop.hdfs.util.EnumCounters;
 
-import org.apache.hadoop.util.Preconditions;
 import org.apache.hadoop.thirdparty.protobuf.ByteString;
 
 @InterfaceAudience.Private
@@ -464,7 +463,9 @@ public class FSImageFormatPBSnapshot {
           }
         }
       }
-      Preconditions.checkState(i == sm.getNumSnapshots());
+      if (i != sm.getNumSnapshots()) {
+        throw new IllegalStateException();
+      }
       parent.commitSection(headers, FSImageFormatProtobuf.SectionName.SNAPSHOT);
     }
 
