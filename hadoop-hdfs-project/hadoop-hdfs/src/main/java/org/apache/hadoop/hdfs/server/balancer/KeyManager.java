@@ -101,6 +101,11 @@ public class KeyManager implements Closeable, DataEncryptionKeyFactory {
     }
   }
 
+  /** Takes the NameNode's current block keys, as one updater turn does. */
+  public void updateBlockKeys() throws IOException {
+    blockTokenSecretManager.addKeys(namenode.getBlockKeys());
+  }
+
   /** Get an access token for a block. */
   public Token<BlockTokenIdentifier> getAccessToken(ExtendedBlock eb,
       StorageType[] storageTypes, String[] storageIds) throws IOException {
@@ -181,7 +186,7 @@ public class KeyManager implements Closeable, DataEncryptionKeyFactory {
           long causynthTick = CausynthMessagePropagation.beginTick(
               blockTokenSecretManager, "KEY_MANAGER_TICK");
           try {
-            blockTokenSecretManager.addKeys(namenode.getBlockKeys());
+            updateBlockKeys();
           } catch (IOException e) {
             LOG.error("Failed to set keys", e);
           } finally {
