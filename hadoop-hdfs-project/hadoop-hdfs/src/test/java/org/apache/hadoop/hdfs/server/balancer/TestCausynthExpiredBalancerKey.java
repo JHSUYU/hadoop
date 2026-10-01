@@ -17,11 +17,13 @@
  */
 package org.apache.hadoop.hdfs.server.balancer;
 
+import java.io.IOException;
 import java.lang.reflect.Field;
 import java.util.Arrays;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeSet;
+import java.util.concurrent.TimeoutException;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.hdfs.DFSConfigKeys;
 import org.apache.hadoop.hdfs.HdfsConfiguration;
@@ -32,10 +34,12 @@ import org.apache.hadoop.hdfs.security.token.block.BlockKey;
 import org.apache.hadoop.hdfs.security.token.block.BlockTokenSecretManager;
 import org.apache.hadoop.hdfs.server.datanode.CausynthCluster;
 import org.apache.hadoop.hdfs.server.datanode.DataNode;
+import org.apache.hadoop.hdfs.server.datanode.DataNodeTestUtils;
 import org.apache.hadoop.hdfs.server.namenode.NameNodeRpcServer;
 import org.apache.hadoop.hdfs.server.protocol.NamenodeProtocol;
 import org.apache.hadoop.ipc.CausynthMessagePropagation;
 import org.apache.hadoop.ipc.RPC;
+import org.apache.hadoop.test.GenericTestUtils;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -154,6 +158,45 @@ public class TestCausynthExpiredBalancerKey {
         }
       } finally {
         RPC.stopProxy(rpc);
+      }
+      // One more rotation, delivered the way the NameNode delivers keys: it
+      // marks every DataNode for a key update (HeartbeatManager does so
+      // after a rotation) and the next heartbeat carries a KeyUpdateCommand
+      // that BPOfferService hands to addKeys.  addKeys first runs
+      // removeExpiredKeys, and this is the DataNodes' only pass over the
+      // keys the refresh above put there: without it the in-window key the
+      // Balancer's cache names is never checked against a DataNode clock.
+      { // causynth-d3-rotation-scope
+        long causynthRotation = org.apache.hadoop.ipc.CausynthMessagePropagation.beginTick(
+            master, "KEY_MANAGER_TICK");
+        try {
+          master.updateKeys(Long.MAX_VALUE);
+          for (DataNode node : CausynthCluster.dataNodes()) {
+            cluster.getNamesystem().getBlockManager().getDatanodeManager()
+                .getDatanode(node.getDatanodeId()).setNeedKeyUpdate(true);
+          }
+        } finally {
+          org.apache.hadoop.ipc.CausynthMessagePropagation.endTick(
+              causynthRotation);
+        }
+      }
+      try {
+        Set<Integer> rotated = keyIds(master);
+        for (DataNode node : CausynthCluster.dataNodes()) {
+          DataNodeTestUtils.triggerHeartbeat(node);
+          BlockTokenSecretManager manager =
+              node.getBlockPoolTokenSecretManager().get(blockPoolId);
+          GenericTestUtils.waitFor(() -> {
+            try {
+              return keyIds(manager).containsAll(rotated);
+            } catch (ReflectiveOperationException e) {
+              throw new IllegalStateException(e);
+            }
+          }, 100, 60000);
+        }
+      } catch (ReflectiveOperationException | TimeoutException
+          | InterruptedException e) {
+        throw new IOException("the DataNodes took no key update", e);
       }
       keyManager.updateBlockKeys();
     };
