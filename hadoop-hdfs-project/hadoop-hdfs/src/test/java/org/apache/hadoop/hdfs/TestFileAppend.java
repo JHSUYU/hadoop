@@ -46,6 +46,7 @@ import org.apache.hadoop.hdfs.protocol.AlreadyBeingCreatedException;
 import org.apache.hadoop.hdfs.protocol.ExtendedBlock;
 import org.apache.hadoop.hdfs.protocol.LocatedBlock;
 import org.apache.hadoop.hdfs.protocol.LocatedBlocks;
+import org.apache.hadoop.hdfs.server.datanode.CausynthCluster;
 import org.apache.hadoop.hdfs.server.datanode.DataNode;
 import org.apache.hadoop.hdfs.server.datanode.DataNodeTestUtils;
 import org.apache.hadoop.hdfs.server.datanode.ReplicaBeingWritten;
@@ -55,6 +56,7 @@ import org.apache.hadoop.hdfs.server.datanode.fsdataset.ReplicaOutputStreams;
 import org.apache.hadoop.hdfs.server.datanode.fsdataset.impl.FsDatasetTestUtil;
 import org.apache.hadoop.hdfs.server.datanode.fsdataset.impl.FsDatasetUtil;
 import org.apache.hadoop.io.IOUtils;
+import org.apache.hadoop.ipc.CausynthMessagePropagation;
 import org.apache.hadoop.ipc.RemoteException;
 import org.apache.hadoop.test.GenericTestUtils;
 import org.apache.hadoop.util.DataChecksum;
@@ -188,12 +190,17 @@ public class TestFileAppend{
    */
   @Test
   public void testSimpleFlush() throws IOException {
-    Configuration conf = new HdfsConfiguration();
+    Configuration conf = CausynthCluster.configure(new HdfsConfiguration());
     fileContents = AppendTestUtil.initBuffer(AppendTestUtil.FILE_SIZE);
     File builderBaseDir = new File(GenericTestUtils.getRandomizedTempPath());
     MiniDFSCluster cluster = new MiniDFSCluster.Builder(conf, builderBaseDir)
+        .dataNodeConfOverlays(CausynthCluster.dataNodeOverlays(1))
         .build();
     DistributedFileSystem fs = cluster.getFileSystem();
+    CausynthCluster.registerCluster(cluster, "flush", fs.getClient());
+    CausynthCluster.startRecording();
+    long request = CausynthMessagePropagation.beginRequest(fs.getClient(),
+        "simple-flush");
     try {
 
       // create a new file.
@@ -232,6 +239,7 @@ public class TestFileAppend{
       e.printStackTrace();
       throw new IOException("Throwable : " + e);
     } finally {
+      CausynthMessagePropagation.endRequest(request, "simple-flush");
       fs.close();
       cluster.shutdown();
     }
@@ -449,7 +457,7 @@ public class TestFileAppend{
   @Test
   public void testAppendAfterSoftLimit() 
       throws IOException, InterruptedException {
-    Configuration conf = new HdfsConfiguration();
+    Configuration conf = CausynthCluster.configure(new HdfsConfiguration());
     conf.setInt(DFSConfigKeys.DFS_REPLICATION_KEY, 1);
     //Set small soft-limit for lease
     final long softLimit = 1L;
@@ -457,30 +465,44 @@ public class TestFileAppend{
 
     File builderBaseDir = new File(GenericTestUtils.getRandomizedTempPath());
     MiniDFSCluster cluster = new MiniDFSCluster.Builder(conf, builderBaseDir)
-        .numDataNodes(1).build();
+        .numDataNodes(1)
+        .dataNodeConfOverlays(CausynthCluster.dataNodeOverlays(1)).build();
     cluster.setLeasePeriod(softLimit, hardLimit);
     cluster.waitActive();
 
-    FileSystem fs = cluster.getFileSystem();
-    FileSystem fs2 = new DistributedFileSystem();
+    DistributedFileSystem fs = cluster.getFileSystem();
+    DistributedFileSystem fs2 = new DistributedFileSystem();
     fs2.initialize(fs.getUri(), conf);
+    CausynthCluster.registerCluster(cluster, "softlimit", fs.getClient(),
+        fs2.getClient());
+    CausynthCluster.startRecording();
 
     final Path testPath = new Path("/testAppendAfterSoftLimit");
     final byte[] fileContents = AppendTestUtil.initBuffer(32);
 
     // create a new file without closing
-    FSDataOutputStream out = fs.create(testPath);
-    out.write(fileContents);
+    long create = CausynthMessagePropagation.beginRequest(fs.getClient(),
+        "create");
+    FSDataOutputStream out;
+    try {
+      out = fs.create(testPath);
+      out.write(fileContents);
+    } finally {
+      CausynthMessagePropagation.endRequest(create, "create");
+    }
 
     //Wait for > soft-limit
     Thread.sleep(250);
 
+    long append = CausynthMessagePropagation.beginRequest(fs2.getClient(),
+        "append");
     try {
       FSDataOutputStream appendStream2 = fs2.append(testPath);
       appendStream2.write(fileContents);
       appendStream2.close();
       assertEquals(fileContents.length, fs.getFileStatus(testPath).getLen());
     } finally {
+      CausynthMessagePropagation.endRequest(append, "append");
       fs.close();
       fs2.close();
       cluster.shutdown();
