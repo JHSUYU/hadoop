@@ -35,6 +35,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 
+import edu.uva.liftlab.graphchecker.annotation.CausynthExceptionTarget;
 import org.apache.hadoop.thirdparty.com.google.common.collect.ImmutableList;
 import org.apache.hadoop.classification.InterfaceAudience;
 import org.apache.hadoop.fs.permission.PermissionStatus;
@@ -464,7 +465,8 @@ public class FSImageFormatPBSnapshot {
         }
       }
       if (i != sm.getNumSnapshots()) {
-        throw new IllegalStateException();
+        throw new @CausynthExceptionTarget("hdfs-17960")
+            IllegalStateException();
       }
       parent.commitSection(headers, FSImageFormatProtobuf.SectionName.SNAPSHOT);
     }
