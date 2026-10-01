@@ -70,6 +70,7 @@ import org.apache.hadoop.hdfs.server.protocol.StorageBlockReport;
 import org.apache.hadoop.hdfs.server.protocol.StorageReport;
 import org.apache.hadoop.hdfs.server.protocol.VolumeFailureSummary;
 import org.apache.hadoop.io.IOUtils;
+import org.apache.hadoop.ipc.CausynthMessagePropagation;
 import org.apache.hadoop.ipc.RemoteException;
 import org.apache.hadoop.net.NetUtils;
 import org.apache.hadoop.util.Preconditions;
@@ -684,6 +685,10 @@ class BPServiceActor implements Runnable {
     // Now loop for a long time....
     //
     while (shouldRun()) {
+      // One offer-service turn is one root, owned by this DataNode: a tick,
+      // the special case of a service-loop turn (GraphChecker).
+      long causynthTick = CausynthMessagePropagation.beginTick(
+          dn, "BP_SERVICE_ACTOR");
       try {
         DataNodeFaultInjector.get().startOfferService();
         final long startTime = scheduler.monotonicNow();
@@ -807,6 +812,7 @@ class BPServiceActor implements Runnable {
         sleepAfterException();
       } finally {
         DataNodeFaultInjector.get().endOfferService();
+        CausynthMessagePropagation.endTick(causynthTick);
       }
       processQueueMessages();
     } // while (shouldRun())
@@ -1077,7 +1083,14 @@ class BPServiceActor implements Runnable {
           if (lifelineNamenode == null) {
             lifelineNamenode = dn.connectToLifelineNN(lifelineNnAddr);
           }
-          sendLifelineIfDue();
+          // One lifeline turn is one root of this DataNode's (GraphChecker).
+          long causynthTick = CausynthMessagePropagation.beginTick(
+              dn, "BP_LIFELINE_SENDER");
+          try {
+            sendLifelineIfDue();
+          } finally {
+            CausynthMessagePropagation.endTick(causynthTick);
+          }
           Thread.sleep(scheduler.getLifelineWaitTime());
         } catch (InterruptedException e) {
           Thread.currentThread().interrupt();

@@ -98,6 +98,7 @@ import static org.apache.hadoop.hdfs.protocol.proto.DataTransferProtos.Status.ER
 import static org.apache.hadoop.hdfs.protocol.proto.DataTransferProtos.Status.SUCCESS;
 import static org.apache.hadoop.hdfs.server.datanode.DataNode.DN_CLIENTTRACE_FORMAT;
 import static org.apache.hadoop.util.Time.monotonicNow;
+import org.apache.hadoop.ipc.CausynthMessagePropagation;
 
 
 /**
@@ -296,7 +297,17 @@ class DataXceiver extends Receiver implements Runnable {
           firstOp = op;
           incrReadWriteOpMetrics(op);
         }
-        processOp(op);
+        // One op is one turn of this connection's loop, owned by this
+        // DataNode, and the message scope a SASL handshake opened ends with
+        // the op rather than with the handshake (GraphChecker).
+        long causynthOp = CausynthMessagePropagation.beginTick(
+            datanode, "DATA_XCEIVER");
+        try {
+          processOp(op);
+        } finally {
+          CausynthMessagePropagation.endTick(causynthOp);
+          CausynthMessagePropagation.endInbound();
+        }
         ++opsProcessed;
       } while ((peer != null) &&
           (!peer.isClosed() && dnConf.socketKeepaliveTimeout > 0));
