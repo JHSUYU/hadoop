@@ -82,10 +82,12 @@ public class Sender implements DataTransferProtocol {
 
   private static void send(final DataOutputStream out, final Op opcode,
       final Message proto) throws IOException {
+    // GraphChecker: the op leaves as a message.
+    final Message carried = DataTransferProtoUtil.withCausynth(proto);
     LOG.trace("Sending DataTransferOp {}: {}",
-        proto.getClass().getSimpleName(), proto);
+        carried.getClass().getSimpleName(), carried);
     op(out, opcode);
-    proto.writeDelimitedTo(out);
+    carried.writeDelimitedTo(out);
     out.flush();
   }
 

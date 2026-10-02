@@ -33,7 +33,11 @@ import org.apache.hadoop.hdfs.protocol.proto.HdfsProtos.ChecksumTypeProto;
 import org.apache.hadoop.hdfs.protocolPB.PBHelperClient;
 import org.apache.hadoop.hdfs.security.token.block.BlockTokenIdentifier;
 import org.apache.hadoop.hdfs.security.token.block.InvalidBlockTokenException;
+import org.apache.hadoop.ipc.CausynthMessagePropagation;
 import org.apache.hadoop.security.token.Token;
+import org.apache.hadoop.thirdparty.protobuf.Descriptors.Descriptor;
+import org.apache.hadoop.thirdparty.protobuf.Descriptors.FieldDescriptor;
+import org.apache.hadoop.thirdparty.protobuf.Message;
 import org.apache.hadoop.util.DataChecksum;
 import org.apache.hadoop.tracing.Span;
 import org.apache.hadoop.tracing.Tracer;
@@ -81,6 +85,46 @@ public abstract class DataTransferProtoUtil {
       .setBaseHeader(buildBaseHeader(blk, blockToken))
       .setClientName(client)
       .build();
+  }
+
+  /**
+   * The op as it leaves (GraphChecker): a message carrying, on its trace
+   * info -- its header's base header's, or its own when it has no header
+   * (the short-circuit shared-memory ops) -- its correlation, the sender's
+   * context and every value the sender's thread exported for it.
+   */
+  static Message withCausynth(Message op) {
+    CausynthMessagePropagation.Outbound causynth =
+        CausynthMessagePropagation.outboundOp();
+    return causynth.active() ? carry(op.toBuilder(), causynth).build() : op;
+  }
+
+  private static Message.Builder carry(Message.Builder message,
+      CausynthMessagePropagation.Outbound causynth) {
+    for (FieldDescriptor field : message.getDescriptorForType().getFields()) {
+      if (field.isRepeated()
+          || field.getJavaType() != FieldDescriptor.JavaType.MESSAGE) {
+        continue;
+      }
+      Descriptor type = field.getMessageType();
+      if (type.equals(DataTransferTraceInfoProto.getDescriptor())) {
+        message.setField(field,
+            ((DataTransferTraceInfoProto) message.getField(field)).toBuilder()
+                .setCausynthCorrelation(causynth.correlationId)
+                .setCausynthTrace(causynth.trace)
+                .setCausynthSymbolic(causynth.symbolic)
+                .build());
+        return message;
+      }
+      if (type.equals(BaseHeaderProto.getDescriptor())
+          || type.equals(ClientOperationHeaderProto.getDescriptor())) {
+        message.setField(field, carry(
+            ((Message) message.getField(field)).toBuilder(), causynth)
+            .build());
+        return message;
+      }
+    }
+    return message;
   }
 
   static BaseHeaderProto buildBaseHeader(ExtendedBlock blk,
