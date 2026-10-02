@@ -90,8 +90,8 @@ public abstract class DataTransferProtoUtil {
   /**
    * The op as it leaves (GraphChecker): a message carrying, on its trace
    * info -- its header's base header's, or its own when it has no header
-   * (the short-circuit shared-memory ops) -- its correlation, the sender's
-   * context and every value the sender's thread exported for it.
+   * (the short-circuit shared-memory ops) -- its correlation and every value
+   * the sender's thread exported for it.
    */
   static Message withCausynth(Message op) {
     CausynthMessagePropagation.Outbound causynth =
@@ -111,7 +111,6 @@ public abstract class DataTransferProtoUtil {
         message.setField(field,
             ((DataTransferTraceInfoProto) message.getField(field)).toBuilder()
                 .setCausynthCorrelation(causynth.correlationId)
-                .setCausynthTrace(causynth.trace)
                 .setCausynthSymbolic(causynth.symbolic)
                 .build());
         return message;

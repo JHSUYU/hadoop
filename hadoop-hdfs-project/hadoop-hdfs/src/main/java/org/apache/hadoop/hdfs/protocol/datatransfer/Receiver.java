@@ -81,13 +81,13 @@ public abstract class Receiver implements DataTransferProtocol {
 
   /**
    * Continues the op's trace span.  GraphChecker: the op is a message this
-   * DataNode received, before any of its fields is read; the thread serves it
-   * until the op's turn ends (DataXceiver).
+   * DataNode's turn received, before any of its fields is read; the turn
+   * keeps its own context and serves the op until it ends (DataXceiver).
    */
   private TraceScope continueTraceSpan(DataTransferTraceInfoProto traceInfo,
                                        String description) {
-    CausynthMessagePropagation.inboundOp(traceInfo.getCausynthTrace(),
-        traceInfo.getCausynthSymbolic(), traceInfo.getCausynthCorrelation());
+    CausynthMessagePropagation.inboundOp(traceInfo.getCausynthSymbolic(),
+        traceInfo.getCausynthCorrelation());
     TraceScope scope = null;
     SpanContext spanContext =
         TraceUtils.byteStringToSpanContext(traceInfo.getSpanContext());

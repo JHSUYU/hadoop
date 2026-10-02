@@ -66,11 +66,10 @@ message DataTransferTraceInfoProto {
   optional uint64 traceId = 1;
   optional uint64 parentId = 2;
   optional bytes spanContext = 3;
-  // GraphChecker: the op as a message, its correlation, the sender's context
-  // and the values it carries (CausynthMessagePropagation#outboundOp).
+  // GraphChecker: the op as a message, its correlation and the values it
+  // carries (CausynthMessagePropagation#outboundOp).
   optional string causynthCorrelation = 4;
-  optional string causynthTrace = 5;
-  optional string causynthSymbolic = 6;
+  optional string causynthSymbolic = 5;
 }
 
 message ClientOperationHeaderProto {
