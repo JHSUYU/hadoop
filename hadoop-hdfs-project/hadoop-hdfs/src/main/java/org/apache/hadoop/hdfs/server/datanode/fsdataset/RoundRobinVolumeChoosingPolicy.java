@@ -23,6 +23,7 @@ import static org.apache.hadoop.hdfs.DFSConfigKeys.DFS_DATANODE_ROUND_ROBIN_VOLU
 import java.io.IOException;
 import java.util.List;
 
+import edu.uva.liftlab.graphchecker.annotation.CausynthExceptionTarget;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.apache.hadoop.conf.Configurable;
@@ -80,7 +81,8 @@ public class RoundRobinVolumeChoosingPolicy<V extends FsVolumeSpi>
       throws IOException {
 
     if (volumes.size() < 1) {
-      throw new DiskOutOfSpaceException("No more available volumes");
+      throw new @CausynthExceptionTarget("hdfs-bugs-slowdisk-zero")
+          DiskOutOfSpaceException("No more available volumes");
     }
 
     // As all the items in volumes are with the same storage type,
