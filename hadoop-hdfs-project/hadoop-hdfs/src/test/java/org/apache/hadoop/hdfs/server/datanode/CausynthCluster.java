@@ -142,8 +142,15 @@ public final class CausynthCluster {
   /** The JournalNodes this run registered. */
   private static final Set<JournalNode> JOURNALS =
       Collections.newSetFromMap(new WeakHashMap<>());
-  private static Object windowCluster;
-  private static long windowRequest;
+  /**
+   * The window's client, {@code <prefix>/client0} of the cluster that opened
+   * it, and its role, once the window is open: one request of the test,
+   * from the first automatic cluster until the window closes, whichever
+   * cluster the test talks to.  Named, never the cluster itself, which a
+   * later shutdown must leave collectable.
+   */
+  private static String windowClient;
+  private static String windowRole;
 
   /** One automatic cluster: its name prefix and the nodes it has built. */
   private static final class Automatic {
@@ -247,7 +254,7 @@ public final class CausynthCluster {
     configure(conf);
     AUTOMATIC_CLUSTERS.put(cluster,
         new Automatic("auto" + automaticClusters++));
-    if (windowCluster == null && CausynthMessagePropagation.startupWindow()) {
+    if (windowClient == null && CausynthMessagePropagation.startupWindow()) {
       openWindow(cluster, clientRole);
     }
   }
@@ -356,13 +363,13 @@ public final class CausynthCluster {
     }
     registerStartedDataNodes(cluster);
     if (cluster.getNameNode(0) != null) {
-      if (windowCluster == null) {
+      if (windowClient == null) {
         openWindow(cluster, "DFS_CLIENT");
       }
-      if (windowCluster == cluster) {
-        CausynthMessagePropagation.registerSourceAlias(
-            cluster.getFileSystem(0).getClient(), cluster);
-      }
+      // The test's one client, whichever cluster it talks to.
+      CausynthMessagePropagation.registerSource(
+          cluster.getFileSystem(0).getClient(), "EXTERNAL_APP", windowRole,
+          windowClient, 0);
     }
   }
 
@@ -404,7 +411,7 @@ public final class CausynthCluster {
       return;
     }
     owner.up = true;
-    if (windowCluster == null) {
+    if (windowClient == null) {
       openWindow(cluster, "QJM_CLIENT");
     }
   }
@@ -431,15 +438,23 @@ public final class CausynthCluster {
   }
 
   /**
-   * The window opens: {@code cluster} is the test's client {@code
-   * <prefix>/client0} and the test's thread stands in its request.
+   * The window opens, once per run: {@code cluster} is the test's client
+   * {@code <prefix>/client0} and the test's thread stands in its request
+   * until the window closes.  A cluster built later (a test that restarts
+   * its cluster encrypted, round HG2's hdfs-adhoc-11/14) is built inside
+   * that request: its construction's calls carry the test's context and
+   * the threads it starts are named by it.  Ended at the first cluster's
+   * shutdown and opened again after the next one's constructor, the
+   * request left that construction's calls with no context, and a second
+   * window restarted every count mid-test.
    */
   private static void openWindow(Object cluster, String clientRole) {
+    windowClient = AUTOMATIC_CLUSTERS.get(cluster).prefix + "/client0";
+    windowRole = clientRole;
     CausynthMessagePropagation.registerSource(cluster, "EXTERNAL_APP",
-        clientRole, AUTOMATIC_CLUSTERS.get(cluster).prefix + "/client0", 0);
-    windowCluster = cluster;
+        clientRole, windowClient, 0);
     startRecording();
-    windowRequest = CausynthMessagePropagation.beginRequest(cluster, "test");
+    CausynthMessagePropagation.beginRequest(cluster, "test");
   }
 
   /**
@@ -460,14 +475,10 @@ public final class CausynthCluster {
   }
 
   /**
-   * A cluster shuts down: the window's request ends with the window's
-   * cluster, and every registry here forgets the cluster and its nodes.
+   * A cluster shuts down: every registry here forgets the cluster and its
+   * nodes; the window's request stands ({@link #openWindow}).
    */
   public static synchronized void shutdownAutomatically(Object cluster) {
-    if (cluster == windowCluster) {
-      CausynthMessagePropagation.endRequest(windowRequest, "test");
-      windowCluster = null;
-    }
     AUTOMATIC_CLUSTERS.remove(cluster);
     if (cluster instanceof MiniDFSCluster) {
       MiniDFSCluster dfs = (MiniDFSCluster) cluster;
