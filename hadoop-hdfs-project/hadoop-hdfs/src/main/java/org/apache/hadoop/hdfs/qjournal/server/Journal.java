@@ -17,6 +17,7 @@
  */
 package org.apache.hadoop.hdfs.qjournal.server;
 
+import edu.uva.liftlab.graphchecker.annotation.CausynthExceptionTarget;
 import org.apache.hadoop.thirdparty.protobuf.ByteString;
 import java.io.Closeable;
 import java.io.File;
@@ -484,7 +485,8 @@ public class Journal implements Closeable {
   private synchronized void checkRequest(RequestInfo reqInfo) throws IOException {
     // Invariant 25 from ZAB paper
     if (reqInfo.getEpoch() < lastPromisedEpoch.get()) {
-      throw new IOException("IPC's epoch " + reqInfo.getEpoch() +
+      throw new @CausynthExceptionTarget("hdfs-adhoc-08")
+          IOException("IPC's epoch " + reqInfo.getEpoch() +
           " is less than the last promised epoch " +
           lastPromisedEpoch.get() + " ; journal id: " + journalId);
     } else if (reqInfo.getEpoch() > lastPromisedEpoch.get()) {
@@ -501,11 +503,12 @@ public class Journal implements Closeable {
     currentEpochIpcSerial = reqInfo.getIpcSerialNumber();
 
     if (reqInfo.hasCommittedTxId()) {
-      Preconditions.checkArgument(
-          reqInfo.getCommittedTxId() >= committedTxnId.get(),
-          "Client trying to move committed txid backward from " +
-          committedTxnId.get() + " to " + reqInfo.getCommittedTxId() +
-              " ; journal id: " + journalId);
+      if (!(reqInfo.getCommittedTxId() >= committedTxnId.get())) {
+        throw new @CausynthExceptionTarget("hdfs-adhoc-09") IllegalArgumentException(
+            "Client trying to move committed txid backward from " +
+            committedTxnId.get() + " to " + reqInfo.getCommittedTxId() +
+                " ; journal id: " + journalId);
+      }
       
       committedTxnId.set(reqInfo.getCommittedTxId());
     }
@@ -515,7 +518,8 @@ public class Journal implements Closeable {
     checkRequest(reqInfo);
     
     if (reqInfo.getEpoch() != lastWriterEpoch.get()) {
-      throw new IOException("IPC's epoch " + reqInfo.getEpoch() +
+      throw new @CausynthExceptionTarget("hdfs-adhoc-10")
+          IOException("IPC's epoch " + reqInfo.getEpoch() +
           " is not the current writer epoch  " +
           lastWriterEpoch.get() + " ; journal id: " + journalId);
     }
@@ -923,7 +927,7 @@ public class Journal implements Closeable {
         // which are already Committed.
         if (txnRange(currentSegment).contains(committedTxnId.get()) &&
             !txnRange(segment).contains(committedTxnId.get())) {
-          throw new AssertionError(
+          throw new @CausynthExceptionTarget("hdfs-adhoc-07") AssertionError(
               "Cannot replace segment " +
               TextFormat.shortDebugString(currentSegment) +
               " with new segment " +

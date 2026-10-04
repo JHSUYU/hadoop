@@ -18,6 +18,7 @@
 package org.apache.hadoop.hdfs.server.datanode;
 
 
+import edu.uva.liftlab.graphchecker.annotation.CausynthExceptionTarget;
 import static org.apache.hadoop.hdfs.DFSConfigKeys.DFS_BLOCKREPORT_INITIAL_DELAY_DEFAULT;
 import static org.apache.hadoop.hdfs.DFSConfigKeys.DFS_BLOCKREPORT_INITIAL_DELAY_KEY;
 import static org.apache.hadoop.fs.CommonConfigurationKeysPublic.FS_GETSPACEUSED_CLASSNAME;
@@ -1835,7 +1836,8 @@ public class DataNode extends ReconfigurableBase
     Preconditions.checkNotNull(block);
     BPOfferService bpos = blockPoolManager.get(block.getBlockPoolId());
     if (bpos == null) {
-      throw new IOException("cannot locate OfferService thread for bp="+
+      throw new @CausynthExceptionTarget("hdfs-adhoc-31")
+          IOException("cannot locate OfferService thread for bp="+
           block.getBlockPoolId());
     }
     return bpos;
@@ -3823,7 +3825,7 @@ public class DataNode extends ReconfigurableBase
     if (blockPoolManager.get(blockPoolId) != null) {
       LOG.warn("The block pool {} is still running, cannot be deleted.",
           blockPoolId);
-      throw new IOException(
+      throw new @CausynthExceptionTarget("hdfs-adhoc-32") IOException(
           "The block pool is still running. First do a refreshNamenodes to " +
           "shutdown the block pool service");
     }

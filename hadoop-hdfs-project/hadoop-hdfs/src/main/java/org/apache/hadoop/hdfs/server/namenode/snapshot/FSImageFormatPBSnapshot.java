@@ -465,7 +465,7 @@ public class FSImageFormatPBSnapshot {
         }
       }
       if (i != sm.getNumSnapshots()) {
-        throw new @CausynthExceptionTarget("hdfs-17960")
+        throw new @CausynthExceptionTarget("hdfs-17960,hdfs-adhoc-52")
             IllegalStateException();
       }
       parent.commitSection(headers, FSImageFormatProtobuf.SectionName.SNAPSHOT);

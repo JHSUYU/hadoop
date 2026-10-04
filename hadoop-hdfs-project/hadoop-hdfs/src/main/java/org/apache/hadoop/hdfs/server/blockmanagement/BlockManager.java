@@ -17,6 +17,7 @@
  */
 package org.apache.hadoop.hdfs.server.blockmanagement;
 
+import edu.uva.liftlab.graphchecker.annotation.CausynthExceptionTarget;
 import static org.apache.hadoop.hdfs.DFSConfigKeys.*;
 import static org.apache.hadoop.hdfs.protocol.BlockType.CONTIGUOUS;
 import static org.apache.hadoop.hdfs.protocol.BlockType.STRIPED;
@@ -2868,7 +2869,9 @@ public class BlockManager implements BlockStatsMXBean {
     
     StatefulBlockInfo(BlockInfo storedBlock,
         Block reportedBlock, ReplicaState reportedState) {
-      Preconditions.checkArgument(!storedBlock.isComplete());
+      if (storedBlock.isComplete()) {
+        throw new @CausynthExceptionTarget("hdfs-adhoc-17") IllegalArgumentException();
+      }
       this.storedBlock = storedBlock;
       this.reportedBlock = reportedBlock;
       this.reportedState = reportedState;

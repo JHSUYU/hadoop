@@ -438,7 +438,8 @@ public class BlockTokenSecretManager extends
     }
     checkAccess(id, userId, block, mode, storageTypes, storageIds);
     if (!MessageDigest.isEqual(retrievePassword(id), token.getPassword())) {
-      throw new InvalidToken("Block token with " + id
+      throw new @CausynthExceptionTarget("hdfs-adhoc-14")
+          InvalidToken("Block token with " + id
           + " doesn't have the correct token password");
     }
   }
@@ -538,7 +539,8 @@ public class BlockTokenSecretManager extends
       key = allKeys.get(identifier.getKeyId());
     }
     if (key == null) {
-      throw new InvalidToken("Can't re-compute password for "
+      throw new @CausynthExceptionTarget("hdfs-adhoc-12")
+          InvalidToken("Can't re-compute password for "
           + identifier + ", since the required block key (keyID="
           + identifier.getKeyId() + ") doesn't exist.");
     }
@@ -581,7 +583,7 @@ public class BlockTokenSecretManager extends
       if (key == null) {
         throw new @CausynthExceptionTarget("hdfs-17897,hdfs-17899-bug1,"
             + "hdfs-17899-bug2,hdfs-17899-bug3,hdfs-17967-pathA,"
-            + "hdfs-17967-pathB,hdfs-17967-pathC")
+            + "hdfs-17967-pathB,hdfs-17967-pathC,hdfs-adhoc-11")
             InvalidEncryptionKeyException("Can't re-compute encryption key"
             + " for nonce, since the required block key (keyID=" + keyId
             + ") doesn't exist. Current key: " + currentKey.getKeyId());

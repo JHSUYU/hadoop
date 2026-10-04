@@ -18,6 +18,7 @@
 
 package org.apache.hadoop.hdfs.server.datanode;
 
+import edu.uva.liftlab.graphchecker.annotation.CausynthExceptionTarget;
 import java.io.File;
 import java.io.IOException;
 import java.io.RandomAccessFile;
@@ -256,7 +257,9 @@ public class DataStorage extends Storage {
             bpStorageDirMap.entrySet()) {
           final String bpid = e.getKey();
           BlockPoolSliceStorage bpStorage = this.storage.bpStorageMap.get(bpid);
-          assert bpStorage != null;
+          if (bpStorage == null) {
+            throw new @CausynthExceptionTarget("hdfs-adhoc-33") AssertionError();
+          }
           for (StorageDirectory bpSd : e.getValue()) {
             bpStorage.addStorageDir(bpSd);
           }
@@ -738,7 +741,8 @@ public class DataStorage extends Storage {
     // For pre-federation version - validate the namespaceID
     if (!federationSupported &&
         getNamespaceID() != nsInfo.getNamespaceID()) {
-      throw new IOException("Incompatible namespaceIDs in "
+      throw new @CausynthExceptionTarget("hdfs-adhoc-34")
+          IOException("Incompatible namespaceIDs in "
           + sd.getRoot().getCanonicalPath() + ": namenode namespaceID = "
           + nsInfo.getNamespaceID() + "; datanode namespaceID = "
           + getNamespaceID());
@@ -747,7 +751,8 @@ public class DataStorage extends Storage {
     // For version that supports federation, validate clusterID
     if (federationSupported
         && !getClusterID().equals(nsInfo.getClusterID())) {
-      throw new IOException("Incompatible clusterIDs in "
+      throw new @CausynthExceptionTarget("hdfs-adhoc-35")
+          IOException("Incompatible clusterIDs in "
           + sd.getRoot().getCanonicalPath() + ": namenode clusterID = "
           + nsInfo.getClusterID() + "; datanode clusterID = " + getClusterID());
     }
@@ -939,7 +944,8 @@ public class DataStorage extends Storage {
     if (!(prevInfo.getLayoutVersion() >=
         DataNodeLayoutVersion.getCurrentLayoutVersion()
         && prevInfo.getCTime() <= nsInfo.getCTime())) {  // cannot rollback
-      throw new InconsistentFSStateException(sd.getRoot(),
+      throw new @CausynthExceptionTarget("hdfs-adhoc-37")
+          InconsistentFSStateException(sd.getRoot(),
           "Cannot rollback to a newer state.\nDatanode previous state: LV = "
               + prevInfo.getLayoutVersion() + " CTime = " + prevInfo.getCTime()
               + " is newer than the namespace state: LV = "

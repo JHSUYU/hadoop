@@ -17,6 +17,7 @@
  */
 package org.apache.hadoop.hdfs.server.namenode;
 
+import edu.uva.liftlab.graphchecker.annotation.CausynthExceptionTarget;
 import static org.apache.hadoop.util.Time.now;
 
 import java.io.Closeable;
@@ -181,9 +182,11 @@ public class FSImage implements Closeable {
       throws IOException {
     long fileCount = fsn.getFilesTotal();
     // Expect 1 file, which is the root inode
-    Preconditions.checkState(fileCount == 1,
-        "FSImage.format should be called with an uninitialized namesystem, has " +
-        fileCount + " files");
+    if (!(fileCount == 1)) {
+      throw new @CausynthExceptionTarget("hdfs-adhoc-46") IllegalStateException(
+          "FSImage.format should be called with an uninitialized namesystem, has " +
+          fileCount + " files");
+    }
     NamespaceInfo ns = NNStorage.newNamespaceInfo();
     LOG.info("Allocated new BlockPoolId: " + ns.getBlockPoolID());
     ns.clusterID = clusterId;

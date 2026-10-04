@@ -17,6 +17,7 @@
  */
 package org.apache.hadoop.hdfs.server.namenode;
 
+import edu.uva.liftlab.graphchecker.annotation.CausynthExceptionTarget;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.util.List;
@@ -119,7 +120,7 @@ final class FSDirAppendOp {
       final BlockStoragePolicy lpPolicy = blockManager
           .getStoragePolicy("LAZY_PERSIST");
       if (lpPolicy != null && lpPolicy.getId() == file.getStoragePolicyID()) {
-        throw new UnsupportedOperationException(
+        throw new @CausynthExceptionTarget("hdfs-adhoc-38") UnsupportedOperationException(
             "Cannot append to lazy persist file " + path);
       }
       // Opening an existing file for append - may need to recover lease.
@@ -130,13 +131,14 @@ final class FSDirAppendOp {
       // Check that the block has at least minimum replication.
       if (lastBlock != null) {
         if (lastBlock.getBlockUCState() == BlockUCState.COMMITTED) {
-          throw new RetriableException(
+          throw new @CausynthExceptionTarget("hdfs-adhoc-39") RetriableException(
               new NotReplicatedYetException("append: lastBlock="
                   + lastBlock + " of src=" + path
                   + " is COMMITTED but not yet COMPLETE."));
         } else if (lastBlock.isComplete()
           && !blockManager.isSufficientlyReplicated(lastBlock)) {
-          throw new IOException("append: lastBlock=" + lastBlock + " of src="
+          throw new @CausynthExceptionTarget("hdfs-adhoc-40")
+              IOException("append: lastBlock=" + lastBlock + " of src="
               + path + " is not sufficiently replicated yet.");
         }
       }

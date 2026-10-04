@@ -17,6 +17,7 @@
  */
 package org.apache.hadoop.hdfs.server.datanode;
 
+import edu.uva.liftlab.graphchecker.annotation.CausynthExceptionTarget;
 import static org.apache.hadoop.hdfs.DFSConfigKeys.DFS_BLOCKREPORT_INTERVAL_MSEC_KEY;
 import static org.apache.hadoop.hdfs.DFSConfigKeys.DFS_DATANODE_OUTLIERS_REPORT_INTERVAL_KEY;
 import static org.apache.hadoop.util.Time.monotonicNow;
@@ -287,10 +288,11 @@ class BPServiceActor implements Runnable {
     String nnVersion = nsInfo.getSoftwareVersion();
     String minimumNameNodeVersion = dnConf.getMinimumNameNodeVersion();
     if (VersionUtil.compareVersions(nnVersion, minimumNameNodeVersion) < 0) {
-      IncorrectVersionException ive = new IncorrectVersionException(
-          minimumNameNodeVersion, nnVersion, "NameNode", "DataNode");
-      LOG.warn(ive.getMessage());
-      throw ive;
+      LOG.warn("NameNode version '{}' is below this DataNode's minimum '{}'",
+          nnVersion, minimumNameNodeVersion);
+      throw new @CausynthExceptionTarget("hdfs-adhoc-21")
+          IncorrectVersionException(minimumNameNodeVersion, nnVersion,
+              "NameNode", "DataNode");
     }
     String dnVersion = VersionInfo.getVersion();
     if (!nnVersion.equals(dnVersion)) {

@@ -17,12 +17,12 @@
  */
 package org.apache.hadoop.hdfs.server.blockmanagement;
 
+import edu.uva.liftlab.graphchecker.annotation.CausynthExceptionTarget;
 import java.io.IOException;
 import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
 
-import org.apache.hadoop.util.Preconditions;
 import org.apache.hadoop.classification.InterfaceAudience;
 import org.apache.hadoop.fs.StorageType;
 import org.apache.hadoop.hdfs.protocol.Block;
@@ -425,7 +425,9 @@ public abstract class BlockInfo extends Block
    */
   public List<ReplicaUnderConstruction> setGenerationStampAndVerifyReplicas(
       long genStamp) {
-    Preconditions.checkState(uc != null && !isComplete());
+    if (!(uc != null && !isComplete())) {
+      throw new @CausynthExceptionTarget("hdfs-adhoc-16") IllegalStateException();
+    }
     // Set the generation stamp for the block.
     setGenerationStamp(genStamp);
 
@@ -444,7 +446,9 @@ public abstract class BlockInfo extends Block
       throw new IOException("Trying to commit inconsistent block: id = "
           + block.getBlockId() + ", expected id = " + getBlockId());
     }
-    Preconditions.checkState(!isComplete());
+    if (isComplete()) {
+      throw new @CausynthExceptionTarget("hdfs-adhoc-15") IllegalStateException();
+    }
     uc.commit();
     this.setNumBytes(block.getNumBytes());
     // Sort out invalid replicas.

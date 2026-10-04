@@ -18,6 +18,7 @@
 
 package org.apache.hadoop.hdfs.server.namenode;
 
+import edu.uva.liftlab.graphchecker.annotation.CausynthExceptionTarget;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -72,7 +73,6 @@ import org.apache.hadoop.hdfs.server.namenode.startupprogress.Step;
 import org.apache.hadoop.hdfs.util.EnumCounters;
 import org.apache.hadoop.hdfs.util.ReadOnlyList;
 
-import org.apache.hadoop.util.Preconditions;
 import org.apache.hadoop.thirdparty.com.google.common.collect.ImmutableList;
 import org.apache.hadoop.thirdparty.protobuf.ByteString;
 
@@ -527,9 +527,11 @@ public final class FSImageFormatPBINode {
       for (int i = 0; i < bp.size(); ++i) {
         BlockProto b = bp.get(i);
         if (isStriped) {
-          Preconditions.checkState(ecPolicy.getId() > 0,
-              "File with ID " + n.getId() +
-              " has an invalid erasure coding policy ID " + ecPolicy.getId());
+          if (!(ecPolicy.getId() > 0)) {
+            throw new @CausynthExceptionTarget("hdfs-adhoc-47") IllegalStateException(
+                "File with ID " + n.getId() +
+                " has an invalid erasure coding policy ID " + ecPolicy.getId());
+          }
           blocks[i] = new BlockInfoStriped(PBHelperClient.convert(b), ecPolicy);
         } else {
           blocks[i] = new BlockInfoContiguous(PBHelperClient.convert(b),

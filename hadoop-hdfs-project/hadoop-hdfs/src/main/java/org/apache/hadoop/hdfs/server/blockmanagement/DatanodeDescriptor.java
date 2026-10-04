@@ -17,6 +17,7 @@
  */
 package org.apache.hadoop.hdfs.server.blockmanagement;
 
+import edu.uva.liftlab.graphchecker.annotation.CausynthExceptionTarget;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -534,7 +535,10 @@ public class DatanodeDescriptor extends DatanodeInfo {
         }
         storageMap.put(s.getStorageID(), s);
       } else {
-        assert storage == s : "found " + storage + " expected " + s;
+        if (!(storage == s)) {
+          throw new @CausynthExceptionTarget("hdfs-adhoc-18") AssertionError(
+              "found " + storage + " expected " + s);
+        }
       }
     }
   }

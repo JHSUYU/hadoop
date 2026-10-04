@@ -17,6 +17,7 @@
  */
 package org.apache.hadoop.hdfs;
 
+import edu.uva.liftlab.graphchecker.annotation.CausynthExceptionTarget;
 import java.io.EOFException;
 import java.io.IOException;
 import java.io.InterruptedIOException;
@@ -514,7 +515,8 @@ public class DFSInputStream extends FSInputStream
             ? dfsClient.getLocatedBlocks(src, offset)
             : dfsClient.getLocatedBlocks(src, offset, length);
         if (newBlocks == null || newBlocks.locatedBlockCount() == 0) {
-          throw new EOFException("Could not find target position " + offset);
+          throw new @CausynthExceptionTarget("hdfs-adhoc-01")
+              EOFException("Could not find target position " + offset);
         }
         // Update the LastLocatedBlock, if offset is for last block.
         if (offset >= locatedBlocks.getFileLength()) {
