@@ -248,7 +248,8 @@ public final class CausynthCluster {
    * built before.  What the construction starts or creates is the node's
    * from its first moment, though the test's request stands where it runs:
    * round HS1's nodes built inside the window ran their start-up as the
-   * test's client.
+   * test's client.  None for a cluster not set up as an automatic one (a
+   * deprecated MiniDFSCluster constructor's).
    */
   public static NodeStartup nodeStartup(Object cluster, String role) {
     if (!automatic()) {
@@ -257,6 +258,9 @@ public final class CausynthCluster {
     Slot slot;
     synchronized (CausynthCluster.class) {
       Automatic owner = AUTOMATIC_CLUSTERS.get(cluster);
+      if (owner == null) {
+        return NodeStartup.NONE;
+      }
       String kind = kind(role);
       int k = owner.built.merge(kind, 1, Integer::sum) - 1;
       slot = new Slot(role, owner.prefix + "/" + kind + k);
@@ -268,7 +272,8 @@ public final class CausynthCluster {
   /**
    * A restart of the node {@code previous} keys, built anew in its slot:
    * the same name at its next epoch, the slot moved first, so the new life
-   * is named from its first moment.
+   * is named from its first moment.  None for a node no automatic cluster
+   * built.
    */
   public static NodeStartup nodeRestart(Object previous) {
     if (!automatic()) {
@@ -277,6 +282,9 @@ public final class CausynthCluster {
     Slot slot;
     synchronized (CausynthCluster.class) {
       slot = SLOTS.get(previous);
+      if (slot == null) {
+        return NodeStartup.NONE;
+      }
       slot.epoch++;
     }
     CausynthMessagePropagation.restartSource(slot, NODE, slot.role,
@@ -327,8 +335,10 @@ public final class CausynthCluster {
   /** The NameNode an automatic cluster restarted in slot {@code index}. */
   public static synchronized void restartedNameNode(MiniDFSCluster cluster,
       int index) {
-    registerNameNode(cluster, index,
-        SLOTS.get(cluster.getNameNodeInfos()[index]));
+    Slot slot = SLOTS.get(cluster.getNameNodeInfos()[index]);
+    if (slot != null) {
+      registerNameNode(cluster, index, slot);
+    }
   }
 
   /**
@@ -404,6 +414,9 @@ public final class CausynthCluster {
    */
   public static synchronized void registerStartedDataNodes(
       MiniDFSCluster cluster) {
+    if (!AUTOMATIC_CLUSTERS.containsKey(cluster)) {
+      return;
+    }
     for (DataNode node : cluster.getDataNodes()) {
       if (!REGISTERED.containsKey(node)) {
         Slot slot = SLOTS.get(node);
@@ -597,8 +610,12 @@ public final class CausynthCluster {
     for (BPOfferService pool : datanode.getAllBpOs()) {
       aliases.add(pool);
       aliases.addAll(pool.getBPServiceActors());
-      if (keys != null && keys.isBlockPoolRegistered(pool.getBlockPoolId())) {
-        aliases.add(keys.get(pool.getBlockPoolId()));
+      // A DataNode registered as soon as it is built (a restart) knows no
+      // block pool until its handshake.
+      String blockPool = pool.getBlockPoolId(true);
+      if (keys != null && blockPool != null
+          && keys.isBlockPoolRegistered(blockPool)) {
+        aliases.add(keys.get(blockPool));
       }
     }
     // A DataNode that never registered with a NameNode (a test's failed
