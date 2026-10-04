@@ -1238,10 +1238,10 @@ public class Client implements AutoCloseable {
       String correlationId = CausynthMessagePropagation.rpcCorrelation(
           clientId, call.id);
       CausynthMessagePropagation.Outbound causynth =
-          CausynthMessagePropagation.outbound(
+          CausynthMessagePropagation.outboundRequest(
               CausynthMessagePropagation.IPC, correlationId,
-              Integer.toString(call.retry), "REQUEST", Client.this,
-              call.causynthScope);
+              Integer.toString(call.retry), Client.this,
+              call.causynthScope, call.rpcRequest);
       RpcRequestHeaderProto.Builder header = ProtoUtil.makeRpcRequestHeader(
           call.rpcKind, OperationProto.RPC_FINAL_PACKET, call.id, call.retry,
           clientId, call.alignmentContext).toBuilder();
