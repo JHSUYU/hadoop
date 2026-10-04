@@ -4452,11 +4452,17 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
    * @see org.apache.hadoop.hdfs.server.datanode.DataNode
    */
   void registerDatanode(DatanodeRegistration nodeReg) throws IOException {
+    // GraphChecker: the topology orders DataNodes as they are added here,
+    // so a replay adds them in its recording's order, by their UUIDs.
+    Object causynthStep = org.apache.hadoop.ipc.CausynthMessagePropagation
+        .startupStep("registerDatanode", nodeReg.getDatanodeUuid());
     writeLock(RwLockMode.BM);
     try {
       blockManager.registerDatanode(nodeReg);
     } finally {
       writeUnlock(RwLockMode.BM, "registerDatanode");
+      org.apache.hadoop.ipc.CausynthMessagePropagation.startupDone(
+          causynthStep);
     }
   }
   
