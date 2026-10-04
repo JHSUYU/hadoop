@@ -17,7 +17,6 @@
  */
 package org.apache.hadoop.hdfs.server.namenode;
 
-import edu.uva.liftlab.graphchecker.annotation.CausynthExceptionTarget;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.util.ArrayList;
@@ -664,8 +663,7 @@ public class EncryptionZoneManager {
     final String zoneName = zoneIIP.getPath();
     checkEncryptionZoneRoot(inode, zoneName);
     if (getReencryptionStatus().hasRunningZone(inode.getId())) {
-      throw new @CausynthExceptionTarget("hdfs-bugs-reencrypt-negative-sleep")
-          IOException("Zone " + zoneName
+      throw new IOException("Zone " + zoneName
           + " is already submitted for re-encryption.");
     }
     LOG.info("Zone {}({}) is submitted for re-encryption.", zoneName,
