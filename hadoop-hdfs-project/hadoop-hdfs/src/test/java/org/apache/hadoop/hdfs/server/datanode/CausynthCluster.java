@@ -24,10 +24,10 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
-import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.WeakHashMap;
 import java.util.concurrent.TimeUnit;
 import java.util.function.BooleanSupplier;
 
@@ -90,9 +90,15 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 public final class CausynthCluster {
   private static final String NODE = "CLUSTER_NODE";
-  /** The DataNodes this run has registered, by identity, and their names. */
-  private static final Map<DataNode, String> REGISTERED =
-      new IdentityHashMap<>();
+  /**
+   * The DataNodes this run has registered, and their names.  Every registry
+   * here holds its clusters and nodes weakly and forgets a cluster's at its
+   * shutdown ({@link #shutdownAutomatically}): a test that builds dozens of
+   * clusters (TestSnapshot: 36) kept every old NameNode's block maps and
+   * every old DataNode's threads alive, and the recording ran out of heap.
+   * No key class overrides equals, so a weak map compares by identity.
+   */
+  private static final Map<DataNode, String> REGISTERED = new WeakHashMap<>();
   /** Longer than any case runs: an expiry that cannot fire. */
   private static final int NEVER_MS = (int) TimeUnit.HOURS.toMillis(6);
 
@@ -122,17 +128,19 @@ public final class CausynthCluster {
    * written.
    */
   public static final String AUTOMATIC = "causynth.cluster.automatic";
-  /** Each automatic cluster, by identity, in the order it began. */
+  /** Each automatic cluster that has not shut down. */
   private static final Map<Object, Automatic> AUTOMATIC_CLUSTERS =
-      new IdentityHashMap<>();
+      new WeakHashMap<>();
+  /** How many automatic clusters began: the n of {@code auto<n>}. */
+  private static int automaticClusters;
   /**
    * The slot of each node an automatic cluster built, by the node (a
    * NameNode by its cluster's NameNodeInfo, which outlives a restart).
    */
-  private static final Map<Object, Slot> SLOTS = new IdentityHashMap<>();
+  private static final Map<Object, Slot> SLOTS = new WeakHashMap<>();
   /** The JournalNodes this run registered. */
   private static final Set<JournalNode> JOURNALS =
-      Collections.newSetFromMap(new IdentityHashMap<>());
+      Collections.newSetFromMap(new WeakHashMap<>());
   private static Object windowCluster;
   private static long windowRequest;
 
@@ -235,7 +243,7 @@ public final class CausynthCluster {
       String clientRole) {
     configure(conf);
     AUTOMATIC_CLUSTERS.put(cluster,
-        new Automatic("auto" + AUTOMATIC_CLUSTERS.size()));
+        new Automatic("auto" + automaticClusters++));
     if (windowCluster == null && CausynthMessagePropagation.startupWindow()) {
       openWindow(cluster, clientRole);
     }
@@ -425,11 +433,32 @@ public final class CausynthCluster {
     }
   }
 
-  /** The window's request ends when its cluster shuts down. */
+  /**
+   * A cluster shuts down: the window's request ends with the window's
+   * cluster, and every registry here forgets the cluster and its nodes.
+   */
   public static synchronized void shutdownAutomatically(Object cluster) {
     if (cluster == windowCluster) {
       CausynthMessagePropagation.endRequest(windowRequest, "test");
       windowCluster = null;
+    }
+    AUTOMATIC_CLUSTERS.remove(cluster);
+    if (cluster instanceof MiniDFSCluster) {
+      MiniDFSCluster dfs = (MiniDFSCluster) cluster;
+      for (MiniDFSCluster.NameNodeInfo nameNode : dfs.getNameNodeInfos()) {
+        SLOTS.remove(nameNode);
+      }
+      for (DataNode node : dfs.getDataNodes()) {
+        SLOTS.remove(node);
+        REGISTERED.remove(node);
+      }
+    } else if (cluster instanceof MiniJournalCluster) {
+      MiniJournalCluster journals = (MiniJournalCluster) cluster;
+      for (int index = 0; index < journals.getNumNodes(); index++) {
+        JournalNode node = journals.getJournalNode(index);
+        SLOTS.remove(node);
+        JOURNALS.remove(node);
+      }
     }
   }
 
@@ -541,7 +570,7 @@ public final class CausynthCluster {
    * order from run to run, and a replay held to the recording's schedule
    * waits for a node that is not next.  The names are the case's.</p>
    */
-  public static List<DataNode> dataNodes() {
+  public static synchronized List<DataNode> dataNodes() {
     List<DataNode> nodes = new ArrayList<>(REGISTERED.keySet());
     nodes.sort(Comparator.comparing(REGISTERED::get));
     return nodes;
@@ -590,7 +619,8 @@ public final class CausynthCluster {
    * transfer server, its RPC server, its block-token managers and its
    * block-pool services are the same node.
    */
-  public static void registerDataNode(DataNode datanode, String sourceId) {
+  public static synchronized void registerDataNode(DataNode datanode,
+      String sourceId) {
     registerDataNode(datanode, sourceId, 0L, null);
   }
 
@@ -648,8 +678,8 @@ public final class CausynthCluster {
    * as {@code <prefix>/dn<index>}: no node's traffic runs unattributed.
    * Called after the named ones, so the names a case is about are its own.
    */
-  public static void registerOtherDataNodes(MiniDFSCluster cluster,
-      String prefix) {
+  public static synchronized void registerOtherDataNodes(
+      MiniDFSCluster cluster, String prefix) {
     List<DataNode> nodes = cluster.getDataNodes();
     for (int index = 0; index < nodes.size(); index++) {
       DataNode node = nodes.get(index);
