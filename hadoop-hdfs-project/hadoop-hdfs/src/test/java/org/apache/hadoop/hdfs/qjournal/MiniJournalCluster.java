@@ -39,6 +39,7 @@ import org.apache.hadoop.hdfs.DFSConfigKeys;
 import org.apache.hadoop.hdfs.MiniDFSCluster;
 import org.apache.hadoop.hdfs.qjournal.client.QuorumJournalManager;
 import org.apache.hadoop.hdfs.qjournal.server.JournalNode;
+import org.apache.hadoop.hdfs.server.datanode.CausynthCluster;
 import org.apache.hadoop.metrics2.lib.DefaultMetricsSystem;
 import org.apache.hadoop.net.NetUtils;
 
@@ -117,6 +118,10 @@ public final class MiniJournalCluster implements Closeable {
   private final JNInfo[] nodes;
   
   private MiniJournalCluster(Builder b) throws IOException {
+    if (CausynthCluster.automatic()) {
+      // The test's own configuration: its managers are built from it too.
+      CausynthCluster.configure(b.conf);
+    }
 
     if (b.httpPorts != null && b.httpPorts.length != b.numJournalNodes) {
       throw new IllegalArgumentException(
@@ -186,6 +191,9 @@ public final class MiniJournalCluster implements Closeable {
    * @throws IOException if one or more nodes failed to stop
    */
   public void shutdown() throws IOException {
+    if (CausynthCluster.automatic()) {
+      CausynthCluster.shutdownAutomatically(this);
+    }
     boolean failed = false;
     for (JNInfo info : nodes) {
       try {
@@ -259,6 +267,9 @@ public final class MiniJournalCluster implements Closeable {
     newJN.setConf(conf);
     newJN.start();
     info.node = newJN;
+    if (CausynthCluster.automatic()) {
+      CausynthCluster.restartedJournalNode(this, i);
+    }
   }
 
   public int getQuorumSize() {
@@ -298,6 +309,9 @@ public final class MiniJournalCluster implements Closeable {
       } catch (InterruptedException ite) {
         LOG.warn("Thread interrupted when waiting for node start", ite);
       }
+    }
+    if (CausynthCluster.automatic()) {
+      CausynthCluster.registerJournalsAutomatically(this);
     }
   }
 

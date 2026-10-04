@@ -35,9 +35,12 @@ import org.apache.hadoop.fs.FSDataOutputStream;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.fs.permission.FsPermission;
 import org.apache.hadoop.hdfs.DFSClient;
+import org.apache.hadoop.hdfs.DFSConfigKeys;
 import org.apache.hadoop.hdfs.DistributedFileSystem;
 import org.apache.hadoop.hdfs.MiniDFSCluster;
 import org.apache.hadoop.hdfs.client.HdfsClientConfigKeys;
+import org.apache.hadoop.hdfs.qjournal.MiniJournalCluster;
+import org.apache.hadoop.hdfs.qjournal.server.JournalNode;
 import org.apache.hadoop.hdfs.security.token.block.BlockPoolTokenSecretManager;
 import org.apache.hadoop.hdfs.server.blockmanagement.BlockManager;
 import org.apache.hadoop.hdfs.server.namenode.FSNamesystem;
@@ -107,13 +110,15 @@ public final class CausynthCluster {
    * #dataNodeOverlays}) and registered whole as it comes up, each NameNode
    * and DataNode as {@code auto<n>/nn<i>} and {@code auto<n>/dn<i>}, and the
    * first one opens the window with one request of the test on its client.
-   * So any cluster test of the module is a workload as it is written.
+   * A MiniJournalCluster is the same, each JournalNode {@code auto<n>/jn<i>}
+   * ({@link #registerJournalsAutomatically}).  So any cluster test of the
+   * module is a workload as it is written.
    */
   public static final String AUTOMATIC = "causynth.cluster.automatic";
   /** Each automatic cluster's name prefix, in the order they came up. */
-  private static final Map<MiniDFSCluster, String> AUTOMATIC_CLUSTERS =
+  private static final Map<Object, String> AUTOMATIC_CLUSTERS =
       new IdentityHashMap<>();
-  private static MiniDFSCluster windowCluster;
+  private static Object windowCluster;
   private static long windowRequest;
 
   private CausynthCluster() {
@@ -149,14 +154,66 @@ public final class CausynthCluster {
     }
     registerOtherDataNodes(cluster, prefix);
     if (windowCluster == null && cluster.getNameNode(0) != null) {
-      windowCluster = cluster;
       DFSClient client = cluster.getFileSystem(0).getClient();
       CausynthMessagePropagation.registerSource(client, "EXTERNAL_APP",
           "DFS_CLIENT", prefix + "/client0", 0);
-      startRecording();
-      windowRequest = CausynthMessagePropagation.beginRequest(client,
-          "test");
+      openWindow(cluster, client);
     }
+  }
+
+  /**
+   * Registers an automatic journal cluster once its JournalNodes serve, each
+   * as {@code auto<n>/jn<i>}; the first cluster of the run opens the window.
+   *
+   * <p>A QJM test builds its QuorumJournalManagers on its own thread after
+   * the cluster is up, so none exists when the window opens: the window's
+   * client is the test's thread, registered on the cluster it waited for as
+   * {@code auto<n>/client0}, and every manager it builds inside the window
+   * starts its logger threads in that request.</p>
+   */
+  public static synchronized void registerJournalsAutomatically(
+      MiniJournalCluster cluster) {
+    if (AUTOMATIC_CLUSTERS.containsKey(cluster)) {
+      return;
+    }
+    String prefix = "auto" + AUTOMATIC_CLUSTERS.size();
+    AUTOMATIC_CLUSTERS.put(cluster, prefix);
+    for (int index = 0; index < cluster.getNumNodes(); index++) {
+      registerJournalNode(cluster.getJournalNode(index),
+          prefix + "/jn" + index);
+    }
+    if (windowCluster == null) {
+      CausynthMessagePropagation.registerSource(cluster, "EXTERNAL_APP",
+          "QJM_CLIENT", prefix + "/client0", 0);
+      openWindow(cluster, cluster);
+    }
+  }
+
+  /** A JournalNode a registered journal cluster restarted in its slot. */
+  public static synchronized void restartedJournalNode(
+      MiniJournalCluster cluster, int index) {
+    String prefix = AUTOMATIC_CLUSTERS.get(cluster);
+    if (prefix != null) {
+      registerJournalNode(cluster.getJournalNode(index),
+          prefix + "/jn" + index);
+    }
+  }
+
+  /**
+   * Registers JournalNode {@code node} as {@code sourceId}: its RPC server is
+   * the anchor, and the JournalNode and its protocol server are the same
+   * node.  A handler serving a journal's request has both on its frames.
+   */
+  public static void registerJournalNode(JournalNode node, String sourceId) {
+    Object rpc = node.getRpcServer();
+    CausynthMessagePropagation.registerNode(hidden(rpc, "getRpcServer"),
+        NODE, "JOURNALNODE", sourceId, rpc, node);
+  }
+
+  private static void openWindow(Object cluster, Object client) {
+    windowCluster = cluster;
+    startRecording();
+    windowRequest = CausynthMessagePropagation.beginRequest(client, "test");
   }
 
   /** The DataNodes a registered automatic cluster started since. */
@@ -169,8 +226,7 @@ public final class CausynthCluster {
   }
 
   /** The window's request ends when its cluster shuts down. */
-  public static synchronized void shutdownAutomatically(
-      MiniDFSCluster cluster) {
+  public static synchronized void shutdownAutomatically(Object cluster) {
     if (cluster == windowCluster) {
       CausynthMessagePropagation.endRequest(windowRequest, "test");
       windowCluster = null;
@@ -207,6 +263,19 @@ public final class CausynthCluster {
     conf.setInt(HdfsClientConfigKeys.DFS_DATANODE_SOCKET_WRITE_TIMEOUT_KEY,
         NEVER_MS);
     conf.setInt(CommonConfigurationKeys.IPC_CLIENT_RPC_TIMEOUT_KEY, NEVER_MS);
+    // So does a QuorumJournalManager's wait for a quorum of its loggers.
+    for (String quorumWait : new String[] {
+        DFSConfigKeys.DFS_QJOURNAL_START_SEGMENT_TIMEOUT_KEY,
+        DFSConfigKeys.DFS_QJOURNAL_PREPARE_RECOVERY_TIMEOUT_KEY,
+        DFSConfigKeys.DFS_QJOURNAL_ACCEPT_RECOVERY_TIMEOUT_KEY,
+        DFSConfigKeys.DFS_QJOURNAL_FINALIZE_SEGMENT_TIMEOUT_KEY,
+        DFSConfigKeys.DFS_QJOURNAL_SELECT_INPUT_STREAMS_TIMEOUT_KEY,
+        DFSConfigKeys.DFS_QJOURNAL_GET_JOURNAL_STATE_TIMEOUT_KEY,
+        DFSConfigKeys.DFS_QJOURNAL_NEW_EPOCH_TIMEOUT_KEY,
+        DFSConfigKeys.DFS_QJOURNAL_WRITE_TXNS_TIMEOUT_KEY,
+        DFSConfigKeys.DFS_QJM_OPERATIONS_TIMEOUT}) {
+      conf.setInt(quorumWait, NEVER_MS);
+    }
     // An HA client tries the NameNodes in a random order by default, so the
     // recording's first call went to nn2 and a replay's to nn1.
     conf.setBoolean(HdfsClientConfigKeys.Failover.RANDOM_ORDER, false);
@@ -292,8 +361,8 @@ public final class CausynthCluster {
     BlockManager blocks = namesystem.getBlockManager();
     List<Object> aliases = new ArrayList<>();
     aliases.add(rpc);
-    aliases.add(serverOf(rpc, "getServiceRpcServer"));
-    aliases.add(serverOf(rpc, "getLifelineRpcServer"));
+    aliases.add(hidden(rpc, "getServiceRpcServer"));
+    aliases.add(hidden(rpc, "getLifelineRpcServer"));
     aliases.add(cluster.getNameNode(index));
     aliases.add(namesystem);
     aliases.add(blocks);
@@ -435,13 +504,12 @@ public final class CausynthCluster {
     }
   }
 
-  /** A NameNode RPC server the class keeps package-private, or null. */
-  private static Object serverOf(NameNodeRpcServer rpc, String getter) {
+  /** What a getter its class keeps package-private returns, or null. */
+  private static Object hidden(Object owner, String getter) {
     try {
-      Method method = NameNodeRpcServer.class.getDeclaredMethod(getter);
+      Method method = owner.getClass().getDeclaredMethod(getter);
       method.setAccessible(true);
-      Object server = method.invoke(rpc);
-      return server == rpc.getClientRpcServer() ? null : server;
+      return method.invoke(owner);
     } catch (ReflectiveOperationException | RuntimeException absent) {
       return null;
     }
