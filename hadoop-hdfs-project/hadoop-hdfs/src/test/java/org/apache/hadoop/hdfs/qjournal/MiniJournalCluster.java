@@ -119,8 +119,7 @@ public final class MiniJournalCluster implements Closeable {
   
   private MiniJournalCluster(Builder b) throws IOException {
     if (CausynthCluster.automatic()) {
-      // The test's own configuration: its managers are built from it too.
-      CausynthCluster.configure(b.conf);
+      CausynthCluster.journalSetUp(this, b.conf);
     }
 
     if (b.httpPorts != null && b.httpPorts.length != b.numJournalNodes) {
@@ -152,10 +151,18 @@ public final class MiniJournalCluster implements Closeable {
         LOG.debug("Fully deleting JN directory " + dir);
         FileUtil.fullyDelete(dir);
       }
-      JournalNode jn = new JournalNode();
-      jn.setConf(createConfForNode(b, i));
-      jn.start();
+      JournalNode jn;
+      try (CausynthCluster.NodeStartup startup =
+          CausynthCluster.nodeStartup(this, "JOURNALNODE")) {
+        jn = new JournalNode();
+        jn.setConf(createConfForNode(b, i));
+        jn.start();
+        startup.built(jn);
+      }
       nodes[i] = new JNInfo(jn);
+    }
+    if (CausynthCluster.automatic()) {
+      CausynthCluster.registerJournalNodes(this);
     }
   }
 
@@ -263,9 +270,14 @@ public final class MiniJournalCluster implements Closeable {
           uri.substring(("https://".length())));
     }
 
-    JournalNode newJN = new JournalNode();
-    newJN.setConf(conf);
-    newJN.start();
+    JournalNode newJN;
+    try (CausynthCluster.NodeStartup startup =
+        CausynthCluster.nodeRestart(jn)) {
+      newJN = new JournalNode();
+      newJN.setConf(conf);
+      newJN.start();
+      startup.built(newJN);
+    }
     info.node = newJN;
     if (CausynthCluster.automatic()) {
       CausynthCluster.restartedJournalNode(this, i);

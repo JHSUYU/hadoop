@@ -21,10 +21,13 @@ import java.io.IOException;
 import java.lang.reflect.Method;
 import java.net.InetSocketAddress;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.function.BooleanSupplier;
 
@@ -107,19 +110,93 @@ public final class CausynthCluster {
   /**
    * Set on a workload JVM whose test was written without GraphChecker: every
    * MiniDFSCluster it builds is made reproducible ({@link #configure}, {@link
-   * #dataNodeOverlays}) and registered whole as it comes up, each NameNode
-   * and DataNode as {@code auto<n>/nn<i>} and {@code auto<n>/dn<i>}, and the
-   * first one opens the window with one request of the test on its client.
-   * A MiniJournalCluster is the same, each JournalNode {@code auto<n>/jn<i>}
-   * ({@link #registerJournalsAutomatically}).  So any cluster test of the
-   * module is a workload as it is written.
+   * #dataNodeOverlays}), every node it builds or restarts is built in a node
+   * startup under its name ({@link #nodeStartup}, {@link #nodeRestart}) and
+   * registered whole once it serves, each NameNode, DataNode and JournalNode
+   * as {@code auto<n>/nn<k>}, {@code auto<n>/dn<k>} and {@code
+   * auto<n>/jn<k>}, and the first cluster opens the window with one request
+   * of the test on its client {@code auto<n>/client0}: once it is up, or,
+   * for a case that declares its window at startup ({@code
+   * recording_window=startup}), before it starts.  A MiniJournalCluster is
+   * the same.  So any cluster test of the module is a workload as it is
+   * written.
    */
   public static final String AUTOMATIC = "causynth.cluster.automatic";
-  /** Each automatic cluster's name prefix, in the order they came up. */
-  private static final Map<Object, String> AUTOMATIC_CLUSTERS =
+  /** Each automatic cluster, by identity, in the order it began. */
+  private static final Map<Object, Automatic> AUTOMATIC_CLUSTERS =
       new IdentityHashMap<>();
+  /**
+   * The slot of each node an automatic cluster built, by the node (a
+   * NameNode by its cluster's NameNodeInfo, which outlives a restart).
+   */
+  private static final Map<Object, Slot> SLOTS = new IdentityHashMap<>();
+  /** The JournalNodes this run registered. */
+  private static final Set<JournalNode> JOURNALS =
+      Collections.newSetFromMap(new IdentityHashMap<>());
   private static Object windowCluster;
   private static long windowRequest;
+
+  /** One automatic cluster: its name prefix and the nodes it has built. */
+  private static final class Automatic {
+    private final String prefix;
+    /** How many nodes of each kind ({@code nn}, {@code dn}, {@code jn}). */
+    private final Map<String, Integer> built = new HashMap<>();
+    /** Whether its JournalNodes served once (MiniJournalCluster#waitActive). */
+    private boolean up;
+
+    private Automatic(String prefix) {
+      this.prefix = prefix;
+    }
+  }
+
+  /**
+   * One node of an automatic cluster across its restarts: the name it is
+   * registered by and the life it is in.  The slot is registered with each
+   * life, so a restart moves it to the next epoch before the new life is
+   * built ({@link #nodeRestart}).
+   */
+  private static final class Slot {
+    private final String role;
+    private final String name;
+    private long epoch;
+
+    private Slot(String role, String name) {
+      this.role = role;
+      this.name = name;
+    }
+  }
+
+  /**
+   * One node's startup ({@link #nodeStartup}, {@link #nodeRestart}): what
+   * the test's thread starts or creates until it is closed belongs to the
+   * node.  Not automatic: nothing.
+   */
+  public static final class NodeStartup implements AutoCloseable {
+    private static final NodeStartup NONE = new NodeStartup(null, 0L);
+    private final Slot slot;
+    private final long token;
+
+    private NodeStartup(Slot slot, long token) {
+      this.slot = slot;
+      this.token = token;
+    }
+
+    /** The node is built: {@code key} (the node, or its slot) finds it. */
+    public void built(Object key) {
+      if (slot != null && key != null) {
+        synchronized (CausynthCluster.class) {
+          SLOTS.put(key, slot);
+        }
+      }
+    }
+
+    @Override
+    public void close() {
+      if (slot != null) {
+        CausynthMessagePropagation.endNodeStartup(token);
+      }
+    }
+  }
 
   private CausynthCluster() {
   }
@@ -128,42 +205,147 @@ public final class CausynthCluster {
     return Boolean.getBoolean(AUTOMATIC);
   }
 
-  /** The set-up an automatic cluster is built with ({@link #AUTOMATIC}). */
-  public static Configuration[] automaticSetUp(Configuration conf,
-      int numDataNodes, Configuration[] dataNodeOverlays) {
-    configure(conf);
+  /**
+   * An automatic MiniDFSCluster's construction begins ({@link #setUp}); the
+   * overlays it builds its DataNodes with.
+   */
+  public static Configuration[] automaticSetUp(MiniDFSCluster cluster,
+      Configuration conf, int numDataNodes, Configuration[] dataNodeOverlays) {
+    setUp(cluster, conf, "DFS_CLIENT");
     return dataNodeOverlays != null ? dataNodeOverlays
         : dataNodeOverlays(numDataNodes);
   }
 
   /**
-   * Registers an automatic cluster as it comes up, or the DataNodes it
-   * started since; the first cluster opens the window.
+   * An automatic MiniJournalCluster's construction begins ({@link #setUp}):
+   * the test's own configuration, which its managers are built from too.
    */
-  public static synchronized void registerAutomatically(
-      MiniDFSCluster cluster) throws IOException {
-    String prefix = AUTOMATIC_CLUSTERS.get(cluster);
-    if (prefix == null) {
-      prefix = "auto" + AUTOMATIC_CLUSTERS.size();
-      AUTOMATIC_CLUSTERS.put(cluster, prefix);
-      for (int index = 0; index < cluster.getNumNameNodes(); index++) {
-        if (cluster.getNameNode(index) != null) {
-          registerNameNode(cluster, index, prefix + "/nn" + index);
-        }
-      }
-    }
-    registerOtherDataNodes(cluster, prefix);
-    if (windowCluster == null && cluster.getNameNode(0) != null) {
-      DFSClient client = cluster.getFileSystem(0).getClient();
-      CausynthMessagePropagation.registerSource(client, "EXTERNAL_APP",
-          "DFS_CLIENT", prefix + "/client0", 0);
-      openWindow(cluster, client);
+  public static void journalSetUp(MiniJournalCluster cluster,
+      Configuration conf) {
+    setUp(cluster, conf, "QJM_CLIENT");
+  }
+
+  /**
+   * A cluster's construction begins: it is configured ({@link #configure})
+   * and named {@code auto<n>}, n counting the clusters begun before it; for
+   * a case that declares its window at startup, the first opens the window
+   * now, its client the test's thread registered on the cluster.
+   */
+  private static synchronized void setUp(Object cluster, Configuration conf,
+      String clientRole) {
+    configure(conf);
+    AUTOMATIC_CLUSTERS.put(cluster,
+        new Automatic("auto" + AUTOMATIC_CLUSTERS.size()));
+    if (windowCluster == null && CausynthMessagePropagation.startupWindow()) {
+      openWindow(cluster, clientRole);
     }
   }
 
   /**
-   * Registers an automatic journal cluster once its JournalNodes serve, each
-   * as {@code auto<n>/jn<i>}; the first cluster of the run opens the window.
+   * The construction of a node of {@code role} that {@code cluster} builds,
+   * in a node startup under the name it is then registered by: {@code
+   * <prefix>/<nn|dn|jn><k>}, k counting the nodes of that kind the cluster
+   * built before.  What the construction starts or creates is the node's
+   * from its first moment, though the test's request stands where it runs:
+   * round HS1's nodes built inside the window ran their start-up as the
+   * test's client.
+   */
+  public static NodeStartup nodeStartup(Object cluster, String role) {
+    if (!automatic()) {
+      return NodeStartup.NONE;
+    }
+    Slot slot;
+    synchronized (CausynthCluster.class) {
+      Automatic owner = AUTOMATIC_CLUSTERS.get(cluster);
+      String kind = kind(role);
+      int k = owner.built.merge(kind, 1, Integer::sum) - 1;
+      slot = new Slot(role, owner.prefix + "/" + kind + k);
+    }
+    return new NodeStartup(slot, CausynthMessagePropagation.beginNodeStartup(
+        NODE, role, slot.name));
+  }
+
+  /**
+   * A restart of the node {@code previous} keys, built anew in its slot:
+   * the same name at its next epoch, the slot moved first, so the new life
+   * is named from its first moment.
+   */
+  public static NodeStartup nodeRestart(Object previous) {
+    if (!automatic()) {
+      return NodeStartup.NONE;
+    }
+    Slot slot;
+    synchronized (CausynthCluster.class) {
+      slot = SLOTS.get(previous);
+      slot.epoch++;
+    }
+    CausynthMessagePropagation.restartSource(slot, NODE, slot.role,
+        slot.name, slot.epoch);
+    return new NodeStartup(slot,
+        CausynthMessagePropagation.beginNodeStartup(slot));
+  }
+
+  private static String kind(String role) {
+    switch (role) {
+    case "NAMENODE":
+      return "nn";
+    case "DATANODE":
+      return "dn";
+    case "JOURNALNODE":
+      return "jn";
+    default:
+      throw new IllegalArgumentException("no node kind: " + role);
+    }
+  }
+
+  /**
+   * An automatic cluster is up: its NameNodes and DataNodes registered,
+   * each under its slot, and the first cluster with a NameNode opens the
+   * window unless the case opened it at startup; the window cluster's
+   * client is the test's file system client too.
+   */
+  public static synchronized void registerAutomatically(
+      MiniDFSCluster cluster) throws IOException {
+    MiniDFSCluster.NameNodeInfo[] nameNodes = cluster.getNameNodeInfos();
+    for (int index = 0; index < nameNodes.length; index++) {
+      if (nameNodes[index].nameNode != null) {
+        registerNameNode(cluster, index, SLOTS.get(nameNodes[index]));
+      }
+    }
+    registerStartedDataNodes(cluster);
+    if (cluster.getNameNode(0) != null) {
+      if (windowCluster == null) {
+        openWindow(cluster, "DFS_CLIENT");
+      }
+      if (windowCluster == cluster) {
+        CausynthMessagePropagation.registerSourceAlias(
+            cluster.getFileSystem(0).getClient(), cluster);
+      }
+    }
+  }
+
+  /** The NameNode an automatic cluster restarted in slot {@code index}. */
+  public static synchronized void restartedNameNode(MiniDFSCluster cluster,
+      int index) {
+    registerNameNode(cluster, index,
+        SLOTS.get(cluster.getNameNodeInfos()[index]));
+  }
+
+  /**
+   * An automatic journal cluster built its JournalNodes: each registered
+   * under its slot as soon as it serves.
+   */
+  public static synchronized void registerJournalNodes(
+      MiniJournalCluster cluster) {
+    for (int index = 0; index < cluster.getNumNodes(); index++) {
+      registerJournalNode(cluster.getJournalNode(index));
+    }
+  }
+
+  /**
+   * An automatic journal cluster's JournalNodes serve
+   * (MiniJournalCluster#waitActive): the first cluster of the run opens the
+   * window unless the case opened it at startup.
    *
    * <p>A QJM test builds its QuorumJournalManagers on its own thread after
    * the cluster is up, so none exists when the window opens: the window's
@@ -173,55 +355,60 @@ public final class CausynthCluster {
    */
   public static synchronized void registerJournalsAutomatically(
       MiniJournalCluster cluster) {
-    if (AUTOMATIC_CLUSTERS.containsKey(cluster)) {
+    Automatic owner = AUTOMATIC_CLUSTERS.get(cluster);
+    if (owner.up) {
       return;
     }
-    String prefix = "auto" + AUTOMATIC_CLUSTERS.size();
-    AUTOMATIC_CLUSTERS.put(cluster, prefix);
-    for (int index = 0; index < cluster.getNumNodes(); index++) {
-      registerJournalNode(cluster.getJournalNode(index),
-          prefix + "/jn" + index);
-    }
+    owner.up = true;
     if (windowCluster == null) {
-      CausynthMessagePropagation.registerSource(cluster, "EXTERNAL_APP",
-          "QJM_CLIENT", prefix + "/client0", 0);
-      openWindow(cluster, cluster);
+      openWindow(cluster, "QJM_CLIENT");
     }
   }
 
-  /** A JournalNode a registered journal cluster restarted in its slot. */
+  /** The JournalNode an automatic journal cluster restarted in a slot. */
   public static synchronized void restartedJournalNode(
       MiniJournalCluster cluster, int index) {
-    String prefix = AUTOMATIC_CLUSTERS.get(cluster);
-    if (prefix != null) {
-      registerJournalNode(cluster.getJournalNode(index),
-          prefix + "/jn" + index);
-    }
+    registerJournalNode(cluster.getJournalNode(index));
   }
 
   /**
-   * Registers JournalNode {@code node} as {@code sourceId}: its RPC server is
-   * the anchor, and the JournalNode and its protocol server are the same
-   * node.  A handler serving a journal's request has both on its frames.
+   * Registers JournalNode {@code node} under its slot: its RPC server is the
+   * anchor, and the JournalNode and its protocol server are the same node.
+   * A handler serving a journal's request has both on its frames.
    */
-  public static void registerJournalNode(JournalNode node, String sourceId) {
+  private static void registerJournalNode(JournalNode node) {
+    if (!JOURNALS.add(node)) {
+      return;
+    }
+    Slot slot = SLOTS.get(node);
     Object rpc = node.getRpcServer();
-    CausynthMessagePropagation.registerNode(hidden(rpc, "getRpcServer"),
-        NODE, "JOURNALNODE", sourceId, rpc, node);
+    register(hidden(rpc, "getRpcServer"), "JOURNALNODE", slot.name,
+        slot.epoch, rpc, node, slot);
   }
 
-  private static void openWindow(Object cluster, Object client) {
+  /**
+   * The window opens: {@code cluster} is the test's client {@code
+   * <prefix>/client0} and the test's thread stands in its request.
+   */
+  private static void openWindow(Object cluster, String clientRole) {
+    CausynthMessagePropagation.registerSource(cluster, "EXTERNAL_APP",
+        clientRole, AUTOMATIC_CLUSTERS.get(cluster).prefix + "/client0", 0);
     windowCluster = cluster;
     startRecording();
-    windowRequest = CausynthMessagePropagation.beginRequest(client, "test");
+    windowRequest = CausynthMessagePropagation.beginRequest(cluster, "test");
   }
 
-  /** The DataNodes a registered automatic cluster started since. */
+  /**
+   * The DataNodes a registered automatic cluster started or restarted since,
+   * each under its slot.
+   */
   public static synchronized void registerStartedDataNodes(
       MiniDFSCluster cluster) {
-    String prefix = AUTOMATIC_CLUSTERS.get(cluster);
-    if (prefix != null) {
-      registerOtherDataNodes(cluster, prefix);
+    for (DataNode node : cluster.getDataNodes()) {
+      if (!REGISTERED.containsKey(node)) {
+        Slot slot = SLOTS.get(node);
+        registerDataNode(node, slot.name, slot.epoch, slot);
+      }
     }
   }
 
@@ -355,6 +542,17 @@ public final class CausynthCluster {
    */
   public static void registerNameNode(MiniDFSCluster cluster, int index,
       String sourceId) {
+    registerNameNode(cluster, index, sourceId, 0L, null);
+  }
+
+  /** {@link #registerNameNode} of an automatic cluster's slot. */
+  private static void registerNameNode(MiniDFSCluster cluster, int index,
+      Slot slot) {
+    registerNameNode(cluster, index, slot.name, slot.epoch, slot);
+  }
+
+  private static void registerNameNode(MiniDFSCluster cluster, int index,
+      String sourceId, long epoch, Slot slot) {
     NameNodeRpcServer rpc =
         (NameNodeRpcServer) cluster.getNameNodeRpc(index);
     FSNamesystem namesystem = cluster.getNamesystem(index);
@@ -368,8 +566,9 @@ public final class CausynthCluster {
     aliases.add(blocks);
     aliases.add(blocks.getDatanodeManager());
     aliases.add(blocks.getBlockTokenSecretManager());
-    CausynthMessagePropagation.registerNode(rpc.getClientRpcServer(), NODE,
-        "NAMENODE", sourceId, aliases.toArray());
+    aliases.add(slot);
+    register(rpc.getClientRpcServer(), "NAMENODE", sourceId, epoch,
+        aliases.toArray());
   }
 
   /**
@@ -379,6 +578,11 @@ public final class CausynthCluster {
    * block-pool services are the same node.
    */
   public static void registerDataNode(DataNode datanode, String sourceId) {
+    registerDataNode(datanode, sourceId, 0L, null);
+  }
+
+  private static void registerDataNode(DataNode datanode, String sourceId,
+      long epoch, Slot slot) {
     List<Object> aliases = new ArrayList<>();
     aliases.add(datanode);
     aliases.add(datanode.getSaslServer());
@@ -401,9 +605,25 @@ public final class CausynthCluster {
     // start) has no DatanodeID: it is still a node, anchored by itself.
     Object anchor = datanode.getDatanodeId() != null
         ? datanode.getDatanodeId() : datanode;
-    CausynthMessagePropagation.registerNode(anchor, NODE,
-        "DATANODE", sourceId, dedupe(aliases).toArray());
+    aliases.add(slot);
+    register(anchor, "DATANODE", sourceId, epoch, dedupe(aliases).toArray());
     REGISTERED.put(datanode, sourceId);
+  }
+
+  /**
+   * Registers one node of {@code role} as {@code sourceId} in life {@code
+   * epoch}: its anchor as the source and every object it runs its work
+   * through as the same node (a null alias, or the anchor, skipped).
+   */
+  private static void register(Object anchor, String role, String sourceId,
+      long epoch, Object... aliases) {
+    CausynthMessagePropagation.registerSource(anchor, NODE, role, sourceId,
+        epoch);
+    for (Object alias : aliases) {
+      if (alias != null && alias != anchor) {
+        CausynthMessagePropagation.registerSourceAlias(alias, anchor);
+      }
+    }
   }
 
   /**

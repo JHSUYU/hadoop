@@ -55,7 +55,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 /**
  * HDFS-17899 bug3, NameNode -> source DataNode -> target DataNode: the source
  * replicates a block to a target whose key delivery failed, and the target
- * cannot resolve the encryption key the source presents.
+ * cannot resolve the encryption key the source presents.  With data-transfer
+ * encryption off, the same delivery failure leaves the target unable to
+ * resolve the block token's key instead (hdfs-adhoc-12).
  */
 public class TestCausynthDataTransferRpcFailure {
   /** Block-key serial number pinned by {@link #pinBlockKeys}. */
@@ -65,9 +67,31 @@ public class TestCausynthDataTransferRpcFailure {
   @Timeout(120)
   public void testReplicationAfterModeledKeyRefreshRpcFailure()
       throws Exception {
+    replicateAfterModeledKeyRefreshRpcFailure(true, "hdfs-17899");
+  }
+
+  /**
+   * hdfs-adhoc-12, BlockTokenSecretManager#retrievePassword's missing key:
+   * the same replication unencrypted, so the target checks the source's
+   * block token (DataXceiver#checkAccess) with no SASL key check before it;
+   * encrypted, that check (retrieveDataEncryptionKey) always fires first.
+   */
+  @Test
+  @Timeout(120)
+  public void testUnencryptedReplicationAfterModeledKeyRefreshRpcFailure()
+      throws Exception {
+    replicateAfterModeledKeyRefreshRpcFailure(false, "hdfs-adhoc-12");
+  }
+
+  /**
+   * @param encrypted whether data transfer is encrypted
+   * @param prefix    the name prefix of the case's nodes
+   */
+  private static void replicateAfterModeledKeyRefreshRpcFailure(
+      boolean encrypted, String prefix) throws Exception {
     // Nothing set up before the window expires on the wall clock.
     Configuration conf = CausynthCluster.configure(new HdfsConfiguration());
-    conf.setBoolean(DFSConfigKeys.DFS_ENCRYPT_DATA_TRANSFER_KEY, true);
+    conf.setBoolean(DFSConfigKeys.DFS_ENCRYPT_DATA_TRANSFER_KEY, encrypted);
     conf.setBoolean(DFSConfigKeys.DFS_BLOCK_ACCESS_TOKEN_ENABLE_KEY, true);
     conf.setInt(
         DFSConfigKeys.DFS_CLIENT_BLOCK_WRITE_LOCATEFOLLOWINGBLOCK_RETRIES_KEY,
@@ -101,7 +125,7 @@ public class TestCausynthDataTransferRpcFailure {
           "the block must be on the DataNode the workload pinned it to");
       DataNode target = nodes.get(0) == source ? nodes.get(1) : nodes.get(0);
       pinBlockKeys(cluster);
-      registerSources(cluster, source, target);
+      registerSources(cluster, source, target, prefix);
 
       BlockTokenSecretManager master = cluster.getNamesystem()
           .getBlockManager().getBlockTokenSecretManager();
@@ -291,12 +315,12 @@ public class TestCausynthDataTransferRpcFailure {
   }
 
   private static void registerSources(MiniDFSCluster cluster,
-      DataNode source, DataNode target) {
+      DataNode source, DataNode target, String prefix) {
     // Every node, registered whole, before any traffic the recording depends
     // on (CausynthCluster).
-    CausynthCluster.registerNameNode(cluster, 0, "hdfs-17899/nn0");
-    CausynthCluster.registerDataNode(source, "hdfs-17899/source-dn");
-    CausynthCluster.registerDataNode(target, "hdfs-17899/target-dn");
-    CausynthCluster.registerOtherDataNodes(cluster, "hdfs-17899");
+    CausynthCluster.registerNameNode(cluster, 0, prefix + "/nn0");
+    CausynthCluster.registerDataNode(source, prefix + "/source-dn");
+    CausynthCluster.registerDataNode(target, prefix + "/target-dn");
+    CausynthCluster.registerOtherDataNodes(cluster, prefix);
   }
 }

@@ -560,7 +560,7 @@ public class MiniDFSCluster implements AutoCloseable {
    */
   protected MiniDFSCluster(Builder builder) throws IOException {
     if (CausynthCluster.automatic()) {
-      builder.dnConfOverlays = CausynthCluster.automaticSetUp(builder.conf,
+      builder.dnConfOverlays = CausynthCluster.automaticSetUp(this, builder.conf,
           builder.numDataNodes, builder.dnConfOverlays);
     }
     if (builder.nnTopology == null) {
@@ -1396,16 +1396,23 @@ public class MiniDFSCluster implements AutoCloseable {
 
   private void createNameNode(Configuration hdfsConf, boolean format, StartupOption operation,
       String clusterId, String nameserviceId, String nnId) throws IOException {
-    // Format and clean out DataNode directories
-    if (format) {
-      DFSTestUtil.formatNameNode(hdfsConf);
-    }
-    if (operation == StartupOption.UPGRADE){
-      operation.setClusterId(clusterId);
-    }
+    CausynthCluster.NodeStartup startup =
+        CausynthCluster.nodeStartup(this, "NAMENODE");
+    NameNode nn;
+    try {
+      // Format and clean out DataNode directories
+      if (format) {
+        DFSTestUtil.formatNameNode(hdfsConf);
+      }
+      if (operation == StartupOption.UPGRADE){
+        operation.setClusterId(clusterId);
+      }
 
-    String[] args = createArgs(operation);
-    NameNode nn =  NameNode.createNameNode(args, hdfsConf);
+      String[] args = createArgs(operation);
+      nn =  NameNode.createNameNode(args, hdfsConf);
+    } finally {
+      startup.close();
+    }
     if (operation == StartupOption.RECOVER) {
       return;
     }
@@ -1431,6 +1438,7 @@ public class MiniDFSCluster implements AutoCloseable {
         DFS_NAMENODE_HTTP_ADDRESS_KEY);
     NameNodeInfo info = new NameNodeInfo(nn, nameserviceId, nnId,
         operation, hdfsConf);
+    startup.built(info);
     namenodes.put(nameserviceId, info);
   }
 
@@ -1811,43 +1819,47 @@ public class MiniDFSCluster implements AutoCloseable {
         IPC_CLIENT_CONNECT_MAX_RETRIES_ON_SASL_DEFAULT);
       int numRetries = 0;
       DataNode dn = null;
-      while (true) {
-        try {
-          dn = DataNode.instantiateDataNode(dnArgs, dnConf,
-                                            secureResources);
-          break;
-        } catch (IOException e) {
-          // Work around issue testing security where rapidly starting multiple
-          // DataNodes using the same principal gets rejected by the KDC as a
-          // replay attack.
-          if (UserGroupInformation.isSecurityEnabled() &&
-              numRetries < maxRetriesOnSasl) {
-            try {
-              Thread.sleep(1000);
-            } catch (InterruptedException ie) {
-              Thread.currentThread().interrupt();
-              break;
+      try (CausynthCluster.NodeStartup startup =
+          CausynthCluster.nodeStartup(this, "DATANODE")) {
+        while (true) {
+          try {
+            dn = DataNode.instantiateDataNode(dnArgs, dnConf,
+                                              secureResources);
+            break;
+          } catch (IOException e) {
+            // Work around issue testing security where rapidly starting
+            // multiple DataNodes using the same principal gets rejected by
+            // the KDC as a replay attack.
+            if (UserGroupInformation.isSecurityEnabled() &&
+                numRetries < maxRetriesOnSasl) {
+              try {
+                Thread.sleep(1000);
+              } catch (InterruptedException ie) {
+                Thread.currentThread().interrupt();
+                break;
+              }
+              ++numRetries;
+              continue;
             }
-            ++numRetries;
-            continue;
+            throw e;
           }
-          throw e;
         }
+        if(dn == null)
+          throw new IOException("Cannot start DataNode in "
+              + dnConf.get(DFS_DATANODE_DATA_DIR_KEY));
+        //since the HDFS does things based on host|ip:port, we need to add the
+        //mapping for the service to rackId
+        String service =
+            SecurityUtil.buildTokenService(dn.getXferAddress()).toString();
+        if (racks != null) {
+          LOG.info("Adding node with service : " + service +
+                              " to rack " + racks[i-curDatanodesNum]);
+          StaticMapping.addNodeToRack(service,
+                                    racks[i-curDatanodesNum]);
+        }
+        dn.runDatanodeDaemon();
+        startup.built(dn);
       }
-      if(dn == null)
-        throw new IOException("Cannot start DataNode in "
-            + dnConf.get(DFS_DATANODE_DATA_DIR_KEY));
-      //since the HDFS does things based on host|ip:port, we need to add the
-      //mapping for the service to rackId
-      String service =
-          SecurityUtil.buildTokenService(dn.getXferAddress()).toString();
-      if (racks != null) {
-        LOG.info("Adding node with service : " + service +
-                            " to rack " + racks[i-curDatanodesNum]);
-        StaticMapping.addNodeToRack(service,
-                                  racks[i-curDatanodesNum]);
-      }
-      dn.runDatanodeDaemon();
       dataNodes.add(new DataNodeProperties(dn, newconf, dnArgs,
           secureResources, dn.getIpcPort()));
       dns[i - curDatanodesNum] = dn;
@@ -2341,13 +2353,20 @@ public class MiniDFSCluster implements AutoCloseable {
       args = createArgs(startOpt);
     }
 
-    NameNode nn = NameNode.createNameNode(args, info.conf);
+    NameNode nn;
+    try (CausynthCluster.NodeStartup startup =
+        CausynthCluster.nodeRestart(info)) {
+      nn = NameNode.createNameNode(args, info.conf);
+    }
     nn.getHttpServer()
         .setAttribute(ImageServlet.RECENT_IMAGE_CHECK_ENABLED, false);
     info.nameNode = nn;
     info.nameserviceId = info.conf.get(DFS_NAMESERVICE_ID);
     info.nnId = info.conf.get(DFS_HA_NAMENODE_ID_KEY);
     info.setStartOpt(startOpt);
+    if (CausynthCluster.automatic()) {
+      CausynthCluster.restartedNameNode(this, nnIndex);
+    }
     if (waitActive) {
       if (numDataNodes > 0) {
         waitNameNodeUp(nnIndex);
@@ -2614,7 +2633,12 @@ public class MiniDFSCluster implements AutoCloseable {
       conf.set(DFS_DATANODE_IPC_ADDRESS_KEY,
           addr.getAddress().getHostAddress() + ":" + dnprop.ipcPort); 
     }
-    final DataNode newDn = DataNode.createDataNode(args, conf, secureResources);
+    final DataNode newDn;
+    try (CausynthCluster.NodeStartup startup =
+        CausynthCluster.nodeRestart(dnprop.datanode)) {
+      newDn = DataNode.createDataNode(args, conf, secureResources);
+      startup.built(newDn);
+    }
 
     final DataNodeProperties dnp = new DataNodeProperties(
         newDn,
@@ -2624,6 +2648,9 @@ public class MiniDFSCluster implements AutoCloseable {
         newDn.getIpcPort());
     dataNodes.add(dnp);
     numDataNodes++;
+    if (CausynthCluster.automatic()) {
+      CausynthCluster.registerStartedDataNodes(this);
+    }
 
     setDataNodeStorageCapacities(
         dataNodes.lastIndexOf(dnp),
