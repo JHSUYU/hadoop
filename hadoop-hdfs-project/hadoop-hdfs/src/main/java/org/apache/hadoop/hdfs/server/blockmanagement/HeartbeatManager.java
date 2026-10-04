@@ -546,9 +546,10 @@ class HeartbeatManager implements DatanodeStatistics {
         restartHeartbeatStopWatch();
         // One rotation tick is one lineage root: the key update
         // this loop performs belongs to no request. // causynth-d3-lineage
+        // Its owner is the block manager, which every NameNode has (the
+        // block-token manager is null while block tokens are off).
         long causynthTick = CausynthMessagePropagation.beginTick(
-            blockManager.getBlockTokenSecretManager(),
-            "HEARTBEAT_TICK");
+            blockManager, "HEARTBEAT_TICK");
         try {
           final long now = Time.monotonicNow();
           if (lastHeartbeatCheck + heartbeatRecheckInterval < now) {
