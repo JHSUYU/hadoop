@@ -850,6 +850,11 @@ class BPServiceActor implements Runnable {
 
     LOG.info("{} beginning handshake with NN: {}.", this, nnAddr);
 
+    // GraphChecker: the NameNode orders its DataNodes as they register (its
+    // topology's leaves), so a replay registers them in its recording's order.
+    Object causynthStep = CausynthMessagePropagation.startupStep(
+        "registerDatanode", dn);
+    try {
     while (shouldRun()) {
       try {
         // Use returned registration from namenode with updated fields
@@ -869,6 +874,9 @@ class BPServiceActor implements Runnable {
       }
       // Try again in a second
       sleepAndLogInterrupts(1000, "connecting to server");
+    }
+    } finally {
+      CausynthMessagePropagation.startupDone(causynthStep);
     }
 
     if (bpRegistration == null) {
