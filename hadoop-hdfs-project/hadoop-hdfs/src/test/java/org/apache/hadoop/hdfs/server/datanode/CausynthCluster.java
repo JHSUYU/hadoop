@@ -117,7 +117,8 @@ public final class CausynthCluster {
    * Set on a workload JVM whose test was written without GraphChecker: every
    * MiniDFSCluster it builds is made reproducible ({@link #configure}, {@link
    * #dataNodeOverlays}), every node it builds or restarts is built in a node
-   * startup under its name ({@link #nodeStartup}, {@link #nodeRestart}) and
+   * startup under its name ({@link #nameNodeStartup}, {@link #nodeStartup},
+   * {@link #nodeRestart}) and
    * registered whole once it serves, each NameNode, DataNode and JournalNode
    * as {@code auto<n>/nn<k>}, {@code auto<n>/dn<k>} and {@code
    * auto<n>/jn<k>}, and the first cluster opens the window with one request
@@ -147,8 +148,10 @@ public final class CausynthCluster {
   /** One automatic cluster: its name prefix and the nodes it has built. */
   private static final class Automatic {
     private final String prefix;
-    /** How many nodes of each kind ({@code nn}, {@code dn}, {@code jn}). */
+    /** How many nodes of each kind it built ({@code dn}, {@code jn}). */
     private final Map<String, Integer> built = new HashMap<>();
+    /** Its NameNodes' slots, by the index MiniDFSCluster gives each. */
+    private final Map<Integer, Slot> nameNodes = new HashMap<>();
     /** Whether its JournalNodes served once (MiniJournalCluster#waitActive). */
     private boolean up;
 
@@ -250,14 +253,15 @@ public final class CausynthCluster {
   }
 
   /**
-   * The construction of a node of {@code role} that {@code cluster} builds,
-   * in a node startup under the name it is then registered by: {@code
-   * <prefix>/<nn|dn|jn><k>}, k counting the nodes of that kind the cluster
-   * built before.  What the construction starts or creates is the node's
-   * from its first moment, though the test's request stands where it runs:
-   * round HS1's nodes built inside the window ran their start-up as the
-   * test's client.  None for a cluster not set up as an automatic one (a
-   * deprecated MiniDFSCluster constructor's).
+   * The construction of a DataNode or JournalNode that {@code cluster}
+   * builds, in a node startup under the name it is then registered by:
+   * {@code <prefix>/<dn|jn><k>}, k counting the nodes of that kind the
+   * cluster built before (a DataNode added after others stopped takes a name
+   * no live one holds).  The node is the startup's from its first moment,
+   * what the test's thread runs inside it included, though the test's
+   * request stands where it runs: round HS1's nodes built inside the window
+   * ran their start-up as the test's client.  None for a cluster not set up
+   * as an automatic one (a deprecated MiniDFSCluster constructor's).
    */
   public static NodeStartup nodeStartup(Object cluster, String role) {
     if (!automatic()) {
@@ -275,6 +279,30 @@ public final class CausynthCluster {
     }
     return new NodeStartup(slot, CausynthMessagePropagation.beginNodeStartup(
         NODE, role, slot.name));
+  }
+
+  /**
+   * One startup of NameNode {@code index} of {@code cluster}, its format's
+   * or its construction's: a NameNode is formatted before it is built, both
+   * under its slot {@code <prefix>/nn<index>}, the index MiniDFSCluster
+   * numbers it by.  None for a cluster not set up as an automatic one.
+   */
+  public static NodeStartup nameNodeStartup(MiniDFSCluster cluster,
+      int index) {
+    if (!automatic()) {
+      return NodeStartup.NONE;
+    }
+    Slot slot;
+    synchronized (CausynthCluster.class) {
+      Automatic owner = AUTOMATIC_CLUSTERS.get(cluster);
+      if (owner == null) {
+        return NodeStartup.NONE;
+      }
+      slot = owner.nameNodes.computeIfAbsent(index,
+          k -> new Slot("NAMENODE", owner.prefix + "/nn" + k));
+    }
+    return new NodeStartup(slot, CausynthMessagePropagation.beginNodeStartup(
+        NODE, slot.role, slot.name));
   }
 
   /**
@@ -303,8 +331,6 @@ public final class CausynthCluster {
 
   private static String kind(String role) {
     switch (role) {
-    case "NAMENODE":
-      return "nn";
     case "DATANODE":
       return "dn";
     case "JOURNALNODE":

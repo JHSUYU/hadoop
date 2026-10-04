@@ -1120,6 +1120,7 @@ public class MiniDFSCluster implements AutoCloseable {
     int nnIndex = nnCounter;
     Collection<URI> prevNNDirs = null;
     for (NNConf nn : nameservice.getNNs()) {
+      int index = nnIndex;
       initNameNodeConf(conf, nsId, nsCounter, nn.getNnId(), manageNameDfsDirs,
           manageNameDfsDirs,  nnIndex);
       Collection<URI> namespaceDirs = FSNamesystem.getNamespaceDirs(conf);
@@ -1163,7 +1164,11 @@ public class MiniDFSCluster implements AutoCloseable {
         } else {
           StartupOption.FORMAT.setClusterId(nn.getClusterId());
         }
-        DFSTestUtil.formatNameNode(conf);
+        // The format is the NameNode's startup too.
+        try (CausynthCluster.NodeStartup startup =
+            CausynthCluster.nameNodeStartup(this, index)) {
+          DFSTestUtil.formatNameNode(conf);
+        }
       }
       prevNNDirs = namespaceDirs;
     }
@@ -1172,9 +1177,10 @@ public class MiniDFSCluster implements AutoCloseable {
     nnIndex = nnCounter;
     for (NNConf nn : nameservice.getNNs()) {
       Configuration hdfsConf = new Configuration(conf);
+      int index = nnIndex++;
       initNameNodeConf(hdfsConf, nsId, nsCounter, nn.getNnId(), manageNameDfsDirs,
-          enableManagedDfsDirsRedundancy, nnIndex++);
-      createNameNode(hdfsConf, false, operation,
+          enableManagedDfsDirsRedundancy, index);
+      createNameNode(index, hdfsConf, false, operation,
           clusterId, nsId, nn.getNnId());
       // Record the last namenode uri
       lastDefaultFileSystem = hdfsConf.get(FS_DEFAULT_NAME_KEY);
@@ -1394,10 +1400,11 @@ public class MiniDFSCluster implements AutoCloseable {
     return args;
   }
 
-  private void createNameNode(Configuration hdfsConf, boolean format, StartupOption operation,
-      String clusterId, String nameserviceId, String nnId) throws IOException {
+  private void createNameNode(int nnIndex, Configuration hdfsConf,
+      boolean format, StartupOption operation, String clusterId,
+      String nameserviceId, String nnId) throws IOException {
     CausynthCluster.NodeStartup startup =
-        CausynthCluster.nodeStartup(this, "NAMENODE");
+        CausynthCluster.nameNodeStartup(this, nnIndex);
     NameNode nn;
     try {
       // Format and clean out DataNode directories
@@ -3469,7 +3476,8 @@ public class MiniDFSCluster implements AutoCloseable {
     NameNodeInfo[] infos = this.getNameNodeInfos(nameserviceId);
     int nnIndex = infos == null ? 0 : infos.length;
     initNameNodeConf(conf, nameserviceId, nameServiceIndex, nnId, true, true, nnIndex);
-    createNameNode(conf, true, null, null, nameserviceId, nnId);
+    createNameNode(getNumNameNodes(), conf, true, null, null, nameserviceId,
+        nnId);
 
     // Refresh datanodes with the newly started namenode
     for (DataNodeProperties dn : dataNodes) {
