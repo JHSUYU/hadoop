@@ -182,6 +182,12 @@ public class Client implements AutoCloseable {
     return retryCount.get() != null ? retryCount.get() : 0;
   }
 
+  /** GraphChecker: the attempt the next call on this thread is -- the
+   * retry count a retry handler set with its call id -- else 0. */
+  static int causynthAttempt() {
+    return callId.get() == null ? 0 : getRetryCount();
+  }
+
   public static Object getExternalHandler() {
     return EXTERNAL_CALL_HANDLER.get();
   }
@@ -1234,7 +1240,6 @@ public class Client implements AutoCloseable {
       // 2) RpcRequest
       //
       // Items '1' and '2' are prepared here. 
-      CausynthMessagePropagation.endInbound();
       String correlationId = CausynthMessagePropagation.rpcCorrelation(
           clientId, call.id);
       CausynthMessagePropagation.Outbound causynth =
