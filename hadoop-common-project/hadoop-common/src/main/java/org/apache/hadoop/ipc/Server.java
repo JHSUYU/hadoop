@@ -1022,6 +1022,17 @@ public abstract class Server {
     final Object causynthScope =
         CausynthMessagePropagation.captureScope();
 
+    /** GraphChecker: opens the exchange this call is on the handler that
+     * runs it, before any of its work, the remote user's doAs included, so
+     * every occurrence the call runs stands on its own message; a call no
+     * message carried opens none. */
+    void causynthEnter() {
+    }
+
+    /** GraphChecker: closes what {@link #causynthEnter} opened. */
+    void causynthExit() {
+    }
+
     Call() {
       this(RpcConstants.INVALID_CALL_ID, RpcConstants.INVALID_RETRY_COUNT,
         RPC.RpcKind.RPC_BUILTIN, RpcConstants.DUMMY_CLIENT_ID);
@@ -1235,6 +1246,9 @@ public abstract class Server {
     ByteBuffer rpcResponse;       // the response for this call
     String causynthTrace = "";
     String causynthSymbolic = "";
+    // GraphChecker: the exchange this call is, while a handler runs it.
+    private long causynthCall;
+    private CausynthMessagePropagation.Inbound causynthInbound;
 
     private ResponseParams responseParams; // the response params
     private Writable rv;                   // the byte response
@@ -1316,42 +1330,46 @@ public abstract class Server {
       this.setStartHandleTimestampNanos(startNanos);
       Writable value = null;
       ResponseParams responseParams = new ResponseParams();
-      long causynthCall = CausynthMessagePropagation
-          .enterCarriedScope(causynthScope, "IPC_HANDLER", null);
-      CausynthMessagePropagation.Inbound causynth =
-          CausynthMessagePropagation.inbound(causynthTrace,
-              causynthSymbolic, CausynthMessagePropagation.IPC,
-              CausynthMessagePropagation.rpcCorrelation(clientId, callId),
-              Integer.toString(retryCount), "REQUEST", Server.this);
 
       try {
-        try {
-          value = call(rpcKind, connection.protocolName, rpcRequest,
-              getTimestampNanos());
-        } catch (Throwable e) {
-          populateResponseParamsOnError(e, responseParams);
-        }
-        if (!isResponseDeferred()) {
-          long deltaNanos = Time.monotonicNowNanos() - startNanos;
-          ProcessingDetails details = getProcessingDetails();
+        value = call(
+            rpcKind, connection.protocolName, rpcRequest, getTimestampNanos());
+      } catch (Throwable e) {
+        populateResponseParamsOnError(e, responseParams);
+      }
+      if (!isResponseDeferred()) {
+        long deltaNanos = Time.monotonicNowNanos() - startNanos;
+        ProcessingDetails details = getProcessingDetails();
 
-          details.set(Timing.PROCESSING, deltaNanos, TimeUnit.NANOSECONDS);
-          deltaNanos -= details.get(Timing.LOCKWAIT, TimeUnit.NANOSECONDS);
-          deltaNanos -= details.get(Timing.LOCKSHARED, TimeUnit.NANOSECONDS);
-          deltaNanos -= details.get(Timing.LOCKEXCLUSIVE, TimeUnit.NANOSECONDS);
-          details.set(Timing.LOCKFREE, deltaNanos, TimeUnit.NANOSECONDS);
+        details.set(Timing.PROCESSING, deltaNanos, TimeUnit.NANOSECONDS);
+        deltaNanos -= details.get(Timing.LOCKWAIT, TimeUnit.NANOSECONDS);
+        deltaNanos -= details.get(Timing.LOCKSHARED, TimeUnit.NANOSECONDS);
+        deltaNanos -= details.get(Timing.LOCKEXCLUSIVE, TimeUnit.NANOSECONDS);
+        details.set(Timing.LOCKFREE, deltaNanos, TimeUnit.NANOSECONDS);
 
-          setResponseFields(value, responseParams);
-          sendResponse();
-          details.setReturnStatus(responseParams.returnStatus);
-        } else {
-          LOG.debug("Deferring response for callId: {}", this.callId);
-        }
-      } finally {
-        CausynthMessagePropagation.endInbound(causynth);
-        CausynthMessagePropagation.exitCarriedScope(causynthCall);
+        setResponseFields(value, responseParams);
+        sendResponse();
+        details.setReturnStatus(responseParams.returnStatus);
+      } else {
+        LOG.debug("Deferring response for callId: {}", this.callId);
       }
       return null;
+    }
+
+    @Override
+    void causynthEnter() {
+      causynthCall = CausynthMessagePropagation
+          .enterCarriedScope(causynthScope, "IPC_HANDLER", null);
+      causynthInbound = CausynthMessagePropagation.inbound(causynthTrace,
+          causynthSymbolic, CausynthMessagePropagation.IPC,
+          CausynthMessagePropagation.rpcCorrelation(clientId, callId),
+          Integer.toString(retryCount), "REQUEST", Server.this);
+    }
+
+    @Override
+    void causynthExit() {
+      CausynthMessagePropagation.endInbound(causynthInbound);
+      CausynthMessagePropagation.exitCarriedScope(causynthCall);
     }
 
     /**
@@ -3320,10 +3338,16 @@ public abstract class Server {
           AuthorizationContext.setCurrentAuthorizationHeader(call.authHeader);
           UserGroupInformation remoteUser = call.getRemoteUser();
           connDropped = !call.isOpen();
-          if (remoteUser != null) {
-            remoteUser.doAs(call);
-          } else {
-            call.run();
+          // GraphChecker: the call's exchange opens before any of its work.
+          call.causynthEnter();
+          try {
+            if (remoteUser != null) {
+              remoteUser.doAs(call);
+            } else {
+              call.run();
+            }
+          } finally {
+            call.causynthExit();
           }
         } catch (InterruptedException e) {
           if (running) {                          // unexpected -- log it

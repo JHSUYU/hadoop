@@ -298,8 +298,8 @@ class DataXceiver extends Receiver implements Runnable {
           incrReadWriteOpMetrics(op);
         }
         // GraphChecker: one op is one turn of this connection's loop, owned by
-        // this DataNode; it ends a SASL handshake's scope and opens its own.
-        CausynthMessagePropagation.endInbound();
+        // this DataNode; the turn ends the exchange its thread served (a SASL
+        // handshake's) and opens its own.
         long causynthOp = CausynthMessagePropagation.beginTick(
             datanode, "DATA_XCEIVER");
         try {
