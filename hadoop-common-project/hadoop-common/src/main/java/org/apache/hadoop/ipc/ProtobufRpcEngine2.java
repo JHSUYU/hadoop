@@ -255,11 +255,12 @@ public class ProtobufRpcEngine2 implements RpcEngine {
 
       final Message theRequest = (Message) args[1];
       final RpcWritable.Buffer val;
+      // GraphChecker: the request starts here, built first, and ends with
+      // the call, answered or failed.
+      long causynthRequest = 0L;
       try {
-        // GraphChecker: the request starts here, built first, so the first
-        // frame its thread enters next is the client's call.
         Writable request = constructRpcRequest(method, theRequest);
-        CausynthMessagePropagation.requestStarting(request,
+        causynthRequest = CausynthMessagePropagation.requestStarting(request,
             Client.causynthAttempt());
         val = (RpcWritable.Buffer) client.call(RPC.RpcKind.RPC_PROTOCOL_BUFFER,
             request, remoteId, fallbackToSimpleAuth, alignmentContext);
@@ -276,6 +277,7 @@ public class ProtobufRpcEngine2 implements RpcEngine {
         }
         throw new ServiceException(e);
       } finally {
+        CausynthMessagePropagation.requestEnded(causynthRequest);
         if (traceScope != null) {
           traceScope.close();
         }
