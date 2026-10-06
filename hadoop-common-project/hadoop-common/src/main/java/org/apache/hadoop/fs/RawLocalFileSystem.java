@@ -41,6 +41,7 @@ import java.nio.file.StandardOpenOption;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.nio.file.attribute.BasicFileAttributeView;
 import java.nio.file.attribute.FileTime;
+import java.nio.file.attribute.PosixFileAttributes;
 import java.util.Arrays;
 import java.util.EnumSet;
 import java.util.Locale;
@@ -1072,7 +1073,33 @@ public class RawLocalFileSystem extends FileSystem {
       }
 
       if (!isPermissionLoaded()) {
-        loadPermissionInfoByNonNativeIO();
+        if (Shell.WINDOWS) {
+          loadPermissionInfoByNonNativeIO();
+        } else {
+          loadPermissionInfoByAttributes();
+        }
+      }
+    }
+
+    /**
+     * GraphChecker: without the native library, a POSIX file's permission,
+     * owner and group come from its attributes in the JVM, as stat() gives
+     * them natively, not from an `ls -ld` process: each process started a
+     * stderr reader thread, thousands per upgrade test, whose timing no
+     * replay holds.
+     */
+    private void loadPermissionInfoByAttributes() {
+      java.nio.file.Path file = new File(getPath().toUri()).toPath();
+      try {
+        PosixFileAttributes attributes =
+            Files.readAttributes(file, PosixFileAttributes.class);
+        int mode = (Integer) Files.getAttribute(file, "unix:mode");
+        setPermission(new FsPermission(mode));
+        setOwner(attributes.owner().getName());
+        setGroup(attributes.group().getName());
+      } catch (IOException e) {
+        throw new RuntimeException("Error while reading file permissions : "
+            + StringUtils.stringifyException(e));
       }
     }
 
@@ -1193,6 +1220,11 @@ public class RawLocalFileSystem extends FileSystem {
     if (NativeIO.isAvailable()) {
       NativeIO.POSIX.chmod(pathToFile(p).getCanonicalPath(),
                      permission.toShort());
+    } else if (!Shell.WINDOWS) {
+      // GraphChecker: chmod(2) in the JVM, not a chmod process (see
+      // DeprecatedRawLocalFileStatus#loadPermissionInfoByAttributes).
+      Files.setAttribute(pathToFile(p).toPath(), "unix:mode",
+          (int) permission.toShort());
     } else {
       String perm = String.format("%04o", permission.toShort());
       Shell.execCommand(Shell.getSetPermissionCommand(perm, false,

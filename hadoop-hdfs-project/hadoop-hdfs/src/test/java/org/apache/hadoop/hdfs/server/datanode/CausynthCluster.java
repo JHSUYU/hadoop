@@ -46,6 +46,7 @@ import org.apache.hadoop.hdfs.qjournal.MiniJournalCluster;
 import org.apache.hadoop.hdfs.qjournal.server.JournalNode;
 import org.apache.hadoop.hdfs.security.token.block.BlockPoolTokenSecretManager;
 import org.apache.hadoop.hdfs.server.blockmanagement.BlockManager;
+import org.apache.hadoop.hdfs.server.datanode.fsdataset.impl.ReplicaCachingGetSpaceUsed;
 import org.apache.hadoop.hdfs.server.namenode.FSNamesystem;
 import org.apache.hadoop.hdfs.server.namenode.NameNodeRpcServer;
 import org.apache.hadoop.hdfs.server.protocol.DatanodeCommand;
@@ -71,7 +72,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * <p>What this deliberately does NOT do: suppress daemon activity.
  * Heartbeats and block reports run as they do in production; the schedule
  * prefix makes them reproducible and the attribution rule makes them
- * attributable.</p>
+ * attributable.  An automatic cluster only settles them once before its
+ * window ({@link #settle}), and runs no external process where the JVM can
+ * do the work ({@link #configure}).</p>
  *
  * <p>Two more properties are about the world the window starts from, which
  * the schedule prefix cannot reach because it only orders the window
@@ -364,6 +367,7 @@ public final class CausynthCluster {
     registerStartedDataNodes(cluster);
     if (cluster.getNameNode(0) != null) {
       if (windowClient == null) {
+        settle(cluster);
         openWindow(cluster, "DFS_CLIENT");
       }
       // The test's one client, whichever cluster it talks to.
@@ -458,6 +462,26 @@ public final class CausynthCluster {
   }
 
   /**
+   * Before the window opens, every running DataNode of the cluster tells its
+   * NameNodes what it has: one heartbeat, one full block report and its
+   * pending incremental reports, each sent before this returns.  The window
+   * then starts from that settled state in every run, its first heartbeat
+   * due one interval after the opening, not from wherever a start-up's
+   * daemon turns stood: a start-up of 9 s or 283 s put a different number of
+   * heartbeat turns inside the window (hdfs-adhoc-22).  Workaround, listed in
+   * STATUS "Per-system surface".
+   */
+  private static void settle(MiniDFSCluster cluster) throws IOException {
+    for (DataNode node : cluster.getDataNodes()) {
+      if (node.isDatanodeFullyStarted()) {
+        DataNodeTestUtils.triggerHeartbeat(node);
+        DataNodeTestUtils.triggerBlockReport(node);
+        DataNodeTestUtils.triggerDeletionReport(node);
+      }
+    }
+  }
+
+  /**
    * The DataNodes a registered automatic cluster started or restarted since,
    * each under its slot.
    */
@@ -545,7 +569,36 @@ public final class CausynthCluster {
     // An HA client tries the NameNodes in a random order by default, so the
     // recording's first call went to nn2 and a replay's to nn1.
     conf.setBoolean(HdfsClientConfigKeys.Failover.RANDOM_ORDER, false);
+    // Workarounds for the order of daemon work a replay cannot hold, listed
+    // in STATUS "Per-system surface"; a value the test chose itself stays.
+    // A block pool's used space from its replica map, not a du process (each
+    // started a stderr reader thread, and its refresh ran at the process's
+    // pace).
+    if (!testChose(conf,
+        CommonConfigurationKeysPublic.FS_GETSPACEUSED_CLASSNAME)) {
+      conf.set(CommonConfigurationKeysPublic.FS_GETSPACEUSED_CLASSNAME,
+          ReplicaCachingGetSpaceUsed.class.getName());
+    }
+    // Edits synced by the handler that logs them, not handed to the async
+    // edit log's thread: its queue's claims fell late in the upgrade and
+    // snapshot workloads' replays (hdfs-adhoc-19, -25, -52).
+    if (!testChose(conf, DFSConfigKeys.DFS_NAMENODE_EDITS_ASYNC_LOGGING)) {
+      conf.setBoolean(DFSConfigKeys.DFS_NAMENODE_EDITS_ASYNC_LOGGING, false);
+    }
     return conf;
+  }
+
+  /** Whether {@code key} has a value from anything but a default resource. */
+  private static boolean testChose(Configuration conf, String key) {
+    String[] sources = conf.getPropertySources(key);
+    if (sources != null) {
+      for (String source : sources) {
+        if (!source.endsWith("-default.xml")) {
+          return true;
+        }
+      }
+    }
+    return false;
   }
 
   /**

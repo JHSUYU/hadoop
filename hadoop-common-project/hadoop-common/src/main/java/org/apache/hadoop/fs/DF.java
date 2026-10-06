@@ -21,6 +21,8 @@ import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.IOException;
+import java.nio.file.FileStore;
+import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.NoSuchElementException;
 import java.util.StringTokenizer;
@@ -33,8 +35,8 @@ import org.apache.hadoop.util.Shell;
 import org.apache.hadoop.classification.VisibleForTesting;
 
 /** Filesystem disk space usage statistics.
- * Uses the unix 'df' program to get mount points, and java.io.File for
- * space utilization. Tested on Linux, FreeBSD, Windows. */
+ * Uses the JVM's file store to get mount points (GraphChecker: no 'df'
+ * process), and java.io.File for space utilization. */
 @InterfaceAudience.LimitedPrivate({"HDFS", "MapReduce"})
 @InterfaceStability.Evolving
 public class DF extends Shell {
@@ -74,9 +76,7 @@ public class DF extends Shell {
       this.filesystem = dirFile.getCanonicalPath().substring(0, 2);
       return this.filesystem;
     } else {
-      run();
-      verifyExitCode();
-      parseOutput();
+      readFileStore();
       return filesystem;
     }
   }
@@ -118,12 +118,30 @@ public class DF extends Shell {
       // Assume a drive letter for a mount point
       this.mount = dirFile.getCanonicalPath().substring(0, 2);
     } else {
-      run();
-      verifyExitCode();
-      parseOutput();
+      readFileStore();
     }
 
     return mount;
+  }
+
+  /**
+   * GraphChecker: the file system and mount point of the directory as the
+   * JVM resolves them, not from a df process: each process started a stderr
+   * reader thread whose timing no replay holds.  The mount point is the
+   * highest ancestor still on the directory's file store; the file system
+   * is the store's name, df's first column.
+   */
+  private void readFileStore() throws IOException {
+    java.nio.file.Path dir = dirFile.toPath();
+    FileStore store = Files.getFileStore(dir);
+    java.nio.file.Path mountPoint = dir;
+    for (java.nio.file.Path up = dir.getParent();
+        up != null && Files.getFileStore(up).equals(store);
+        up = up.getParent()) {
+      mountPoint = up;
+    }
+    this.filesystem = store.name();
+    this.mount = mountPoint.toString();
   }
   
   @Override
@@ -199,17 +217,6 @@ public class DF extends Shell {
       throw new IOException("Could not parse line: " + line);
     } catch (NumberFormatException e) {
       throw new IOException("Could not parse line: " + line);
-    }
-  }
-
-  private void verifyExitCode() throws IOException {
-    if (getExitCode() != 0) {
-      StringBuilder sb =
-          new StringBuilder("df could not be run successfully: ");
-      for (String line : output) {
-        sb.append(line);
-      }
-      throw new IOException(sb.toString());
     }
   }
 
