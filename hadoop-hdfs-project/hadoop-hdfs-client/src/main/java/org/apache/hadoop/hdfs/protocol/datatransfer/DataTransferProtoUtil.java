@@ -91,11 +91,11 @@ public abstract class DataTransferProtoUtil {
    * The op as it leaves (GraphChecker): a message carrying, on its trace
    * info -- its header's base header's, or its own when it has no header
    * (the short-circuit shared-memory ops) -- its correlation and every value
-   * the sender's thread exported for it.
+   * its message fields carry (the shim's outboundOp is handed the op).
    */
   static Message withCausynth(Message op) {
     CausynthMessagePropagation.Outbound causynth =
-        CausynthMessagePropagation.outboundOp();
+        CausynthMessagePropagation.outboundOp(op);
     return causynth.active() ? carry(op.toBuilder(), causynth).build() : op;
   }
 

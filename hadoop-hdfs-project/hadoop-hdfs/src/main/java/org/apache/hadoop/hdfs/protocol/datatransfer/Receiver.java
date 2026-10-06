@@ -158,6 +158,8 @@ public abstract class Receiver implements DataTransferProtocol {
     OpReadBlockProto proto = OpReadBlockProto.parseFrom(vintPrefixed(in));
     TraceScope traceScope = continueTraceSpan(proto.getHeader(),
         proto.getClass().getSimpleName());
+    // GraphChecker: the parsed op, inside its exchange.
+    CausynthMessagePropagation.received(proto);
     try {
       readBlock(PBHelperClient.convert(proto.getHeader().getBaseHeader().getBlock()),
         PBHelperClient.convert(proto.getHeader().getBaseHeader().getToken()),
@@ -178,6 +180,8 @@ public abstract class Receiver implements DataTransferProtocol {
     final OpWriteBlockProto proto = OpWriteBlockProto.parseFrom(vintPrefixed(in));
     TraceScope traceScope = continueTraceSpan(proto.getHeader(),
         proto.getClass().getSimpleName());
+    // GraphChecker: the parsed op, inside its exchange.
+    CausynthMessagePropagation.received(proto);
     final DatanodeInfo[] targets = PBHelperClient.convert(proto.getTargetsList());
     try {
       writeBlock(PBHelperClient.convert(proto.getHeader().getBaseHeader().getBlock()),
@@ -211,6 +215,8 @@ public abstract class Receiver implements DataTransferProtocol {
       OpTransferBlockProto.parseFrom(vintPrefixed(in));
     TraceScope traceScope = continueTraceSpan(proto.getHeader(),
         proto.getClass().getSimpleName());
+    // GraphChecker: the parsed op, inside its exchange.
+    CausynthMessagePropagation.received(proto);
     final DatanodeInfo[] targets = PBHelperClient.convert(proto.getTargetsList());
     try {
       final ExtendedBlock block =
@@ -236,6 +242,8 @@ public abstract class Receiver implements DataTransferProtocol {
       OpRequestShortCircuitAccessProto.parseFrom(vintPrefixed(in));
     TraceScope traceScope = continueTraceSpan(proto.getHeader(),
         proto.getClass().getSimpleName());
+    // GraphChecker: the parsed op, inside its exchange.
+    CausynthMessagePropagation.received(proto);
     SlotId slotId = (proto.hasSlotId()) ? 
         PBHelperClient.convert(proto.getSlotId()) : null;
     try {
@@ -255,6 +263,8 @@ public abstract class Receiver implements DataTransferProtocol {
       ReleaseShortCircuitAccessRequestProto.parseFrom(vintPrefixed(in));
     TraceScope traceScope = continueTraceSpan(proto.getTraceInfo(),
         proto.getClass().getSimpleName());
+    // GraphChecker: the parsed op, inside its exchange.
+    CausynthMessagePropagation.received(proto);
     try {
       releaseShortCircuitFds(PBHelperClient.convert(proto.getSlotId()));
     } finally {
@@ -268,6 +278,8 @@ public abstract class Receiver implements DataTransferProtocol {
         ShortCircuitShmRequestProto.parseFrom(vintPrefixed(in));
     TraceScope traceScope = continueTraceSpan(proto.getTraceInfo(),
         proto.getClass().getSimpleName());
+    // GraphChecker: the parsed op, inside its exchange.
+    CausynthMessagePropagation.received(proto);
     try {
       requestShortCircuitShm(proto.getClientName());
     } finally {
@@ -280,6 +292,8 @@ public abstract class Receiver implements DataTransferProtocol {
     OpReplaceBlockProto proto = OpReplaceBlockProto.parseFrom(vintPrefixed(in));
     TraceScope traceScope = continueTraceSpan(proto.getHeader(),
         proto.getClass().getSimpleName());
+    // GraphChecker: the parsed op, inside its exchange.
+    CausynthMessagePropagation.received(proto);
     try {
       replaceBlock(PBHelperClient.convert(proto.getHeader().getBlock()),
           PBHelperClient.convertStorageType(proto.getStorageType()),
@@ -297,6 +311,8 @@ public abstract class Receiver implements DataTransferProtocol {
     OpCopyBlockProto proto = OpCopyBlockProto.parseFrom(vintPrefixed(in));
     TraceScope traceScope = continueTraceSpan(proto.getHeader(),
         proto.getClass().getSimpleName());
+    // GraphChecker: the parsed op, inside its exchange.
+    CausynthMessagePropagation.received(proto);
     try {
       copyBlock(PBHelperClient.convert(proto.getHeader().getBlock()),
           PBHelperClient.convert(proto.getHeader().getToken()));
@@ -310,6 +326,8 @@ public abstract class Receiver implements DataTransferProtocol {
     OpBlockChecksumProto proto = OpBlockChecksumProto.parseFrom(vintPrefixed(in));
     TraceScope traceScope = continueTraceSpan(proto.getHeader(),
         proto.getClass().getSimpleName());
+    // GraphChecker: the parsed op, inside its exchange.
+    CausynthMessagePropagation.received(proto);
     try {
       blockChecksum(PBHelperClient.convert(proto.getHeader().getBlock()),
           PBHelperClient.convert(proto.getHeader().getToken()),
@@ -325,6 +343,8 @@ public abstract class Receiver implements DataTransferProtocol {
         OpBlockGroupChecksumProto.parseFrom(vintPrefixed(dis));
     TraceScope traceScope = continueTraceSpan(proto.getHeader(),
         proto.getClass().getSimpleName());
+    // GraphChecker: the parsed op, inside its exchange.
+    CausynthMessagePropagation.received(proto);
     StripedBlockInfo stripedBlockInfo = new StripedBlockInfo(
         PBHelperClient.convert(proto.getHeader().getBlock()),
         PBHelperClient.convert(proto.getDatanodes()),
