@@ -315,6 +315,8 @@ public class ProtobufRpcEngine implements RpcEngine {
       Message returnMessage;
       try {
         returnMessage = buf.getValue(prototype.getDefaultInstanceForType());
+        // GraphChecker: the parsed response, inside its exchange.
+        CausynthMessagePropagation.received(returnMessage);
 
         if (LOG.isTraceEnabled()) {
           LOG.trace(Thread.currentThread().getId() + ": Response <- " +
