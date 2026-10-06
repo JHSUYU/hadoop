@@ -3253,6 +3253,19 @@ public abstract class Server {
 
   private void internalQueueCall(Call call, boolean blocking)
       throws IOException, InterruptedException {
+    // GraphChecker: the hand-off of a received call is named by its request,
+    // not by how many calls its connection carried before.
+    Object causynthHandoff =
+        CausynthMessagePropagation.handingOff(call.clientId, call.callId);
+    try {
+      internalQueueCallNamed(call, blocking);
+    } finally {
+      CausynthMessagePropagation.handedOff(causynthHandoff);
+    }
+  }
+
+  private void internalQueueCallNamed(Call call, boolean blocking)
+      throws IOException, InterruptedException {
     try {
       // queue the call, may be blocked if blocking is true.
       if (blocking) {
