@@ -3682,11 +3682,12 @@ public abstract class Server {
     headerBuilder.setRetryCount(call.retryCount);
     headerBuilder.setStatus(status);
     headerBuilder.setServerIpcVersionNum(CURRENT_VERSION);
+    // GraphChecker: the response door is handed the response it carries.
     CausynthMessagePropagation.Outbound causynth =
-        CausynthMessagePropagation.outbound(CausynthMessagePropagation.IPC,
+        CausynthMessagePropagation.outboundResponse(
+            CausynthMessagePropagation.IPC,
             CausynthMessagePropagation.rpcCorrelation(call.clientId,
-                call.callId), Integer.toString(call.retryCount),
-            "RESPONSE", this);
+                call.callId), Integer.toString(call.retryCount), this, rv);
     if (causynth.active()) {
       headerBuilder.setCausynthTrace(causynth.trace);
       if (!causynth.symbolic.isEmpty()) {
