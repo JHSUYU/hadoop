@@ -492,6 +492,8 @@ public class ProtobufRpcEngine implements RpcEngine {
       }
       Message prototype = service.getRequestPrototype(methodDescriptor);
       Message param = request.getValue(prototype);
+      // GraphChecker: the parsed request, inside its exchange.
+      CausynthMessagePropagation.received(param);
 
       Message result;
       Call currentCall = Server.getCurCall().get();
