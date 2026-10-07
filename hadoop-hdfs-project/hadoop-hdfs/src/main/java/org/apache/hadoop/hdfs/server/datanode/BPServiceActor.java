@@ -897,6 +897,52 @@ class BPServiceActor implements Runnable {
   }
 
   /**
+   * GraphChecker workaround (hdfs-adhoc-21): {@link #connectToNNAndHandshake}
+   * on a thread of its own, joined, so the handshake is an occurrence that
+   * ends instead of the prefix of this actor's never-ending service loop;
+   * whatever it threw is thrown here, as the actor's own.
+   */
+  private void handshakeOnItsOwnThread() throws IOException {
+    Handshake handshake = new Handshake();
+    Thread thread = new SubjectInheritingThread(handshake,
+        "handshake of " + this);
+    thread.start();
+    try {
+      thread.join();
+    } catch (InterruptedException e) {
+      Thread.currentThread().interrupt();
+      throw new java.io.InterruptedIOException("handshake interrupted");
+    }
+    handshake.rethrow();
+  }
+
+  /** The handshake's thread (hdfs-adhoc-21 workaround). */
+  private final class Handshake implements Runnable {
+    private Throwable failed;
+
+    @Override
+    public void run() {
+      try {
+        connectToNNAndHandshake();
+      } catch (Throwable t) {
+        failed = t;
+      }
+    }
+
+    void rethrow() throws IOException {
+      if (failed instanceof IOException) {
+        throw (IOException) failed;
+      }
+      if (failed instanceof RuntimeException) {
+        throw (RuntimeException) failed;
+      }
+      if (failed instanceof Error) {
+        throw (Error) failed;
+      }
+    }
+  }
+
+  /**
    * No matter what kind of exception we get, keep retrying to offerService().
    * That's the loop that connects to the NameNode and provides basic DataNode
    * functionality.
@@ -913,7 +959,7 @@ class BPServiceActor implements Runnable {
         // init stuff
         try {
           // setup storage
-          connectToNNAndHandshake();
+          handshakeOnItsOwnThread();
           break;
         } catch (IOException ioe) {
           // Initial handshake, storage recovery or registration failed
