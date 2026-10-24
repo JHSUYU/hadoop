@@ -1910,22 +1910,19 @@ public class DFSTestUtil {
     BlockInfo storedBlock = bm0.getStoredBlock(blk.getLocalBlock());
     assertTrue(!storedBlock.isComplete(),
         "Block " + blk + " should be under construction, " + "got: " + storedBlock);
-    // We expect that the replica with the most recent heart beat will be
-    // the one to be in charge of the synchronization / recovery protocol.
     final DatanodeStorageInfo[] storages = storedBlock
         .getUnderConstructionFeature().getExpectedStorageLocations();
-    DatanodeStorageInfo expectedPrimary = storages[0];
-    long mostRecentLastUpdate = expectedPrimary.getDatanodeDescriptor()
-        .getLastUpdateMonotonic();
-    for (int i = 1; i < storages.length; i++) {
-      final long lastUpdate = storages[i].getDatanodeDescriptor()
-          .getLastUpdateMonotonic();
-      if (lastUpdate > mostRecentLastUpdate) {
-        expectedPrimary = storages[i];
-        mostRecentLastUpdate = lastUpdate;
+    DatanodeDescriptor expectedPrimary = null;
+    for (DatanodeStorageInfo storage : storages) {
+      final DatanodeDescriptor node = storage.getDatanodeDescriptor();
+      if (node.getLastUpdateMonotonic() > 0 && (expectedPrimary == null
+          || node.getDatanodeUuid().compareTo(
+              expectedPrimary.getDatanodeUuid()) < 0)) {
+        expectedPrimary = node;
       }
     }
-    return expectedPrimary.getDatanodeDescriptor();
+    return expectedPrimary != null ? expectedPrimary
+        : storages[0].getDatanodeDescriptor();
   }
 
   public static void toolRun(Tool tool, String cmd, int retcode, String contain)

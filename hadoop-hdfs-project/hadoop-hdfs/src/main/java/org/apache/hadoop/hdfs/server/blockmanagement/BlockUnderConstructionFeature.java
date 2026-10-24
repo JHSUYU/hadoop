@@ -264,7 +264,6 @@ public class BlockUnderConstructionFeature {
         replica.setChosenAsPrimary(false);
       }
     }
-    long mostRecentLastUpdate = 0;
     ReplicaUnderConstruction primary = null;
     primaryNodeIndex = -1;
     for (int i = 0; i < replicas.length; i++) {
@@ -273,12 +272,14 @@ public class BlockUnderConstructionFeature {
         continue;
       }
       final ReplicaUnderConstruction ruc = replicas[i];
-      final long lastUpdate = ruc.getExpectedStorageLocation()
-          .getDatanodeDescriptor().getLastUpdateMonotonic();
-      if (lastUpdate > mostRecentLastUpdate) {
+      final DatanodeDescriptor node =
+          ruc.getExpectedStorageLocation().getDatanodeDescriptor();
+      if (node.getLastUpdateMonotonic() > 0 && (primary == null
+          || node.getDatanodeUuid().compareTo(primary
+              .getExpectedStorageLocation().getDatanodeDescriptor()
+              .getDatanodeUuid()) < 0)) {
         primaryNodeIndex = i;
         primary = ruc;
-        mostRecentLastUpdate = lastUpdate;
       }
     }
     if (primary != null) {
