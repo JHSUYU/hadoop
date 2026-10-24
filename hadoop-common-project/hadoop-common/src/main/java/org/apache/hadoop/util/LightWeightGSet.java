@@ -64,6 +64,7 @@ public class LightWeightGSet<K, E extends K> implements GSet<K, E> {
 
   static final int MAX_ARRAY_LENGTH = 1 << 30; //prevent int overflow problem
   static final int MIN_ARRAY_LENGTH = 1;
+  private static final long CAUSYNTH_SIZING_MEMORY = 64L << 20;
 
   /**
    * An internal array of entries, which are the rows of the hash table.
@@ -372,8 +373,8 @@ public class LightWeightGSet<K, E extends K> implements GSet<K, E> {
    * @return compute capacity.
    */
   public static int computeCapacity(double percentage, String mapName) {
-    return computeCapacity(Runtime.getRuntime().maxMemory(), percentage,
-        mapName);
+    return computeCapacity(Math.min(Runtime.getRuntime().maxMemory(),
+        CAUSYNTH_SIZING_MEMORY), percentage, mapName);
   }
   
   @VisibleForTesting
