@@ -1912,12 +1912,17 @@ public class DFSTestUtil {
         "Block " + blk + " should be under construction, " + "got: " + storedBlock);
     final DatanodeStorageInfo[] storages = storedBlock
         .getUnderConstructionFeature().getExpectedStorageLocations();
+    DatanodeDescriptor expectedPrimary = null;
     for (DatanodeStorageInfo storage : storages) {
-      if (storage.getDatanodeDescriptor().getLastUpdateMonotonic() > 0) {
-        return storage.getDatanodeDescriptor();
+      final DatanodeDescriptor node = storage.getDatanodeDescriptor();
+      if (node.getLastUpdateMonotonic() > 0 && (expectedPrimary == null
+          || node.getDatanodeUuid().compareTo(
+              expectedPrimary.getDatanodeUuid()) < 0)) {
+        expectedPrimary = node;
       }
     }
-    return storages[0].getDatanodeDescriptor();
+    return expectedPrimary != null ? expectedPrimary
+        : storages[0].getDatanodeDescriptor();
   }
 
   public static void toolRun(Tool tool, String cmd, int retcode, String contain)

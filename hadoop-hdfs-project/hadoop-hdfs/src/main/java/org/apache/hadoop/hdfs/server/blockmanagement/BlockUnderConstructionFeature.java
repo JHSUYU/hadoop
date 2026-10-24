@@ -266,14 +266,18 @@ public class BlockUnderConstructionFeature {
     }
     ReplicaUnderConstruction primary = null;
     primaryNodeIndex = -1;
-    for (int i = 0; i < replicas.length && primary == null; i++) {
+    for (int i = 0; i < replicas.length; i++) {
       // Skip alive replicas which have been chosen for recovery.
       if (!(replicas[i].isAlive() && !replicas[i].getChosenAsPrimary())) {
         continue;
       }
       final ReplicaUnderConstruction ruc = replicas[i];
-      if (ruc.getExpectedStorageLocation().getDatanodeDescriptor()
-          .getLastUpdateMonotonic() > 0) {
+      final DatanodeDescriptor node =
+          ruc.getExpectedStorageLocation().getDatanodeDescriptor();
+      if (node.getLastUpdateMonotonic() > 0 && (primary == null
+          || node.getDatanodeUuid().compareTo(primary
+              .getExpectedStorageLocation().getDatanodeDescriptor()
+              .getDatanodeUuid()) < 0)) {
         primaryNodeIndex = i;
         primary = ruc;
       }
