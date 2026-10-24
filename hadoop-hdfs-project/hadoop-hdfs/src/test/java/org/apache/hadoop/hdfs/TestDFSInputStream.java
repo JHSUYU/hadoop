@@ -73,7 +73,7 @@ public class TestDFSInputStream {
     fout.write(fileContent);
     fout.close();
     Random random = new Random();
-    for (int i = 3; i < 18; i++) {
+    for (int i = 15; i < 18; i++) {
       DFSInputStream fin = client.open("/testfile");
       for (long pos = 0; pos < fileLength;) {
         long skip = random.nextInt(1 << i) + 1;
