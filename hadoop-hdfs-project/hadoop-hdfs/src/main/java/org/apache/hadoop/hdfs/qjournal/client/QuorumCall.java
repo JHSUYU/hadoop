@@ -47,6 +47,14 @@ import org.apache.hadoop.thirdparty.protobuf.TextFormat;
 class QuorumCall<KEY, RESULT> {
   private final Map<KEY, RESULT> successes = Maps.newHashMap();
   private final Map<KEY, Throwable> exceptions = Maps.newHashMap();
+  /**
+   * GraphChecker: the calls' keys in the order they were made (AsyncLoggerSet
+   * makes them in its loggers' order), which {@link #getResults()} keeps. The
+   * successes map is keyed by AsyncLogger, whose hash is its identity hash, so
+   * its own order differs in every JVM, and a reader of the results would
+   * read the replies in a different order every run.
+   */
+  private final List<KEY> keys = new ArrayList<>();
 
   /**
    * Interval, in milliseconds, at which a log message will be made
@@ -74,6 +82,7 @@ class QuorumCall<KEY, RESULT> {
     for (final Entry<KEY, ? extends ListenableFuture<RESULT>> e : calls.entrySet()) {
       Preconditions.checkArgument(e.getValue() != null,
           "null future for key: " + e.getKey());
+      qr.keys.add(e.getKey());
       qr.addCall(e.getValue());
       Futures.addCallback(e.getValue(), new FutureCallback<RESULT>() {
         @Override
@@ -297,7 +306,14 @@ class QuorumCall<KEY, RESULT> {
    * quorum.
    */
   public synchronized Map<KEY, RESULT> getResults() {
-    return Maps.newHashMap(successes);
+    // GraphChecker: in the order the calls were made (see keys).
+    Map<KEY, RESULT> results = Maps.newLinkedHashMap();
+    for (KEY key : keys) {
+      if (successes.containsKey(key)) {
+        results.put(key, successes.get(key));
+      }
+    }
+    return results;
   }
 
   public synchronized void rethrowException(String msg) throws QuorumException {

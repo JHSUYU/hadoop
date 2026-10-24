@@ -207,7 +207,7 @@ class AsyncLoggerSet {
   
   public QuorumCall<AsyncLogger, GetJournalStateResponseProto> getJournalState() {
     Map<AsyncLogger, ListenableFuture<GetJournalStateResponseProto>> calls =
-        Maps.newHashMap();
+        Maps.newLinkedHashMap();
     for (AsyncLogger logger : loggers) {
       calls.put(logger, logger.getJournalState());
     }
@@ -215,7 +215,7 @@ class AsyncLoggerSet {
   }
   
   public QuorumCall<AsyncLogger, Boolean> isFormatted() {
-    Map<AsyncLogger, ListenableFuture<Boolean>> calls = Maps.newHashMap();
+    Map<AsyncLogger, ListenableFuture<Boolean>> calls = Maps.newLinkedHashMap();
     for (AsyncLogger logger : loggers) {
       calls.put(logger, logger.isFormatted());
     }
@@ -226,7 +226,7 @@ class AsyncLoggerSet {
       NamespaceInfo nsInfo,
       long epoch) {
     Map<AsyncLogger, ListenableFuture<NewEpochResponseProto>> calls =
-        Maps.newHashMap();
+        Maps.newLinkedHashMap();
     for (AsyncLogger logger : loggers) {
       calls.put(logger, logger.newEpoch(epoch));
     }
@@ -235,7 +235,7 @@ class AsyncLoggerSet {
 
   public QuorumCall<AsyncLogger, Void> startLogSegment(
       long txid, int layoutVersion) {
-    Map<AsyncLogger, ListenableFuture<Void>> calls = Maps.newHashMap();
+    Map<AsyncLogger, ListenableFuture<Void>> calls = Maps.newLinkedHashMap();
     for (AsyncLogger logger : loggers) {
       calls.put(logger, logger.startLogSegment(txid, layoutVersion));
     }
@@ -244,7 +244,7 @@ class AsyncLoggerSet {
   
   public QuorumCall<AsyncLogger, Void> finalizeLogSegment(long firstTxId,
       long lastTxId) {
-    Map<AsyncLogger, ListenableFuture<Void>> calls = Maps.newHashMap();
+    Map<AsyncLogger, ListenableFuture<Void>> calls = Maps.newLinkedHashMap();
     for (AsyncLogger logger : loggers) {
       calls.put(logger, logger.finalizeLogSegment(firstTxId, lastTxId));
     }
@@ -253,7 +253,7 @@ class AsyncLoggerSet {
   
   public QuorumCall<AsyncLogger, Void> sendEdits(
       long segmentTxId, long firstTxnId, int numTxns, byte[] data) {
-    Map<AsyncLogger, ListenableFuture<Void>> calls = Maps.newHashMap();
+    Map<AsyncLogger, ListenableFuture<Void>> calls = Maps.newLinkedHashMap();
     for (AsyncLogger logger : loggers) {
       ListenableFuture<Void> future = 
         logger.sendEdits(segmentTxId, firstTxnId, numTxns, data);
@@ -266,7 +266,7 @@ class AsyncLoggerSet {
   getJournaledEdits(long fromTxnId, int maxTransactions) {
     Map<AsyncLogger,
         ListenableFuture<GetJournaledEditsResponseProto>> calls
-        = Maps.newHashMap();
+        = Maps.newLinkedHashMap();
     for (AsyncLogger logger : loggers) {
       ListenableFuture<GetJournaledEditsResponseProto> future =
           logger.getJournaledEdits(fromTxnId, maxTransactions);
@@ -279,7 +279,7 @@ class AsyncLoggerSet {
       long fromTxnId, boolean inProgressOk) {
     Map<AsyncLogger,
         ListenableFuture<RemoteEditLogManifest>> calls
-        = Maps.newHashMap();
+        = Maps.newLinkedHashMap();
     for (AsyncLogger logger : loggers) {
       ListenableFuture<RemoteEditLogManifest> future =
           logger.getEditLogManifest(fromTxnId, inProgressOk);
@@ -292,7 +292,7 @@ class AsyncLoggerSet {
       prepareRecovery(long segmentTxId) {
     Map<AsyncLogger,
       ListenableFuture<PrepareRecoveryResponseProto>> calls
-      = Maps.newHashMap();
+      = Maps.newLinkedHashMap();
     for (AsyncLogger logger : loggers) {
       ListenableFuture<PrepareRecoveryResponseProto> future =
           logger.prepareRecovery(segmentTxId);
@@ -304,7 +304,7 @@ class AsyncLoggerSet {
   QuorumCall<AsyncLogger,Void>
       acceptRecovery(SegmentStateProto log, URL fromURL) {
     Map<AsyncLogger, ListenableFuture<Void>> calls
-      = Maps.newHashMap();
+      = Maps.newLinkedHashMap();
     for (AsyncLogger logger : loggers) {
       ListenableFuture<Void> future =
           logger.acceptRecovery(log, fromURL);
@@ -315,7 +315,7 @@ class AsyncLoggerSet {
 
   QuorumCall<AsyncLogger, Void> format(NamespaceInfo nsInfo, boolean force) {
     Map<AsyncLogger, ListenableFuture<Void>> calls =
-        Maps.newHashMap();
+        Maps.newLinkedHashMap();
     for (AsyncLogger logger : loggers) {
       ListenableFuture<Void> future =
           logger.format(nsInfo, force);
@@ -326,7 +326,7 @@ class AsyncLoggerSet {
   
   QuorumCall<AsyncLogger, Void> doPreUpgrade() {
     Map<AsyncLogger, ListenableFuture<Void>> calls =
-        Maps.newHashMap();
+        Maps.newLinkedHashMap();
     for (AsyncLogger logger : loggers) {
       ListenableFuture<Void> future =
           logger.doPreUpgrade();
@@ -337,7 +337,7 @@ class AsyncLoggerSet {
 
   public QuorumCall<AsyncLogger, Void> doUpgrade(StorageInfo sInfo) {
     Map<AsyncLogger, ListenableFuture<Void>> calls =
-        Maps.newHashMap();
+        Maps.newLinkedHashMap();
     for (AsyncLogger logger : loggers) {
       ListenableFuture<Void> future =
           logger.doUpgrade(sInfo);
@@ -348,7 +348,7 @@ class AsyncLoggerSet {
 
   public QuorumCall<AsyncLogger, Void> doFinalize() {
     Map<AsyncLogger, ListenableFuture<Void>> calls =
-        Maps.newHashMap();
+        Maps.newLinkedHashMap();
     for (AsyncLogger logger : loggers) {
       ListenableFuture<Void> future =
           logger.doFinalize();
@@ -360,7 +360,7 @@ class AsyncLoggerSet {
   public QuorumCall<AsyncLogger, Boolean> canRollBack(StorageInfo storage,
       StorageInfo prevStorage, int targetLayoutVersion) {
     Map<AsyncLogger, ListenableFuture<Boolean>> calls =
-        Maps.newHashMap();
+        Maps.newLinkedHashMap();
     for (AsyncLogger logger : loggers) {
       ListenableFuture<Boolean> future =
           logger.canRollBack(storage, prevStorage, targetLayoutVersion);
@@ -371,7 +371,7 @@ class AsyncLoggerSet {
 
   public QuorumCall<AsyncLogger, Void> doRollback() {
     Map<AsyncLogger, ListenableFuture<Void>> calls =
-        Maps.newHashMap();
+        Maps.newLinkedHashMap();
     for (AsyncLogger logger : loggers) {
       ListenableFuture<Void> future =
           logger.doRollback();
@@ -381,7 +381,7 @@ class AsyncLoggerSet {
   }
 
   public QuorumCall<AsyncLogger, Void> discardSegments(long startTxId) {
-    Map<AsyncLogger, ListenableFuture<Void>> calls = Maps.newHashMap();
+    Map<AsyncLogger, ListenableFuture<Void>> calls = Maps.newLinkedHashMap();
     for (AsyncLogger logger : loggers) {
       ListenableFuture<Void> future = logger.discardSegments(startTxId);
       calls.put(logger, future);
@@ -391,7 +391,7 @@ class AsyncLoggerSet {
 
   public QuorumCall<AsyncLogger, Long> getJournalCTime() {
     Map<AsyncLogger, ListenableFuture<Long>> calls =
-        Maps.newHashMap();
+        Maps.newLinkedHashMap();
     for (AsyncLogger logger : loggers) {
       ListenableFuture<Long> future = logger.getJournalCTime();
       calls.put(logger, future);
