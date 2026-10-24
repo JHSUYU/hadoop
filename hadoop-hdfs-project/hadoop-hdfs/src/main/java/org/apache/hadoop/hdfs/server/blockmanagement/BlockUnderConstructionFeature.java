@@ -264,21 +264,18 @@ public class BlockUnderConstructionFeature {
         replica.setChosenAsPrimary(false);
       }
     }
-    long mostRecentLastUpdate = 0;
     ReplicaUnderConstruction primary = null;
     primaryNodeIndex = -1;
-    for (int i = 0; i < replicas.length; i++) {
+    for (int i = 0; i < replicas.length && primary == null; i++) {
       // Skip alive replicas which have been chosen for recovery.
       if (!(replicas[i].isAlive() && !replicas[i].getChosenAsPrimary())) {
         continue;
       }
       final ReplicaUnderConstruction ruc = replicas[i];
-      final long lastUpdate = ruc.getExpectedStorageLocation()
-          .getDatanodeDescriptor().getLastUpdateMonotonic();
-      if (lastUpdate > mostRecentLastUpdate) {
+      if (ruc.getExpectedStorageLocation().getDatanodeDescriptor()
+          .getLastUpdateMonotonic() > 0) {
         primaryNodeIndex = i;
         primary = ruc;
-        mostRecentLastUpdate = lastUpdate;
       }
     }
     if (primary != null) {
