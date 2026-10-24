@@ -113,6 +113,7 @@ public class TestEncryptedTransfer {
 
   public void setup() throws IOException {
     conf = new Configuration();
+    conf.setInt(HdfsClientConfigKeys.DFS_CLIENT_MAX_BLOCK_ACQUIRE_FAILURES_KEY, 0);
   }
 
   @AfterEach
