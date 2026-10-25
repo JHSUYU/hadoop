@@ -583,8 +583,9 @@ public class BlockTokenSecretManager extends
       if (key == null) {
         throw new @CausynthExceptionTarget("hdfs-17897,hdfs-17899-bug1,"
             + "hdfs-17899-bug2,hdfs-17899-bug3,hdfs-17967-pathA,"
-            + "hdfs-17967-pathB,hdfs-17967-pathC,hdfs-adhoc-11")
-            InvalidEncryptionKeyException("Can't re-compute encryption key"
+            + "hdfs-17967-pathB,hdfs-17967-pathC,hdfs-adhoc-11,"
+            + "hdfs-buggy-11741") InvalidEncryptionKeyException(
+            "Can't re-compute encryption key"
             + " for nonce, since the required block key (keyID=" + keyId
             + ") doesn't exist. Current key: " + currentKey.getKeyId());
       }
