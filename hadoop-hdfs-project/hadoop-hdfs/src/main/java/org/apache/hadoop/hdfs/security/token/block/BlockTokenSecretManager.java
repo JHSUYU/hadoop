@@ -242,9 +242,7 @@ public class BlockTokenSecretManager extends
     }
     LOG.info("Setting block keys. BlockPool = {} .", blockPoolId);
     removeExpiredKeys();
-    if (updateCurrentKey || currentKey == null) {
-      this.currentKey = exportedKeys.getCurrentKey();
-    }
+    this.currentKey = exportedKeys.getCurrentKey();
     BlockKey[] receivedKeys = exportedKeys.getAllKeys();
     for (int i = 0; i < receivedKeys.length; i++) {
       if (receivedKeys[i] != null) {
