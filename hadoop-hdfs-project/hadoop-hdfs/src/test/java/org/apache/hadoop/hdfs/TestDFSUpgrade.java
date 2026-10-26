@@ -406,30 +406,31 @@ public class TestDFSUpgrade {
   }
   
   /**
-   * The "Normal DataNode upgrade" step of {@link #testUpgrade} with two
+   * The "Normal DataNode upgrade" step of {@link #testUpgrade} with three
    * volumes loaded in parallel (HDFS-14311): the NameNode starts with
-   * -upgrade, so its cTime is new, and the DataNode's two volumes come from
-   * the master storage, loaded into one BlockPoolSliceStorage. Volume 1 keeps
-   * the master layout (current) with the old cTime, so it upgrades for its
-   * cTime and its upgrade task writes the shared storage's layoutVersion
-   * (the current one) and cTime on the parallel-load executor. Volume 2 is at
-   * the previous DataNode layout (-56, the layout the issue's 2.7 to 2.9
-   * upgrade left) with a future cTime, so by its own VERSION it upgrades for
-   * its layout and the regular-startup and cTime checks never fire.
+   * -upgrade, so its cTime is new, and the DataNode's volumes come from the
+   * master storage, loaded in order into one BlockPoolSliceStorage. Volumes 1
+   * and 2 are at the previous DataNode layout (-56, the layout the issue's 2.7
+   * to 2.9 upgrade left), so each upgrades for its layout: doTransition decides
+   * that on the layout check alone, before the cTime check. Volume 1's upgrade
+   * task then writes the shared storage's layoutVersion (the current one) on
+   * the parallel-load executor. Volume 2 also has a future cTime. Volume 3
+   * keeps the master layout (current) with the old cTime and upgrades for its
+   * cTime.
    *
    * <p>Volume 2 is loaded second: the loader thread reads its VERSION into the
    * shared storage and runs doTransition's checks on those fields while volume
    * 1's upgrade task runs. When the task's {@code layoutVersion = current}
-   * write is read for volume 2's layoutVersion check, volume 2 reads a layout
-   * equal to the current one, no longer greater, so it skips the layout
-   * upgrade; its own future cTime is still greater than the namespace cTime,
-   * and doTransition falls through to the "is newer than the namespace state"
+   * write is read for volume 2's layout check, volume 2 reads a layout equal
+   * to the current one, no longer greater, so it goes on to the cTime check;
+   * its own future cTime is greater than the namespace cTime, and
+   * doTransition falls through to the "is newer than the namespace state"
    * throw.</p>
    */
   @Test
   @Timeout(value = 120)
   public void testParallelVolumeUpgrade() throws Exception {
-    final int numDirs = 2;
+    final int numDirs = 3;
     conf = new HdfsConfiguration();
     conf.setInt(DFSConfigKeys.DFS_DATANODE_SCAN_PERIOD_HOURS_KEY, -1);
     conf.setBoolean(DFSConfigKeys.DFS_DATANODE_DUPLICATE_REPLICA_DELETION, false);
@@ -439,7 +440,7 @@ public class TestDFSUpgrade {
     String[] nameNodeDirs = conf.getStrings(DFSConfigKeys.DFS_NAMENODE_NAME_DIR_KEY);
     String[] dataNodeDirs = conf.getStrings(DFSConfigKeys.DFS_DATANODE_DATA_DIR_KEY);
 
-    log("DataNode upgrade of two volumes at different layouts", numDirs);
+    log("DataNode upgrade of three volumes at different layouts", numDirs);
     UpgradeUtilities.createNameNodeStorageDirs(nameNodeDirs, "current");
     cluster = createCluster();
     try {
@@ -449,12 +450,16 @@ public class TestDFSUpgrade {
           UpgradeUtilities.createDataNodeStorageDirs(dataNodeDirs, "current");
       final int previousLayout = DataNodeLayoutVersion.Feature
           .BLOCKID_BASED_LAYOUT.getInfo().getLayoutVersion();
-      File volume2Version = new File(
-          BlockPoolSliceStorage.getBpRoot(bpid, dnCurDirs[1]), "current/VERSION");
-      Properties props = Storage.readPropertiesFile(volume2Version);
-      props.setProperty("layoutVersion", String.valueOf(previousLayout));
-      props.setProperty("cTime", String.valueOf(Long.MAX_VALUE));
-      Storage.writeProperties(volume2Version, props);
+      for (int volume = 0; volume < 2; volume++) {
+        File version = new File(BlockPoolSliceStorage.getBpRoot(bpid,
+            dnCurDirs[volume]), "current/VERSION");
+        Properties props = Storage.readPropertiesFile(version);
+        props.setProperty("layoutVersion", String.valueOf(previousLayout));
+        if (volume == 1) {
+          props.setProperty("cTime", String.valueOf(Long.MAX_VALUE));
+        }
+        Storage.writeProperties(version, props);
+      }
 
       cluster.startDataNodes(conf, 1, false, StartupOption.REGULAR, null);
 
