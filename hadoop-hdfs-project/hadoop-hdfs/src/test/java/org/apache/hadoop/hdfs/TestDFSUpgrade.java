@@ -461,6 +461,10 @@ public class TestDFSUpgrade {
         Storage.writeProperties(version, props);
       }
 
+      // GraphChecker: the upgrade tasks wait (a workaround, see
+      // BlockPoolSliceStorage#upgradeTaskDelayMs), so natively every volume's
+      // VERSION is read before any task writes the shared layout.
+      BlockPoolSliceStorage.upgradeTaskDelayMs = 10000;
       cluster.startDataNodes(conf, 1, false, StartupOption.REGULAR, null);
 
       assertTrue(cluster.getDataNodes().get(0).isBPServiceAlive(bpid),
@@ -478,6 +482,7 @@ public class TestDFSUpgrade {
             upgraded.getProperty("cTime"));
       }
     } finally {
+      BlockPoolSliceStorage.upgradeTaskDelayMs = 0;
       cluster.shutdown();
       UpgradeUtilities.createEmptyDirs(nameNodeDirs);
       UpgradeUtilities.createEmptyDirs(dataNodeDirs);

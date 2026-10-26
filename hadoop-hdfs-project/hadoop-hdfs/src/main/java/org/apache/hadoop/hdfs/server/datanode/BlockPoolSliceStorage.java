@@ -71,6 +71,17 @@ public class BlockPoolSliceStorage extends Storage {
   static final String TRASH_ROOT_DIR = "trash";
 
   /**
+   * GraphChecker: a workaround for hdfs-buggy-14311's workload, test-only.
+   * Milliseconds each parallel upgrade task waits before its upgrade, so that
+   * natively the loader thread reads every volume's VERSION before any task
+   * writes the shared layout. It only fixes a native order the race leaves
+   * open; it adds no happens-before and never decides the throw. 0 (no wait)
+   * unless a test sets it.
+   */
+  @VisibleForTesting
+  public static volatile long upgradeTaskDelayMs = 0;
+
+  /**
    * A marker file that is created on each root directory if a rolling upgrade
    * is in progress. The NN does not inform the DN when a rolling upgrade is
    * finalized. All the DN can infer is whether or not a rolling upgrade is
@@ -497,6 +508,9 @@ public class BlockPoolSliceStorage extends Storage {
       callables.add(new Callable<StorageDirectory>() {
         @Override
         public StorageDirectory call() throws Exception {
+          if (upgradeTaskDelayMs > 0) {
+            Thread.sleep(upgradeTaskDelayMs);
+          }
           doUpgrade(name, bpSd, nsInfo, bpPrevDir, bpTmpDir, bpCurDir, oldLV,
               conf);
           return bpSd;
