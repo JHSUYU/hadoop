@@ -463,8 +463,12 @@ public class TestDFSUpgrade {
 
       // GraphChecker: the upgrade tasks wait (a workaround, see
       // BlockPoolSliceStorage#upgradeTaskDelayMs), so natively every volume's
-      // VERSION is read before any task writes the shared layout.
+      // VERSION is read before any task writes the shared layout; each later
+      // task waits 5 s more (#upgradeTaskStaggerMs), so natively volume 1's
+      // task writes it before volume 2's and volume 3's.
       BlockPoolSliceStorage.upgradeTaskDelayMs = 10000;
+      BlockPoolSliceStorage.upgradeTaskStaggerMs = 5000;
+      BlockPoolSliceStorage.UPGRADE_TASKS_STARTED.set(0);
       cluster.startDataNodes(conf, 1, false, StartupOption.REGULAR, null);
 
       assertTrue(cluster.getDataNodes().get(0).isBPServiceAlive(bpid),
@@ -483,6 +487,7 @@ public class TestDFSUpgrade {
       }
     } finally {
       BlockPoolSliceStorage.upgradeTaskDelayMs = 0;
+      BlockPoolSliceStorage.upgradeTaskStaggerMs = 0;
       cluster.shutdown();
       UpgradeUtilities.createEmptyDirs(nameNodeDirs);
       UpgradeUtilities.createEmptyDirs(dataNodeDirs);

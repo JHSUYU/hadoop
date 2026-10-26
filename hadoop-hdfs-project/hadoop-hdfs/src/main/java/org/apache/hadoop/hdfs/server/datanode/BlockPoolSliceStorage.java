@@ -30,6 +30,7 @@ import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -80,6 +81,20 @@ public class BlockPoolSliceStorage extends Storage {
    */
   @VisibleForTesting
   public static volatile long upgradeTaskDelayMs = 0;
+
+  /**
+   * GraphChecker: the same workaround. With {@link #upgradeTaskDelayMs} set,
+   * the n-th upgrade task to start (counted from 0 in
+   * {@link #UPGRADE_TASKS_STARTED}) waits n times this many milliseconds
+   * more, so that natively the tasks also write the shared layout in the
+   * order their volumes were loaded. Like the wait itself, it adds no
+   * happens-before and never decides the throw. 0 unless a test sets it.
+   */
+  @VisibleForTesting
+  public static volatile long upgradeTaskStaggerMs = 0;
+
+  @VisibleForTesting
+  public static final AtomicInteger UPGRADE_TASKS_STARTED = new AtomicInteger();
 
   /**
    * A marker file that is created on each root directory if a rolling upgrade
@@ -509,7 +524,8 @@ public class BlockPoolSliceStorage extends Storage {
         @Override
         public StorageDirectory call() throws Exception {
           if (upgradeTaskDelayMs > 0) {
-            Thread.sleep(upgradeTaskDelayMs);
+            Thread.sleep(upgradeTaskDelayMs + upgradeTaskStaggerMs
+                * UPGRADE_TASKS_STARTED.getAndIncrement());
           }
           doUpgrade(name, bpSd, nsInfo, bpPrevDir, bpTmpDir, bpCurDir, oldLV,
               conf);
