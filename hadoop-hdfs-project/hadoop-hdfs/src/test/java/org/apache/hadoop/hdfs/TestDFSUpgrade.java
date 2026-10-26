@@ -31,6 +31,8 @@ import static org.junit.jupiter.api.Assertions.fail;
 import java.io.File;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.util.Properties;
+import java.util.concurrent.TimeUnit;
 import java.util.regex.Pattern;
 
 import org.junit.jupiter.api.Disabled;
@@ -44,6 +46,7 @@ import org.apache.hadoop.hdfs.server.common.HdfsServerConstants.StartupOption;
 import org.apache.hadoop.hdfs.server.common.InconsistentFSStateException;
 import org.apache.hadoop.hdfs.server.common.Storage;
 import org.apache.hadoop.hdfs.server.common.StorageInfo;
+import org.apache.hadoop.hdfs.server.datanode.BlockPoolSliceStorage;
 import org.apache.hadoop.hdfs.server.datanode.DataNodeLayoutVersion;
 import org.apache.hadoop.hdfs.server.namenode.TestParallelImageWrite;
 import org.apache.hadoop.ipc.RemoteException;
@@ -402,6 +405,71 @@ public class TestDFSUpgrade {
     }
   }
   
+  /**
+   * The "Normal DataNode upgrade" step of {@link #testUpgrade} with two
+   * volumes loaded in parallel (HDFS-14311): the NameNode starts with
+   * -upgrade, so its cTime is new, and the DataNode's two volumes come from
+   * the master storage. Volume 1's block pool is at the previous DataNode
+   * layout (-56, the layout the issue's 2.7 to 2.9 upgrade left), volume 2's
+   * at the current one with the old cTime: both need an upgrade, volume 1 for
+   * its layout, volume 2 for its cTime, and both get one. The DataNode loads
+   * them into one BlockPoolSliceStorage; volume 1's upgrade task writes that
+   * storage's layoutVersion and cTime on the parallel-load executor while the
+   * loader thread reads volume 2's VERSION into the same fields and checks
+   * them in doTransition.
+   */
+  @Test
+  @Timeout(value = 120)
+  public void testParallelVolumeUpgrade() throws Exception {
+    final int numDirs = 2;
+    conf = new HdfsConfiguration();
+    conf.setInt(DFSConfigKeys.DFS_DATANODE_SCAN_PERIOD_HOURS_KEY, -1);
+    conf.setBoolean(DFSConfigKeys.DFS_DATANODE_DUPLICATE_REPLICA_DELETION, false);
+    conf.setLong(DFSConfigKeys.DFS_HEARTBEAT_INTERVAL_KEY,
+        TimeUnit.HOURS.toSeconds(6));
+    conf = UpgradeUtilities.initializeStorageStateConf(numDirs, conf);
+    String[] nameNodeDirs = conf.getStrings(DFSConfigKeys.DFS_NAMENODE_NAME_DIR_KEY);
+    String[] dataNodeDirs = conf.getStrings(DFSConfigKeys.DFS_DATANODE_DATA_DIR_KEY);
+
+    log("DataNode upgrade of two volumes at different layouts", numDirs);
+    UpgradeUtilities.createNameNodeStorageDirs(nameNodeDirs, "current");
+    cluster = createCluster();
+    try {
+      final String bpid = UpgradeUtilities.getCurrentBlockPoolID(cluster);
+      final long nameNodeCTime = UpgradeUtilities.getCurrentFsscTime(cluster);
+      File[] dnCurDirs =
+          UpgradeUtilities.createDataNodeStorageDirs(dataNodeDirs, "current");
+      final int previousLayout = DataNodeLayoutVersion.Feature
+          .BLOCKID_BASED_LAYOUT.getInfo().getLayoutVersion();
+      File volume1Version = new File(
+          BlockPoolSliceStorage.getBpRoot(bpid, dnCurDirs[0]), "current/VERSION");
+      Properties props = Storage.readPropertiesFile(volume1Version);
+      props.setProperty("layoutVersion", String.valueOf(previousLayout));
+      Storage.writeProperties(volume1Version, props);
+
+      cluster.startDataNodes(conf, 1, false, StartupOption.REGULAR, null);
+
+      assertTrue(cluster.getDataNodes().get(0).isBPServiceAlive(bpid),
+          "Block pool " + bpid + " should have started");
+      for (File dnCurDir : dnCurDirs) {
+        File bpRoot = BlockPoolSliceStorage.getBpRoot(bpid, dnCurDir);
+        assertTrue(new File(bpRoot, "previous").isDirectory(),
+            "Volume " + dnCurDir + " should have been upgraded");
+        Properties upgraded = Storage.readPropertiesFile(
+            new File(bpRoot, "current/VERSION"));
+        assertEquals(String.valueOf(
+            DataNodeLayoutVersion.getCurrentLayoutVersion()),
+            upgraded.getProperty("layoutVersion"));
+        assertEquals(String.valueOf(nameNodeCTime),
+            upgraded.getProperty("cTime"));
+      }
+    } finally {
+      cluster.shutdown();
+      UpgradeUtilities.createEmptyDirs(nameNodeDirs);
+      UpgradeUtilities.createEmptyDirs(dataNodeDirs);
+    }
+  }
+
   /*
    * Stand-alone test to detect failure of one SD during parallel upgrade.
    * At this time, can only be done with manual hack of {@link FSImage.doUpgrade()}

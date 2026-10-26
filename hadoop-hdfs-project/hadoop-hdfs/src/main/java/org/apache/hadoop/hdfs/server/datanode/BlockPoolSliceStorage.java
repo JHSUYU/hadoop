@@ -422,7 +422,7 @@ public class BlockPoolSliceStorage extends Storage {
     }
     // layoutVersion == LAYOUT_VERSION && this.cTime > nsInfo.cTime
     // must shutdown
-    throw new @CausynthExceptionTarget("hdfs-adhoc-24")
+    throw new @CausynthExceptionTarget("hdfs-adhoc-24,hdfs-buggy-14311")
         IOException("Datanode state: LV = " + this.getLayoutVersion()
         + " CTime = " + this.getCTime()
         + " is newer than the namespace state: LV = "
