@@ -42,6 +42,9 @@ import org.junit.jupiter.api.Timeout;
  * rather than JournalSet shutting the NameNode down for a required journal.
  * The workload rolls the edit log twice inside its window; each roll ends the
  * current segment (healthy, the previous one is open) and starts the next.
+ * The first roll follows an edit; the second rolls at once, as the standby's
+ * roll RPC calls rollEditLog directly: an edit logged before it would meet
+ * the null stream a failed segment start leaves and throw before the roll.
  * In the recording both rolls succeed.</p>
  *
  * <p>With the bug put back, when the first roll's {@code startLogSegment}
@@ -75,20 +78,23 @@ public class TestCausynthRollSegmentFailure {
       CausynthCluster.registerCluster(cluster, "roll", client);
       CausynthCluster.startRecording();
 
-      roll(editLog, client, "roll-1");
+      roll(editLog, client, "roll-1", true);
       CausynthCluster.recordingPrecondition(editLog::isSegmentOpen,
           "the first roll must leave a segment open");
-      roll(editLog, client, "roll-2");
+      roll(editLog, client, "roll-2", false);
       CausynthCluster.recordingPrecondition(editLog::isSegmentOpen,
           "the second roll must leave a segment open");
     }
   }
 
-  private static void roll(FSEditLog editLog, DFSClient client, String api) {
+  private static void roll(FSEditLog editLog, DFSClient client, String api,
+      boolean logFirst) {
     long request = CausynthMessagePropagation.beginRequest(client, api);
     try {
-      editLog.logSetReplication("/causynth-roll", (short) 1);
-      editLog.logSync();
+      if (logFirst) {
+        editLog.logSetReplication("/causynth-roll", (short) 1);
+        editLog.logSync();
+      }
       editLog.rollEditLog(NameNodeLayoutVersion.CURRENT_LAYOUT_VERSION);
     } catch (IOException startSegmentFailed) {
       // HDFS-14075: a failed startLogSegment is re-thrown to the roll caller
