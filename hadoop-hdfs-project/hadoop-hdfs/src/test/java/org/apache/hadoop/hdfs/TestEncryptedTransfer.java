@@ -18,7 +18,6 @@
 package org.apache.hadoop.hdfs;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 import static org.mockito.Mockito.times;
@@ -27,7 +26,6 @@ import java.io.IOException;
 import java.io.OutputStream;
 import java.net.InetAddress;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collection;
 import java.util.List;
 import java.util.concurrent.TimeoutException;
@@ -45,7 +43,6 @@ import org.apache.hadoop.fs.FileChecksum;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hdfs.client.HdfsClientConfigKeys;
-import org.apache.hadoop.hdfs.protocol.DatanodeInfo;
 import org.apache.hadoop.hdfs.protocol.LocatedBlock;
 import org.apache.hadoop.hdfs.protocol.datatransfer.TrustedChannelResolver;
 import org.apache.hadoop.hdfs.protocol.datatransfer.sasl.DataTransferSaslUtil;
@@ -381,71 +378,6 @@ public class TestEncryptedTransfer {
     // Retry the operation after clearing the encryption key
     FileChecksum verifyChecksum = fs.getFileChecksum(TEST_PATH);
     assertEquals(checksum, verifyChecksum);
-  }
-
-  @MethodSource("data")
-  @ParameterizedTest
-  public void testLongLivedClientPipelineRecovery(String pResolverClazz)
-      throws IOException, InterruptedException, TimeoutException {
-    initTestEncryptedTransfer(pResolverClazz);
-    if (resolverClazz != null) {
-      // TestTrustedChannelResolver does not use encryption keys.
-      return;
-    }
-    // use 4 datanodes to make sure that after 1 data node is stopped,
-    // client only retries establishing pipeline with the 4th node.
-    int numDataNodes = 4;
-
-    setEncryptionConfigKeys();
-
-    cluster = new MiniDFSCluster.Builder(conf)
-        .numDataNodes(numDataNodes)
-        .build();
-
-    fs = getFileSystem(conf);
-    DFSClient client = DFSClientAdapter.getDFSClient((DistributedFileSystem)fs);
-    DFSClient spyClient = Mockito.spy(client);
-    DFSClientAdapter.setDFSClient((DistributedFileSystem) fs, spyClient);
-    writeTestDataToFile(fs);
-
-    BlockTokenSecretManager btsm = cluster.getNamesystem().getBlockManager()
-        .getBlockTokenSecretManager();
-    // Reduce key update interval and token life for testing.
-    btsm.setKeyUpdateIntervalForTesting(2 * 1000);
-    btsm.setTokenLifetime(2 * 1000);
-    btsm.clearAllKeysForTesting();
-
-    // Wait until the encryption key becomes invalid.
-    LOG.info("Wait until encryption keys become invalid...");
-
-    DataEncryptionKey encryptionKey = spyClient.getEncryptionKey();
-    List<DataNode> dataNodes = cluster.getDataNodes();
-    for (DataNode dn: dataNodes) {
-      GenericTestUtils.waitFor(
-          new Supplier<Boolean>() {
-            @Override
-            public Boolean get() {
-              return !dn.getBlockPoolTokenSecretManager().
-                  get(encryptionKey.blockPoolId)
-                  .hasKey(encryptionKey.keyId);
-            }
-          }, 100, 30*1000
-      );
-    }
-    LOG.info("The encryption key is invalid on all nodes now.");
-    try(FSDataOutputStream out = fs.append(TEST_PATH)) {
-      DFSOutputStream dfstream = (DFSOutputStream) out.getWrappedStream();
-      // shut down the first datanode in the pipeline.
-      DatanodeInfo[] targets = dfstream.getPipeline();
-      cluster.stopDataNode(targets[0].getXferAddr());
-      // write data to induce pipeline recovery
-      out.write(PLAIN_TEXT.getBytes());
-      out.hflush();
-      assertFalse(Arrays.asList(dfstream.getPipeline()).contains(targets[0]),
-          "The first datanode in the pipeline was not replaced.");
-    }
-    // verify that InvalidEncryptionKeyException is handled properly
-    Mockito.verify(spyClient, times(1)).clearDataEncryptionKey();
   }
 
   @MethodSource("data")

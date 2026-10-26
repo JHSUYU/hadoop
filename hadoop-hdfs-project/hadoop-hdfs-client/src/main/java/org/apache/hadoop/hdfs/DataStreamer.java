@@ -120,40 +120,6 @@ import javax.annotation.Nonnull;
 class DataStreamer extends Daemon {
   static final Logger LOG = LoggerFactory.getLogger(DataStreamer.class);
 
-  private class RefetchEncryptionKeyPolicy {
-    private int fetchEncryptionKeyTimes = 0;
-    private InvalidEncryptionKeyException lastException;
-    private final DatanodeInfo src;
-
-    RefetchEncryptionKeyPolicy(DatanodeInfo src) {
-      this.src = src;
-    }
-    boolean continueRetryingOrThrow() throws InvalidEncryptionKeyException {
-      if (fetchEncryptionKeyTimes >= 2) {
-        // hit the same exception twice connecting to the node, so
-        // throw the exception and exclude the node.
-        throw lastException;
-      }
-      // Don't exclude this node just yet.
-      // Try again with a new encryption key.
-      LOG.info("Will fetch a new encryption key and retry, "
-          + "encryption key was invalid when connecting to "
-          + this.src + ": ", lastException);
-      // The encryption key used is invalid.
-      dfsClient.clearDataEncryptionKey();
-      return true;
-    }
-
-    /**
-     * Record a connection exception.
-     */
-    void recordFailure(final InvalidEncryptionKeyException e)
-        throws InvalidEncryptionKeyException {
-      fetchEncryptionKeyTimes++;
-      lastException = e;
-    }
-  }
-
   private class StreamerStreams implements java.io.Closeable {
     private Socket sock = null;
     private DataOutputStream out = null;
@@ -1588,24 +1554,18 @@ class DataStreamer extends Daemon {
                         final Token<BlockTokenIdentifier> blockToken)
       throws IOException {
     //transfer replica to the new datanode
-    RefetchEncryptionKeyPolicy policy = new RefetchEncryptionKeyPolicy(src);
-    do {
-      StreamerStreams streams = null;
-      try {
-        final long writeTimeout = computeTransferWriteTimeout();
-        final long readTimeout = computeTransferReadTimeout();
+    StreamerStreams streams = null;
+    try {
+      final long writeTimeout = computeTransferWriteTimeout();
+      final long readTimeout = computeTransferReadTimeout();
 
-        streams = new StreamerStreams(src, writeTimeout, readTimeout,
-            blockToken);
-        streams.sendTransferBlock(targets, targetStorageTypes,
-            targetStorageIDs, blockToken);
-        return;
-      } catch (InvalidEncryptionKeyException e) {
-        policy.recordFailure(e);
-      } finally {
-        IOUtils.closeStream(streams);
-      }
-    } while (policy.continueRetryingOrThrow());
+      streams = new StreamerStreams(src, writeTimeout, readTimeout,
+          blockToken);
+      streams.sendTransferBlock(targets, targetStorageTypes,
+          targetStorageIDs, blockToken);
+    } finally {
+      IOUtils.closeStream(streams);
+    }
   }
 
   /**
