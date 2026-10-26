@@ -409,14 +409,22 @@ public class TestDFSUpgrade {
    * The "Normal DataNode upgrade" step of {@link #testUpgrade} with two
    * volumes loaded in parallel (HDFS-14311): the NameNode starts with
    * -upgrade, so its cTime is new, and the DataNode's two volumes come from
-   * the master storage. Volume 1's block pool is at the previous DataNode
-   * layout (-56, the layout the issue's 2.7 to 2.9 upgrade left), volume 2's
-   * at the current one with the old cTime: both need an upgrade, volume 1 for
-   * its layout, volume 2 for its cTime, and both get one. The DataNode loads
-   * them into one BlockPoolSliceStorage; volume 1's upgrade task writes that
-   * storage's layoutVersion and cTime on the parallel-load executor while the
-   * loader thread reads volume 2's VERSION into the same fields and checks
-   * them in doTransition.
+   * the master storage, loaded into one BlockPoolSliceStorage. Volume 1 keeps
+   * the master layout (current) with the old cTime, so it upgrades for its
+   * cTime and its upgrade task writes the shared storage's layoutVersion
+   * (the current one) and cTime on the parallel-load executor. Volume 2 is at
+   * the previous DataNode layout (-56, the layout the issue's 2.7 to 2.9
+   * upgrade left) with a future cTime, so by its own VERSION it upgrades for
+   * its layout and the regular-startup and cTime checks never fire.
+   *
+   * <p>Volume 2 is loaded second: the loader thread reads its VERSION into the
+   * shared storage and runs doTransition's checks on those fields while volume
+   * 1's upgrade task runs. When the task's {@code layoutVersion = current}
+   * write is read for volume 2's layoutVersion check, volume 2 reads a layout
+   * equal to the current one, no longer greater, so it skips the layout
+   * upgrade; its own future cTime is still greater than the namespace cTime,
+   * and doTransition falls through to the "is newer than the namespace state"
+   * throw.</p>
    */
   @Test
   @Timeout(value = 120)
@@ -441,11 +449,12 @@ public class TestDFSUpgrade {
           UpgradeUtilities.createDataNodeStorageDirs(dataNodeDirs, "current");
       final int previousLayout = DataNodeLayoutVersion.Feature
           .BLOCKID_BASED_LAYOUT.getInfo().getLayoutVersion();
-      File volume1Version = new File(
-          BlockPoolSliceStorage.getBpRoot(bpid, dnCurDirs[0]), "current/VERSION");
-      Properties props = Storage.readPropertiesFile(volume1Version);
+      File volume2Version = new File(
+          BlockPoolSliceStorage.getBpRoot(bpid, dnCurDirs[1]), "current/VERSION");
+      Properties props = Storage.readPropertiesFile(volume2Version);
       props.setProperty("layoutVersion", String.valueOf(previousLayout));
-      Storage.writeProperties(volume1Version, props);
+      props.setProperty("cTime", String.valueOf(Long.MAX_VALUE));
+      Storage.writeProperties(volume2Version, props);
 
       cluster.startDataNodes(conf, 1, false, StartupOption.REGULAR, null);
 
