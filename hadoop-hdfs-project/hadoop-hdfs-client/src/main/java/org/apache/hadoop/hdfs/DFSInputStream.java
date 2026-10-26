@@ -1269,7 +1269,8 @@ public class DFSInputStream extends FSInputStream
           // The encryption key used is invalid.
           refetchEncryptionKey--;
           dfsClient.clearDataEncryptionKey();
-        } else if (refetchToken > 0 && tokenRefetchNeeded(e, datanode.addr)) {
+        }
+        if (refetchToken > 0 && tokenRefetchNeeded(e, datanode.addr)) {
           refetchToken--;
           try {
             fetchBlockAt(block.getStartOffset());
