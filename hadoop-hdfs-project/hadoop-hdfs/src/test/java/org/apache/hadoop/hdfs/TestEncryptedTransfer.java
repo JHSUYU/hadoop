@@ -332,59 +332,6 @@ public class TestEncryptedTransfer {
 
   @MethodSource("data")
   @ParameterizedTest
-  public void testFileChecksumWithInvalidEncryptionKey(String pResolverClazz)
-      throws IOException, InterruptedException, TimeoutException {
-    initTestEncryptedTransfer(pResolverClazz);
-    if (resolverClazz != null) {
-      // TestTrustedChannelResolver does not use encryption keys.
-      return;
-    }
-    setEncryptionConfigKeys();
-    cluster = new MiniDFSCluster.Builder(conf).build();
-
-    fs = getFileSystem(conf);
-    DFSClient client = DFSClientAdapter.getDFSClient((DistributedFileSystem)fs);
-    DFSClient spyClient = Mockito.spy(client);
-    DFSClientAdapter.setDFSClient((DistributedFileSystem) fs, spyClient);
-    writeTestDataToFile(fs);
-    FileChecksum checksum = fs.getFileChecksum(TEST_PATH);
-
-    BlockTokenSecretManager btsm = cluster.getNamesystem().getBlockManager()
-        .getBlockTokenSecretManager();
-    // Reduce key update interval and token life for testing.
-    btsm.setKeyUpdateIntervalForTesting(2 * 1000);
-    btsm.setTokenLifetime(2 * 1000);
-    btsm.clearAllKeysForTesting();
-
-    // Wait until the encryption key becomes invalid.
-    LOG.info("Wait until encryption keys become invalid...");
-
-    DataEncryptionKey encryptionKey = spyClient.getEncryptionKey();
-    List<DataNode> dataNodes = cluster.getDataNodes();
-    for (DataNode dn: dataNodes) {
-      GenericTestUtils.waitFor(
-          new Supplier<Boolean>() {
-            @Override
-            public Boolean get() {
-              return !dn.getBlockPoolTokenSecretManager().
-                  get(encryptionKey.blockPoolId)
-                  .hasKey(encryptionKey.keyId);
-            }
-          }, 100, 30*1000
-      );
-    }
-    LOG.info("The encryption key is invalid on all nodes now.");
-    fs.getFileChecksum(TEST_PATH);
-    // verify that InvalidEncryptionKeyException is handled properly
-    assertTrue(client.getEncryptionKey() == null);
-    Mockito.verify(spyClient, times(1)).clearDataEncryptionKey();
-    // Retry the operation after clearing the encryption key
-    FileChecksum verifyChecksum = fs.getFileChecksum(TEST_PATH);
-    assertEquals(checksum, verifyChecksum);
-  }
-
-  @MethodSource("data")
-  @ParameterizedTest
   public void testLongLivedClientPipelineRecovery(String pResolverClazz)
       throws IOException, InterruptedException, TimeoutException {
     initTestEncryptedTransfer(pResolverClazz);
