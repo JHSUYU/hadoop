@@ -217,7 +217,11 @@ public class BlockTokenSecretManager extends
         currentKey, allKeys.values().toArray(new BlockKey[0]));
   }
 
-  private synchronized void removeExpiredKeys() {
+  /**
+   * Remove expired keys.
+   * @return the time the keys were judged against
+   */
+  private synchronized long removeExpiredKeys() {
     long now = timer.now();
     for (Iterator<Map.Entry<Integer, BlockKey>> it = allKeys.entrySet()
         .iterator(); it.hasNext();) {
@@ -226,6 +230,7 @@ public class BlockTokenSecretManager extends
         it.remove();
       }
     }
+    return now;
   }
 
   public synchronized void addKeys(ExportedBlockKeys exportedKeys) throws IOException {
@@ -241,13 +246,15 @@ public class BlockTokenSecretManager extends
       return;
     }
     LOG.info("Setting block keys. BlockPool = {} .", blockPoolId);
-    removeExpiredKeys();
+    long now = removeExpiredKeys();
     if (updateCurrentKey || currentKey == null) {
       this.currentKey = exportedKeys.getCurrentKey();
     }
     BlockKey[] receivedKeys = exportedKeys.getAllKeys();
     for (int i = 0; i < receivedKeys.length; i++) {
-      if (receivedKeys[i] != null) {
+      // A key that has already expired is not merged.
+      if (receivedKeys[i] != null
+          && receivedKeys[i].getExpiryDate() >= now) {
         this.allKeys.put(receivedKeys[i].getKeyId(), receivedKeys[i]);
       }
     }
