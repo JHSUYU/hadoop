@@ -539,7 +539,7 @@ public class BlockTokenSecretManager extends
       key = allKeys.get(identifier.getKeyId());
     }
     if (key == null) {
-      throw new @CausynthExceptionTarget("hdfs-adhoc-12")
+      throw new @CausynthExceptionTarget("hdfs-adhoc-12,hdfs-inj-02,hdfs-inj-02-control")
           InvalidToken("Can't re-compute password for "
           + identifier + ", since the required block key (keyID="
           + identifier.getKeyId() + ") doesn't exist.");
