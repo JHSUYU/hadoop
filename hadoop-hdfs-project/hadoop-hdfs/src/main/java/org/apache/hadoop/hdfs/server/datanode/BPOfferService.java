@@ -836,7 +836,7 @@ class BPOfferService {
       if (dn.isBlockTokenEnabled) {
         dn.blockPoolTokenSecretManager.addKeys(
             getBlockPoolId(), 
-            ((KeyUpdateCommand) cmd).getExportedKeys(), false);
+            ((KeyUpdateCommand) cmd).getExportedKeys(), true);
       }
       break;
     case DatanodeProtocol.DNA_TRANSFER:
