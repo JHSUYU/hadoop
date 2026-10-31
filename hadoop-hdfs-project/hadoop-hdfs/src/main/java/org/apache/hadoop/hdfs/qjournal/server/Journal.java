@@ -518,7 +518,7 @@ public class Journal implements Closeable {
     checkRequest(reqInfo);
     
     if (reqInfo.getEpoch() != lastWriterEpoch.get()) {
-      throw new @CausynthExceptionTarget("hdfs-adhoc-10")
+      throw new @CausynthExceptionTarget("hdfs-adhoc-10,hdfs-inj-05,hdfs-inj-05-control")
           IOException("IPC's epoch " + reqInfo.getEpoch() +
           " is not the current writer epoch  " +
           lastWriterEpoch.get() + " ; journal id: " + journalId);
