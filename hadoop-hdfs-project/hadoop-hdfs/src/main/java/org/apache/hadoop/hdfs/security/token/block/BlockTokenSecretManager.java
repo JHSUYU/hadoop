@@ -580,7 +580,7 @@ public class BlockTokenSecretManager extends
     BlockKey key = null;
     synchronized (this) {
       key = allKeys.get(keyId);
-      if (key == null) {
+      if (key == null || key.getExpiryDate() < timer.now()) { // an expired key must not decrypt
         throw new @CausynthExceptionTarget("hdfs-17897,hdfs-17899-bug1,"
             + "hdfs-17899-bug2,hdfs-17899-bug3,hdfs-17967-pathA,"
             + "hdfs-17967-pathB,hdfs-17967-pathC,hdfs-adhoc-11")
