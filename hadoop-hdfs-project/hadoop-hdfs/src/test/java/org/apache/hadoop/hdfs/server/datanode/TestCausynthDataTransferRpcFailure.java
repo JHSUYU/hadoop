@@ -67,7 +67,23 @@ public class TestCausynthDataTransferRpcFailure {
   @Timeout(120)
   public void testReplicationAfterModeledKeyRefreshRpcFailure()
       throws Exception {
-    replicateAfterModeledKeyRefreshRpcFailure(true, "hdfs-17899");
+    replicateAfterModeledKeyRefreshRpcFailure(true, "hdfs-17899", 2, 0);
+  }
+
+  /**
+   * hdfs-inj-03: the same encrypted replication after ONE rotation.  On a
+   * NameNode that publishes its next block key ahead of time, every DataNode
+   * holds the key that becomes current at the rotation before it, so a lost
+   * key refresh is harmless; on one that does not, the target DataNode holds
+   * that key only if its own refresh delivered it.  The DataNodes' daemon
+   * heartbeats wait six hours, so the window's key refreshes are the
+   * workload's own (a daemon heartbeat would take the key-update mark).
+   */
+  @Test
+  @Timeout(120)
+  public void testReplicationAfterOneRotation() throws Exception {
+    replicateAfterModeledKeyRefreshRpcFailure(true, "hdfs-inj-03", 1,
+        TimeUnit.HOURS.toSeconds(6));
   }
 
   /**
@@ -80,15 +96,19 @@ public class TestCausynthDataTransferRpcFailure {
   @Timeout(120)
   public void testUnencryptedReplicationAfterModeledKeyRefreshRpcFailure()
       throws Exception {
-    replicateAfterModeledKeyRefreshRpcFailure(false, "hdfs-adhoc-12");
+    replicateAfterModeledKeyRefreshRpcFailure(false, "hdfs-adhoc-12", 2, 0);
   }
 
   /**
-   * @param encrypted whether data transfer is encrypted
-   * @param prefix    the name prefix of the case's nodes
+   * @param encrypted   whether data transfer is encrypted
+   * @param prefix      the name prefix of the case's nodes
+   * @param rotations   the master's block-key rotations inside the window
+   * @param heartbeatS  the DataNodes' heartbeat interval in seconds, or 0
+   *                    for the default
    */
   private static void replicateAfterModeledKeyRefreshRpcFailure(
-      boolean encrypted, String prefix) throws Exception {
+      boolean encrypted, String prefix, int rotations, long heartbeatS)
+      throws Exception {
     // Nothing set up before the window expires on the wall clock.
     Configuration conf = CausynthCluster.configure(new HdfsConfiguration());
     conf.setBoolean(DFSConfigKeys.DFS_ENCRYPT_DATA_TRANSFER_KEY, encrypted);
@@ -101,6 +121,9 @@ public class TestCausynthDataTransferRpcFailure {
         10 * 60 * 1000);
     conf.setLong(DFSConfigKeys.DFS_BLOCK_ACCESS_KEY_UPDATE_INTERVAL_KEY, 60);
     conf.setLong(DFSConfigKeys.DFS_BLOCK_ACCESS_TOKEN_LIFETIME_KEY, 1);
+    if (heartbeatS > 0) {
+      conf.setLong(DFSConfigKeys.DFS_HEARTBEAT_INTERVAL_KEY, heartbeatS);
+    }
     // Each DataNode has IPC connections of its own, as a DataNode process
     // does (CausynthCluster.dataNodeOverlays).
     try (MiniDFSCluster cluster = new MiniDFSCluster.Builder(conf)
@@ -133,14 +156,14 @@ public class TestCausynthDataTransferRpcFailure {
 
       int initialKeyId = currentKeyId(master);
       // THE KEY FLOWS THE RPC'S WAY (experiments/hadoop/lib/README.md).  The
-      // master rotates twice, as the NameNode's own request; an explicit
+      // master rotates, as the NameNode's own request; an explicit
       // rotation marks no DataNode for a key update, so the workload marks
       // the two it drives.
-      long rotations = CausynthMessagePropagation.beginRequest(
+      long rotateRequest = CausynthMessagePropagation.beginRequest(
           ((NameNodeRpcServer) cluster.getNameNodeRpc()).getClientRpcServer(),
           "rotate-block-keys");
       try {
-        for (int rotation = 0; rotation < 2; rotation++) {
+        for (int rotation = 0; rotation < rotations; rotation++) {
           long causynthRotation = CausynthMessagePropagation.beginTick(
               master, "KEY_MANAGER_TICK");
           try {
@@ -150,11 +173,13 @@ public class TestCausynthDataTransferRpcFailure {
           }
         }
       } finally {
-        CausynthMessagePropagation.endRequest(rotations, "rotate-block-keys");
+        CausynthMessagePropagation.endRequest(rotateRequest,
+            "rotate-block-keys");
       }
       CausynthCluster.recordingPrecondition(
-          () -> currentKeyId(master) == initialKeyId + 2,
-          "the recorded window must rotate the master twice");
+          () -> currentKeyId(master) == initialKeyId + rotations,
+          "the recorded window must rotate the master " + rotations
+              + " time(s)");
       int currentKeyId = currentKeyId(master);
       for (DataNode node : new DataNode[]{target, source}) {
         cluster.getNamesystem().getBlockManager().getDatanodeManager()
@@ -215,7 +240,9 @@ public class TestCausynthDataTransferRpcFailure {
    * this the replay groups of one campaign mint unrelated ids.  setSerialNo
    * only moves the counter, so the two constructor-time keys keep their
    * random ids; two rotations retire them: the first mints SERIAL_NO + 1 as
-   * nextKey, the second makes it currentKey and mints SERIAL_NO + 2.  DataNodes mint nothing themselves (they only
+   * nextKey, the second makes it currentKey and mints SERIAL_NO + 2 (held
+   * in allKeys only by a master that publishes its next key ahead of
+   * time).  DataNodes mint nothing themselves (they only
    * addKeys what the NameNode exports), so delivering the master's export
    * in-process here is the same state a KeyUpdateCommand delivers; it stays
    * out of the trace because nothing is recorded yet.  The recorded window's
@@ -255,18 +282,28 @@ public class TestCausynthDataTransferRpcFailure {
     Set<Integer> pinned =
         new TreeSet<>(Arrays.asList(SERIAL_NO + 1, SERIAL_NO + 2));
     retainKeys(master, pinned);
-    assertEquals(pinned, keyIds(master));
+    assertPinned(pinned, keyIds(master), "the master");
     String blockPoolId = cluster.getNamesystem().getBlockPoolId();
     for (DataNode node : cluster.getDataNodes()) {
       BlockTokenSecretManager manager =
           node.getBlockPoolTokenSecretManager().get(blockPoolId);
       manager.addKeys(master.exportKeys());
       retainKeys(manager, pinned);
-      assertEquals(pinned, keyIds(manager),
-          "DataNode " + node.getDatanodeId() + " holds unpinned keys");
+      assertPinned(pinned, keyIds(manager),
+          "DataNode " + node.getDatanodeId());
       assertEquals(SERIAL_NO + 1, manager.getCurrentKey().getKeyId());
-      assertTrue(manager.hasKey(SERIAL_NO + 1) && manager.hasKey(SERIAL_NO + 2));
     }
+  }
+
+  /**
+   * The pinned keys a manager holds: the current SERIAL_NO + 1, and
+   * SERIAL_NO + 2 where the master published its next key ahead of time.
+   */
+  private static void assertPinned(Set<Integer> pinned, Set<Integer> held,
+      String who) {
+    assertTrue(pinned.containsAll(held), who + " holds unpinned keys");
+    assertTrue(held.contains(SERIAL_NO + 1),
+        who + " lacks the current key");
   }
 
   /** The private allKeys map; BlockTokenSecretManager has no test accessor. */
