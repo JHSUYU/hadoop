@@ -204,7 +204,6 @@ public class BlockTokenSecretManager extends
         nextKey, "<org.apache.hadoop.security.token.delegation."
             + "DelegationKey: long expiryDate>");
     allKeys.put(currentKey.getKeyId(), currentKey);
-    allKeys.put(nextKey.getKeyId(), nextKey);
   }
 
   /** Export block keys, only to be used in master mode */
@@ -299,7 +298,6 @@ public class BlockTokenSecretManager extends
     CausynthSymbolicSource.symbolize("HDFS.BLOCK_KEY.EXPIRY_DATE", nextKey,
         "<org.apache.hadoop.security.token.delegation."
             + "DelegationKey: long expiryDate>");
-    allKeys.put(nextKey.getKeyId(), nextKey);
     return true;
   }
 
