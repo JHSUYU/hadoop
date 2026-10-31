@@ -361,12 +361,9 @@ public class IPCLoggerChannel implements AsyncLogger {
         try {
           getProxy().journal(createReqInfo(), segmentTxId, firstTxnId, numTxns, data);
         } catch (IOException e) {
-          QuorumJournalManager.LOG.warn("Remote journal {} failed to write txns {}-{}."
-                  + " Will try to write to this JN again after the next log roll.",
+          // A failed batch is just logged: the quorum covers it.
+          QuorumJournalManager.LOG.warn("Remote journal {} failed to write txns {}-{}.",
               IPCLoggerChannel.this, firstTxnId, (firstTxnId + numTxns - 1), e);
-          synchronized (IPCLoggerChannel.this) {
-            outOfSync = true;
-          }
           throw e;
         } finally {
           final long nowNanos = Time.monotonicNowNanos();
