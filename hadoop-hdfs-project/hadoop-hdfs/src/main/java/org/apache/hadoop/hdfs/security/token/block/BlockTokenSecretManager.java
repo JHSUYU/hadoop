@@ -241,7 +241,6 @@ public class BlockTokenSecretManager extends
       return;
     }
     LOG.info("Setting block keys. BlockPool = {} .", blockPoolId);
-    removeExpiredKeys();
     if (updateCurrentKey || currentKey == null) {
       this.currentKey = exportedKeys.getCurrentKey();
     }
@@ -251,6 +250,9 @@ public class BlockTokenSecretManager extends
         this.allKeys.put(receivedKeys[i].getKeyId(), receivedKeys[i]);
       }
     }
+    // Prune after merging, so that expired keys received from the
+    // NameNode are dropped too.
+    removeExpiredKeys();
   }
 
   /**
