@@ -167,6 +167,22 @@ public class TestQuorumJournalManager {
     // Should be finalized
     checkRecovery(cluster, 4, 4);
   }
+
+  /**
+   * hdfs-inj-05: one segment written in two flushes, so every JournalNode
+   * gets two journal() calls in it.  A JournalNode that missed the segment
+   * start rejects the first; the writer must not send it the second.
+   */
+  @Test
+  public void testSingleWriterTwoFlushes() throws Exception {
+    EditLogOutputStream stm = writeSegment(cluster, qjm, 1, 3, false);
+    writeTxns(stm, 4, 2);
+    stm.close();
+    qjm.finalizeLogSegment(1, 5);
+
+    // Should be finalized on a quorum
+    checkRecovery(cluster, 1, 5);
+  }
   
   @Test
   public void testFormat() throws Exception {
