@@ -1440,11 +1440,10 @@ public class FSEditLog implements LogsPurgeable {
     } catch (IOException ex) {
       final String msg = "Unable to start log segment " + segmentTxId
           + ": too few journals successfully started.";
+      // Best effort: a redundant journal failed to start; keep serving and
+      // let the next roll re-open the segment.
       LOG.error(msg, ex);
-      synchronized (journalSetLock) {
-        IOUtils.cleanupWithLogger(LOG, journalSet);
-      }
-      terminate(1, msg);
+      return;
     }
 
     curSegmentTxId = segmentTxId;
