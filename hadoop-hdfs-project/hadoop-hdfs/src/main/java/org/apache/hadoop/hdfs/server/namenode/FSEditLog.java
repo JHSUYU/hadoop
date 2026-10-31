@@ -1468,7 +1468,7 @@ public class FSEditLog implements LogsPurgeable {
     LOG.info("Ending log segment " + curSegmentTxId +
         ", " + getLastWrittenTxId());
     if (!isSegmentOpen()) {
-      throw new @CausynthExceptionTarget("hdfs-adhoc-45") IllegalStateException(
+      throw new @CausynthExceptionTarget("hdfs-adhoc-45,hdfs-inj-01,hdfs-inj-01-control") IllegalStateException(
           String.format("Bad state: %s", state));
     }
     
