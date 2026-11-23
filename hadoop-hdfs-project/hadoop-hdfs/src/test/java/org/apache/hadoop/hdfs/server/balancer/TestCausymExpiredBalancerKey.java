@@ -32,12 +32,12 @@ import org.apache.hadoop.hdfs.NameNodeProxies;
 import org.apache.hadoop.hdfs.client.HdfsClientConfigKeys;
 import org.apache.hadoop.hdfs.security.token.block.BlockKey;
 import org.apache.hadoop.hdfs.security.token.block.BlockTokenSecretManager;
-import org.apache.hadoop.hdfs.server.datanode.CausynthCluster;
+import org.apache.hadoop.hdfs.server.datanode.CausymCluster;
 import org.apache.hadoop.hdfs.server.datanode.DataNode;
 import org.apache.hadoop.hdfs.server.datanode.DataNodeTestUtils;
 import org.apache.hadoop.hdfs.server.namenode.NameNodeRpcServer;
 import org.apache.hadoop.hdfs.server.protocol.NamenodeProtocol;
-import org.apache.hadoop.ipc.CausynthMessagePropagation;
+import org.apache.hadoop.ipc.CausymMessagePropagation;
 import org.apache.hadoop.ipc.RPC;
 import org.apache.hadoop.test.GenericTestUtils;
 import org.junit.jupiter.api.Test;
@@ -46,14 +46,14 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /** HDFS-11741's non-refreshing encryption-key cache, using current tracing. */
-public class TestCausynthExpiredBalancerKey {
+public class TestCausymExpiredBalancerKey {
   /** Block-key serial number pinned by {@link #pinBlockKeys}. */
   private static final int SERIAL_NO = Integer.MAX_VALUE / 11741;
 
   @Test
   public void testEncryptedBalancerAfterKeyRotations() throws Exception {
     // Nothing set up before the window expires on the wall clock.
-    Configuration conf = CausynthCluster.configure(new HdfsConfiguration());
+    Configuration conf = CausymCluster.configure(new HdfsConfiguration());
     conf.setBoolean(DFSConfigKeys.DFS_ENCRYPT_DATA_TRANSFER_KEY, true);
     conf.setBoolean(DFSConfigKeys.DFS_BLOCK_ACCESS_TOKEN_ENABLE_KEY, true);
     conf.setInt(HdfsClientConfigKeys.BlockWrite.LOCATEFOLLOWINGBLOCK_RETRIES_KEY, 30);
@@ -68,7 +68,7 @@ public class TestCausynthExpiredBalancerKey {
     conf.setInt(DFSConfigKeys.DFS_NAMENODE_STALE_DATANODE_INTERVAL_KEY, 300000);
     TestBalancer.tolerateSlowDatanodes = true;
     TestBalancer workload = new TestBalancer();
-    CausynthMessagePropagation.registerSource(workload, "EXTERNAL_APP",
+    CausymMessagePropagation.registerSource(workload, "EXTERNAL_APP",
         "BALANCER", "hdfs-11741/balancer", 0);
     long[] request = {0L};
     workload.beforeBalancer = () -> {
@@ -81,38 +81,38 @@ public class TestCausynthExpiredBalancerKey {
       } catch (Exception e) {
         throw new IllegalStateException("pinning block keys failed", e);
       }
-      request[0] = CausynthMessagePropagation.beginRequest(
+      request[0] = CausymMessagePropagation.beginRequest(
           workload, "balance-block");
     };
     KeyManager.testWait = keyManager -> {
       KeyManager.testWait = ignored -> { };
-      CausynthMessagePropagation.registerSourceAlias(keyManager, workload);
+      CausymMessagePropagation.registerSourceAlias(keyManager, workload);
       MiniDFSCluster cluster = workload.getCluster();
       // Every node, registered whole, before any traffic the recording
       // depends on: the attribution rule names each daemon thread's node
-      // from what it finds registered (CausynthCluster).
-      CausynthCluster.registerNameNode(cluster, 0, "hdfs-11741/nn0");
-      CausynthCluster.registerOtherDataNodes(cluster, "hdfs-11741");
+      // from what it finds registered (CausymCluster).
+      CausymCluster.registerNameNode(cluster, 0, "hdfs-11741/nn0");
+      CausymCluster.registerOtherDataNodes(cluster, "hdfs-11741");
       BlockTokenSecretManager master = cluster.getNamesystem()
           .getBlockManager().getBlockTokenSecretManager();
       String blockPoolId = cluster.getNamesystem().getBlockPoolId();
       NamenodeProtocol rpc = NameNodeProxies.createProxy(conf,
           cluster.getFileSystem().getUri(), NamenodeProtocol.class).getProxy();
-      CausynthCluster.startRecording();
+      CausymCluster.startRecording();
       // Rotate once inside the recorded interval, before the Balancer
       // fetches: updateKeys builds a new currentKey (and retiring and next
       // keys) whose expiryDate is the recorded NameNode clock plus the
       // intervals.  pinBlockKeys' rotations ran before recording, so the key
       // they left current carried an expiry no recorded clock wrote, a
       // constant that differs in every replay.
-      { // causynth-d3-rotation-scope
-        long causynthRotation = org.apache.hadoop.ipc.CausynthMessagePropagation.beginTick(
+      { // causym-d3-rotation-scope
+        long causymRotation = org.apache.hadoop.ipc.CausymMessagePropagation.beginTick(
             master, "KEY_MANAGER_TICK");
         try {
           master.updateKeys(Long.MAX_VALUE);
         } finally {
-          org.apache.hadoop.ipc.CausynthMessagePropagation.endTick(
-              causynthRotation);
+          org.apache.hadoop.ipc.CausymMessagePropagation.endTick(
+              causymRotation);
         }
       }
       // Refresh once inside the recorded interval. The Balancer cache below
@@ -123,37 +123,37 @@ public class TestCausynthExpiredBalancerKey {
       // G valid; symbolic expiry and the production removal loop determine
       // whether a DataNode still has it when the Balancer uses its cache.
       keyManager.newDataEncryptionKey();
-      { // causynth-d3-rotation-scope
-        long causynthRotation = org.apache.hadoop.ipc.CausynthMessagePropagation.beginTick(
+      { // causym-d3-rotation-scope
+        long causymRotation = org.apache.hadoop.ipc.CausymMessagePropagation.beginTick(
             master, "KEY_MANAGER_TICK");
         try {
           master.updateKeys(Long.MAX_VALUE);
         } finally {
-          org.apache.hadoop.ipc.CausynthMessagePropagation.endTick(
-              causynthRotation);
+          org.apache.hadoop.ipc.CausymMessagePropagation.endTick(
+              causymRotation);
         }
       }
-      { // causynth-d3-rotation-scope
-        long causynthRotation = org.apache.hadoop.ipc.CausynthMessagePropagation.beginTick(
+      { // causym-d3-rotation-scope
+        long causymRotation = org.apache.hadoop.ipc.CausymMessagePropagation.beginTick(
             master, "KEY_MANAGER_TICK");
         try {
           master.updateKeys(Long.MAX_VALUE);
         } finally {
-          org.apache.hadoop.ipc.CausynthMessagePropagation.endTick(
-              causynthRotation);
+          org.apache.hadoop.ipc.CausymMessagePropagation.endTick(
+              causymRotation);
         }
       }
       try {
         // In the order of the nodes' names, not the cluster's.
-        for (DataNode node : CausynthCluster.dataNodes()) {
+        for (DataNode node : CausymCluster.dataNodes()) {
           BlockTokenSecretManager manager = node.getBlockPoolTokenSecretManager()
               .get(blockPoolId);
-          long refresh = CausynthMessagePropagation.beginRequest(
+          long refresh = CausymMessagePropagation.beginRequest(
               node.getDatanodeId(), "refresh-block-keys");
           try {
             manager.addKeys(rpc.getBlockKeys());
           } finally {
-            CausynthMessagePropagation.endRequest(refresh, "refresh-block-keys");
+            CausymMessagePropagation.endRequest(refresh, "refresh-block-keys");
           }
         }
       } finally {
@@ -166,23 +166,23 @@ public class TestCausynthExpiredBalancerKey {
       // removeExpiredKeys, and this is the DataNodes' only pass over the
       // keys the refresh above put there: without it the in-window key the
       // Balancer's cache names is never checked against a DataNode clock.
-      { // causynth-d3-rotation-scope
-        long causynthRotation = org.apache.hadoop.ipc.CausynthMessagePropagation.beginTick(
+      { // causym-d3-rotation-scope
+        long causymRotation = org.apache.hadoop.ipc.CausymMessagePropagation.beginTick(
             master, "KEY_MANAGER_TICK");
         try {
           master.updateKeys(Long.MAX_VALUE);
-          for (DataNode node : CausynthCluster.dataNodes()) {
+          for (DataNode node : CausymCluster.dataNodes()) {
             cluster.getNamesystem().getBlockManager().getDatanodeManager()
                 .getDatanode(node.getDatanodeId()).setNeedKeyUpdate(true);
           }
         } finally {
-          org.apache.hadoop.ipc.CausynthMessagePropagation.endTick(
-              causynthRotation);
+          org.apache.hadoop.ipc.CausymMessagePropagation.endTick(
+              causymRotation);
         }
       }
       try {
         Set<Integer> rotated = keyIds(master);
-        for (DataNode node : CausynthCluster.dataNodes()) {
+        for (DataNode node : CausymCluster.dataNodes()) {
           DataNodeTestUtils.triggerHeartbeat(node);
           BlockTokenSecretManager manager =
               node.getBlockPoolTokenSecretManager().get(blockPoolId);
@@ -206,14 +206,14 @@ public class TestCausynthExpiredBalancerKey {
       TestBalancer.tolerateSlowDatanodes = false;
       KeyManager.testWait = ignored -> { };
       if (request[0] != 0L) {
-        CausynthMessagePropagation.endRequest(request[0], "balance-block");
+        CausymMessagePropagation.endRequest(request[0], "balance-block");
       }
     }
   }
 
   /**
    * Makes every block-key id the recorded window sees identical across
-   * GraphChecker replay sessions.  The NameNode manager seeds serialNo from
+   * Causym replay sessions.  The NameNode manager seeds serialNo from
    * SecureRandom once per JVM and each replay task is its own JVM.
    * setSerialNo only moves the counter, so the two constructor-time keys keep
    * their random ids; two rotations retire them: the first mints
@@ -229,24 +229,24 @@ public class TestCausynthExpiredBalancerKey {
     BlockTokenSecretManager master = cluster.getNamesystem()
         .getBlockManager().getBlockTokenSecretManager();
     master.setSerialNo(SERIAL_NO);
-    { // causynth-d3-rotation-scope
-      long causynthRotation = org.apache.hadoop.ipc.CausynthMessagePropagation.beginTick(
+    { // causym-d3-rotation-scope
+      long causymRotation = org.apache.hadoop.ipc.CausymMessagePropagation.beginTick(
           master, "KEY_MANAGER_TICK");
       try {
         master.updateKeys(Long.MAX_VALUE);
       } finally {
-        org.apache.hadoop.ipc.CausynthMessagePropagation.endTick(
-            causynthRotation);
+        org.apache.hadoop.ipc.CausymMessagePropagation.endTick(
+            causymRotation);
       }
     }
-    { // causynth-d3-rotation-scope
-      long causynthRotation = org.apache.hadoop.ipc.CausynthMessagePropagation.beginTick(
+    { // causym-d3-rotation-scope
+      long causymRotation = org.apache.hadoop.ipc.CausymMessagePropagation.beginTick(
           master, "KEY_MANAGER_TICK");
       try {
         master.updateKeys(Long.MAX_VALUE);
       } finally {
-        org.apache.hadoop.ipc.CausynthMessagePropagation.endTick(
-            causynthRotation);
+        org.apache.hadoop.ipc.CausymMessagePropagation.endTick(
+            causymRotation);
       }
     }
     assertEquals(SERIAL_NO + 1, master.getCurrentKey().getKeyId());

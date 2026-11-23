@@ -42,18 +42,18 @@ import org.apache.hadoop.hdfs.server.namenode.FSNamesystem;
 import org.apache.hadoop.hdfs.server.namenode.NameNodeRpcServer;
 import org.apache.hadoop.hdfs.server.protocol.DatanodeCommand;
 import org.apache.hadoop.hdfs.server.protocol.HeartbeatResponse;
-import org.apache.hadoop.ipc.CausynthMessagePropagation;
+import org.apache.hadoop.ipc.CausymMessagePropagation;
 
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * THE registration helper every GraphChecker workload uses: one node, one
+ * THE registration helper every Causym workload uses: one node, one
  * source, and every object the node runs its work through registered as
  * that node -- then the recording boundary.
  *
  * <p>Two properties of a workload are real and stated here once: every node
  * is registered BEFORE any traffic the recording depends on, and each node
- * is registered whole.  "Whole" is what GraphChecker's attribution rule
+ * is registered whole.  "Whole" is what Causym's attribution rule
  * needs: a handler serving an RPC is the registered RPC server's, a
  * connection's handshake is the registered SASL server's, a daemon turn is
  * the registered DataNode's -- the engine finds those objects on the
@@ -80,7 +80,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * #createOnNode}), because random placement would make a different started
  * node play each role in every run.</p>
  */
-public final class CausynthCluster {
+public final class CausymCluster {
   private static final String NODE = "CLUSTER_NODE";
   /** The DataNodes this run has registered, by identity, and their names. */
   private static final Map<DataNode, String> REGISTERED =
@@ -99,7 +99,7 @@ public final class CausynthCluster {
   public static final int WINDOW_WAIT_MS =
       (int) TimeUnit.SECONDS.toMillis(60);
 
-  private CausynthCluster() {
+  private CausymCluster() {
   }
 
   /**
@@ -211,7 +211,7 @@ public final class CausynthCluster {
     aliases.add(blocks);
     aliases.add(blocks.getDatanodeManager());
     aliases.add(blocks.getBlockTokenSecretManager());
-    CausynthMessagePropagation.registerNode(rpc.getClientRpcServer(), NODE,
+    CausymMessagePropagation.registerNode(rpc.getClientRpcServer(), NODE,
         "NAMENODE", sourceId, aliases.toArray());
   }
 
@@ -237,7 +237,7 @@ public final class CausynthCluster {
         aliases.add(keys.get(pool.getBlockPoolId()));
       }
     }
-    CausynthMessagePropagation.registerNode(datanode.getDatanodeId(), NODE,
+    CausymMessagePropagation.registerNode(datanode.getDatanodeId(), NODE,
         "DATANODE", sourceId, dedupe(aliases).toArray());
     REGISTERED.put(datanode, sourceId);
   }
@@ -279,7 +279,7 @@ public final class CausynthCluster {
       String api) throws IOException {
     BPOfferService service = datanode.getAllBpOs().get(0);
     BPServiceActor actor = service.getBPServiceActors().get(0);
-    long request = CausynthMessagePropagation.beginRequest(
+    long request = CausymMessagePropagation.beginRequest(
         datanode.getDatanodeId(), api);
     try {
       HeartbeatResponse response = actor.sendHeartBeat(false);
@@ -293,13 +293,13 @@ public final class CausynthCluster {
     } catch (IOException transport) {
       return false;
     } finally {
-      CausynthMessagePropagation.endRequest(request, api);
+      CausymMessagePropagation.endRequest(request, api);
     }
   }
 
   /** Opens the recorded window: the one recording boundary. */
   public static void startRecording() {
-    CausynthMessagePropagation.startRecording();
+    CausymMessagePropagation.startRecording();
   }
 
   /**
@@ -320,7 +320,7 @@ public final class CausynthCluster {
    */
   public static void recordingPrecondition(BooleanSupplier holds,
       String message) {
-    if (!CausynthMessagePropagation.replaying()) {
+    if (!CausymMessagePropagation.replaying()) {
       assertTrue(holds.getAsBoolean(), message);
     }
   }

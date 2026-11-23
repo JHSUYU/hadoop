@@ -26,7 +26,7 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.StorageType;
 import org.apache.hadoop.hdfs.DFSConfigKeys;
 import org.apache.hadoop.hdfs.protocol.ExtendedBlock;
-import org.apache.hadoop.ipc.CausynthMessagePropagation;
+import org.apache.hadoop.ipc.CausymMessagePropagation;
 import org.apache.hadoop.hdfs.protocol.datatransfer.sasl.DataEncryptionKeyFactory;
 import org.apache.hadoop.hdfs.security.token.block.BlockTokenIdentifier;
 import org.apache.hadoop.hdfs.security.token.block.BlockTokenSecretManager;
@@ -164,15 +164,15 @@ public class KeyManager implements Closeable, DataEncryptionKeyFactory {
     public void run() {
       try {
         while (shouldRun) {
-          // One key-updater turn is one lineage root. // causynth-d3-lineage
-          long causynthTick = CausynthMessagePropagation.beginTick(
+          // One key-updater turn is one lineage root. // causym-d3-lineage
+          long causymTick = CausymMessagePropagation.beginTick(
               blockTokenSecretManager, "KEY_MANAGER_TICK");
           try {
             updateBlockKeys();
           } catch (IOException e) {
             LOG.error("Failed to set keys", e);
           } finally {
-            CausynthMessagePropagation.endTick(causynthTick);
+            CausymMessagePropagation.endTick(causymTick);
           }
           Thread.sleep(sleepInterval);
         }
