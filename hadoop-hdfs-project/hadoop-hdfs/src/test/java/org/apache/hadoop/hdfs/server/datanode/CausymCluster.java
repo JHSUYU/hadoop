@@ -51,18 +51,18 @@ import org.apache.hadoop.hdfs.server.namenode.FSNamesystem;
 import org.apache.hadoop.hdfs.server.namenode.NameNodeRpcServer;
 import org.apache.hadoop.hdfs.server.protocol.DatanodeCommand;
 import org.apache.hadoop.hdfs.server.protocol.HeartbeatResponse;
-import org.apache.hadoop.ipc.CausynthMessagePropagation;
+import org.apache.hadoop.ipc.CausymMessagePropagation;
 
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * THE registration helper every GraphChecker workload uses: one node, one
+ * THE registration helper every Causym workload uses: one node, one
  * source, and every object the node runs its work through registered as
  * that node -- then the recording boundary.
  *
  * <p>Two properties of a workload are real and stated here once: every node
  * is registered BEFORE any traffic the recording depends on, and each node
- * is registered whole.  "Whole" is what GraphChecker's attribution rule
+ * is registered whole.  "Whole" is what Causym's attribution rule
  * needs: a handler serving an RPC is the registered RPC server's, a
  * connection's handshake is the registered SASL server's, a daemon turn is
  * the registered DataNode's -- the engine finds those objects on the
@@ -91,7 +91,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * #createOnNode}), because random placement would make a different started
  * node play each role in every run.</p>
  */
-public final class CausynthCluster {
+public final class CausymCluster {
   private static final String NODE = "CLUSTER_NODE";
   /**
    * The DataNodes this run has registered, and their names.  Every registry
@@ -117,7 +117,7 @@ public final class CausynthCluster {
       (int) TimeUnit.SECONDS.toMillis(60);
 
   /**
-   * Set on a workload JVM whose test was written without GraphChecker: every
+   * Set on a workload JVM whose test was written without Causym: every
    * MiniDFSCluster it builds is made reproducible ({@link #configure}, {@link
    * #dataNodeOverlays}), every node it builds or restarts is built in a node
    * startup under its name ({@link #nameNodeStartup}, {@link #nodeStartup},
@@ -131,7 +131,7 @@ public final class CausynthCluster {
    * the same.  So any cluster test of the module is a workload as it is
    * written.
    */
-  public static final String AUTOMATIC = "causynth.cluster.automatic";
+  public static final String AUTOMATIC = "causym.cluster.automatic";
   /** Each automatic cluster that has not shut down. */
   private static final Map<Object, Automatic> AUTOMATIC_CLUSTERS =
       new WeakHashMap<>();
@@ -205,7 +205,7 @@ public final class CausynthCluster {
     /** The node is built: {@code key} (the node, or its slot) finds it. */
     public void built(Object key) {
       if (slot != null && key != null) {
-        synchronized (CausynthCluster.class) {
+        synchronized (CausymCluster.class) {
           SLOTS.put(key, slot);
         }
       }
@@ -214,12 +214,12 @@ public final class CausynthCluster {
     @Override
     public void close() {
       if (slot != null) {
-        CausynthMessagePropagation.endNodeStartup(token);
+        CausymMessagePropagation.endNodeStartup(token);
       }
     }
   }
 
-  private CausynthCluster() {
+  private CausymCluster() {
   }
 
   public static boolean automatic() {
@@ -257,7 +257,7 @@ public final class CausynthCluster {
     configure(conf);
     AUTOMATIC_CLUSTERS.put(cluster,
         new Automatic("auto" + automaticClusters++));
-    if (windowClient == null && CausynthMessagePropagation.startupWindow()) {
+    if (windowClient == null && CausymMessagePropagation.startupWindow()) {
       openWindow(cluster, clientRole);
     }
   }
@@ -278,7 +278,7 @@ public final class CausynthCluster {
       return NodeStartup.NONE;
     }
     Slot slot;
-    synchronized (CausynthCluster.class) {
+    synchronized (CausymCluster.class) {
       Automatic owner = AUTOMATIC_CLUSTERS.get(cluster);
       if (owner == null) {
         return NodeStartup.NONE;
@@ -287,7 +287,7 @@ public final class CausynthCluster {
       int k = owner.built.merge(kind, 1, Integer::sum) - 1;
       slot = new Slot(role, owner.prefix + "/" + kind + k);
     }
-    return new NodeStartup(slot, CausynthMessagePropagation.beginNodeStartup(
+    return new NodeStartup(slot, CausymMessagePropagation.beginNodeStartup(
         NODE, role, slot.name));
   }
 
@@ -303,7 +303,7 @@ public final class CausynthCluster {
       return NodeStartup.NONE;
     }
     Slot slot;
-    synchronized (CausynthCluster.class) {
+    synchronized (CausymCluster.class) {
       Automatic owner = AUTOMATIC_CLUSTERS.get(cluster);
       if (owner == null) {
         return NodeStartup.NONE;
@@ -311,7 +311,7 @@ public final class CausynthCluster {
       slot = owner.nameNodes.computeIfAbsent(index,
           k -> new Slot("NAMENODE", owner.prefix + "/nn" + k));
     }
-    return new NodeStartup(slot, CausynthMessagePropagation.beginNodeStartup(
+    return new NodeStartup(slot, CausymMessagePropagation.beginNodeStartup(
         NODE, slot.role, slot.name));
   }
 
@@ -326,17 +326,17 @@ public final class CausynthCluster {
       return NodeStartup.NONE;
     }
     Slot slot;
-    synchronized (CausynthCluster.class) {
+    synchronized (CausymCluster.class) {
       slot = SLOTS.get(previous);
       if (slot == null) {
         return NodeStartup.NONE;
       }
       slot.epoch++;
     }
-    CausynthMessagePropagation.restartSource(slot, NODE, slot.role,
+    CausymMessagePropagation.restartSource(slot, NODE, slot.role,
         slot.name, slot.epoch);
     return new NodeStartup(slot,
-        CausynthMessagePropagation.beginNodeStartup(slot));
+        CausymMessagePropagation.beginNodeStartup(slot));
   }
 
   private static String kind(String role) {
@@ -371,7 +371,7 @@ public final class CausynthCluster {
         openWindow(cluster, "DFS_CLIENT");
       }
       // The test's one client, whichever cluster it talks to.
-      CausynthMessagePropagation.registerSource(
+      CausymMessagePropagation.registerSource(
           cluster.getFileSystem(0).getClient(), "EXTERNAL_APP", windowRole,
           windowClient, 0);
     }
@@ -455,10 +455,10 @@ public final class CausynthCluster {
   private static void openWindow(Object cluster, String clientRole) {
     windowClient = AUTOMATIC_CLUSTERS.get(cluster).prefix + "/client0";
     windowRole = clientRole;
-    CausynthMessagePropagation.registerSource(cluster, "EXTERNAL_APP",
+    CausymMessagePropagation.registerSource(cluster, "EXTERNAL_APP",
         clientRole, windowClient, 0);
     startRecording();
-    CausynthMessagePropagation.beginRequest(cluster, "test");
+    CausymMessagePropagation.beginRequest(cluster, "test");
   }
 
   /**
@@ -754,11 +754,11 @@ public final class CausynthCluster {
    */
   private static void register(Object anchor, String role, String sourceId,
       long epoch, Object... aliases) {
-    CausynthMessagePropagation.registerSource(anchor, NODE, role, sourceId,
+    CausymMessagePropagation.registerSource(anchor, NODE, role, sourceId,
         epoch);
     for (Object alias : aliases) {
       if (alias != null && alias != anchor) {
-        CausynthMessagePropagation.registerSourceAlias(alias, anchor);
+        CausymMessagePropagation.registerSourceAlias(alias, anchor);
       }
     }
   }
@@ -787,7 +787,7 @@ public final class CausynthCluster {
   public static void registerCluster(MiniDFSCluster cluster, String prefix,
       DFSClient... clients) {
     for (int index = 0; index < clients.length; index++) {
-      CausynthMessagePropagation.registerSource(clients[index],
+      CausymMessagePropagation.registerSource(clients[index],
           "EXTERNAL_APP", "DFS_CLIENT", prefix + "/client" + index, 0);
     }
     registerNameNode(cluster, 0, prefix + "/nn0");
@@ -815,7 +815,7 @@ public final class CausynthCluster {
       String api) throws IOException {
     BPOfferService service = datanode.getAllBpOs().get(0);
     BPServiceActor actor = service.getBPServiceActors().get(0);
-    long request = CausynthMessagePropagation.beginRequest(
+    long request = CausymMessagePropagation.beginRequest(
         datanode.getDatanodeId(), api);
     try {
       HeartbeatResponse response = actor.sendHeartBeat(false);
@@ -829,13 +829,13 @@ public final class CausynthCluster {
     } catch (IOException transport) {
       return false;
     } finally {
-      CausynthMessagePropagation.endRequest(request, api);
+      CausymMessagePropagation.endRequest(request, api);
     }
   }
 
   /** Opens the recorded window: the one recording boundary. */
   public static void startRecording() {
-    CausynthMessagePropagation.startRecording();
+    CausymMessagePropagation.startRecording();
   }
 
   /**
@@ -856,7 +856,7 @@ public final class CausynthCluster {
    */
   public static void recordingPrecondition(BooleanSupplier holds,
       String message) {
-    if (!CausynthMessagePropagation.replaying()) {
+    if (!CausymMessagePropagation.replaying()) {
       assertTrue(holds.getAsBoolean(), message);
     }
   }

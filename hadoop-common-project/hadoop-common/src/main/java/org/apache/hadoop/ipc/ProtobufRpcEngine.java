@@ -246,13 +246,13 @@ public class ProtobufRpcEngine implements RpcEngine {
 
       final Message theRequest = (Message) args[1];
       final RpcWritable.Buffer val;
-      // GraphChecker: the request starts here, built first, and ends with
+      // Causym: the request starts here, built first, and ends with
       // the call, answered or failed.
-      long causynthRequest = 0L;
+      long causymRequest = 0L;
       try {
         Writable request = constructRpcRequest(method, theRequest);
-        causynthRequest = CausynthMessagePropagation.requestStarting(request,
-            Client.causynthAttempt());
+        causymRequest = CausymMessagePropagation.requestStarting(request,
+            Client.causymAttempt());
         val = (RpcWritable.Buffer) client.call(RPC.RpcKind.RPC_PROTOCOL_BUFFER,
             request, remoteId, fallbackToSimpleAuth, alignmentContext);
 
@@ -268,7 +268,7 @@ public class ProtobufRpcEngine implements RpcEngine {
         }
         throw new ServiceException(e);
       } finally {
-        CausynthMessagePropagation.requestEnded(causynthRequest);
+        CausymMessagePropagation.requestEnded(causymRequest);
         if (traceScope != null) traceScope.close();
       }
 
@@ -315,8 +315,8 @@ public class ProtobufRpcEngine implements RpcEngine {
       Message returnMessage;
       try {
         returnMessage = buf.getValue(prototype.getDefaultInstanceForType());
-        // GraphChecker: the parsed response, inside its exchange.
-        CausynthMessagePropagation.received(returnMessage);
+        // Causym: the parsed response, inside its exchange.
+        CausymMessagePropagation.received(returnMessage);
 
         if (LOG.isTraceEnabled()) {
           LOG.trace(Thread.currentThread().getId() + ": Response <- " +
@@ -492,8 +492,8 @@ public class ProtobufRpcEngine implements RpcEngine {
       }
       Message prototype = service.getRequestPrototype(methodDescriptor);
       Message param = request.getValue(prototype);
-      // GraphChecker: the parsed request, inside its exchange.
-      CausynthMessagePropagation.received(param);
+      // Causym: the parsed request, inside its exchange.
+      CausymMessagePropagation.received(param);
 
       Message result;
       Call currentCall = Server.getCurCall().get();

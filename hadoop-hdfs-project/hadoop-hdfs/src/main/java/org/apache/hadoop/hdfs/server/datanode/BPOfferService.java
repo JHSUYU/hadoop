@@ -17,7 +17,7 @@
  */
 package org.apache.hadoop.hdfs.server.datanode;
 
-import edu.uva.liftlab.graphchecker.annotation.CausynthExceptionTarget;
+import edu.uva.liftlab.causym.annotation.CausymExceptionTarget;
 import org.apache.hadoop.classification.VisibleForTesting;
 import org.apache.hadoop.util.Preconditions;
 
@@ -614,7 +614,7 @@ class BPOfferService {
 
       if (bpServiceToActive == actor) {
         if (!(txid >= lastActiveClaimTxId)) {
-          throw new @CausynthExceptionTarget("hdfs-adhoc-20") AssertionError();
+          throw new @CausymExceptionTarget("hdfs-adhoc-20") AssertionError();
         }
         lastActiveClaimTxId = txid;
       }
@@ -778,7 +778,7 @@ class BPOfferService {
       String bp = ((FinalizeCommand) cmd).getBlockPoolId();
       LOG.info("Got finalize command for block pool " + bp);
       if (!getBlockPoolId().equals(bp)) {
-        throw new @CausynthExceptionTarget("hdfs-adhoc-19") AssertionError(
+        throw new @CausymExceptionTarget("hdfs-adhoc-19") AssertionError(
             "BP " + getBlockPoolId() + " received DNA_FINALIZE " +
             "for other block pool " + bp);
       }
