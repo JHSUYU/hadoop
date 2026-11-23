@@ -390,10 +390,10 @@ public abstract class GenericTestUtils {
       throw new IllegalArgumentException(ERROR_INVALID_ARGUMENT);
     }
 
-    // GraphChecker: a workload of an automatic cluster waits without its
+    // Causym: a workload of an automatic cluster waits without its
     // bound.  The bound is sized for a native run; a replay held to a
     // recorded order runs on an interpreter, and its timeout is the replay's.
-    final long bound = Boolean.getBoolean("causynth.cluster.automatic")
+    final long bound = Boolean.getBoolean("causym.cluster.automatic")
         ? TimeUnit.HOURS.toMillis(6) : waitForMillis;
     long st = Time.monotonicNow();
     boolean result = check.get();
