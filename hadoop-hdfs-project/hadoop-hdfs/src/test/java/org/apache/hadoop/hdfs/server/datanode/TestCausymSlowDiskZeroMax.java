@@ -33,7 +33,7 @@ import org.apache.hadoop.hdfs.server.datanode.fsdataset.FsDatasetSpi;
 import org.apache.hadoop.hdfs.server.datanode.fsdataset.FsVolumeSpi;
 import org.apache.hadoop.hdfs.server.datanode.metrics.DataNodeDiskMetrics;
 import org.apache.hadoop.hdfs.server.protocol.SlowDiskReports.DiskOp;
-import org.apache.hadoop.ipc.CausynthMessagePropagation;
+import org.apache.hadoop.ipc.CausymMessagePropagation;
 import org.apache.hadoop.thirdparty.com.google.common.collect.ImmutableMap;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
@@ -62,7 +62,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
  * ({@code RoundRobinVolumeChoosingPolicy#chooseVolume}'s
  * {@code DiskOutOfSpaceException}).</p>
  */
-public class TestCausynthSlowDiskZeroMax {
+public class TestCausymSlowDiskZeroMax {
   /** The detector's turn. */
   private static final long DETECTION_INTERVAL_MS = 1000;
   /** The DataNode's only SSD, beside one DISK. */
@@ -74,7 +74,7 @@ public class TestCausynthSlowDiskZeroMax {
   public void testAllSsdWriteAfterSlowDiskExclusionTurnedOff()
       throws Exception {
     // Nothing set up before the window expires on the wall clock.
-    Configuration conf = CausynthCluster.configure(new HdfsConfiguration());
+    Configuration conf = CausymCluster.configure(new HdfsConfiguration());
     // File-IO profiling on: the DataNode keeps its disk metrics and runs
     // the slow-disk detector.
     conf.setInt(
@@ -84,56 +84,56 @@ public class TestCausynthSlowDiskZeroMax {
     conf.set(DFSConfigKeys.DFS_DATANODE_OUTLIERS_REPORT_INTERVAL_KEY,
         DETECTION_INTERVAL_MS + "ms");
     // Each DataNode has IPC connections of its own, as a DataNode process
-    // does (CausynthCluster.dataNodeOverlays).
+    // does (CausymCluster.dataNodeOverlays).
     try (MiniDFSCluster cluster = new MiniDFSCluster.Builder(conf)
         .numDataNodes(1)
         .storagesPerDatanode(STORAGES.length)
         .storageTypes(STORAGES)
-        .dataNodeConfOverlays(CausynthCluster.dataNodeOverlays(1)).build();
+        .dataNodeConfOverlays(CausymCluster.dataNodeOverlays(1)).build();
          DistributedFileSystem fs = cluster.getFileSystem()) {
       cluster.waitActive();
       DataNode datanode = cluster.getDataNodes().get(0);
       DataNodeDiskMetrics metrics = datanode.getDiskMetrics();
       assertNotNull(metrics, "file-IO profiling must start the detector");
       String ssd = ssdPath(datanode);
-      Path dir = new Path("/causynth-slowdisk");
+      Path dir = new Path("/causym-slowdisk");
       fs.mkdirs(dir);
       fs.setStoragePolicy(dir, HdfsConstants.ALLSSD_STORAGE_POLICY_NAME);
-      CausynthCluster.registerCluster(cluster, "slowdisk", fs.getClient());
-      CausynthCluster.startRecording();
+      CausymCluster.registerCluster(cluster, "slowdisk", fs.getClient());
+      CausymCluster.startRecording();
 
       // The SSD is slow, as the detector would find it.
-      long flag = CausynthMessagePropagation.beginRequest(
+      long flag = CausymMessagePropagation.beginRequest(
           datanode.getDatanodeId(), "flag-slow-disk");
       try {
         metrics.addSlowDiskForTesting(ssd, ImmutableMap.of(
             DiskOp.READ, 1.0, DiskOp.WRITE, 1.5, DiskOp.METADATA, 2.0));
       } finally {
-        CausynthMessagePropagation.endRequest(flag, "flag-slow-disk");
+        CausymMessagePropagation.endRequest(flag, "flag-slow-disk");
       }
       // At once, exclusion off: 0 is "exclude nothing".
-      long off = CausynthMessagePropagation.beginRequest(
+      long off = CausymMessagePropagation.beginRequest(
           datanode.getDatanodeId(), "slow-disk-exclusion-off");
       try {
         datanode.reconfigureProperty(
             DFSConfigKeys.DFS_DATANODE_MAX_SLOWDISKS_TO_EXCLUDE_KEY, "0");
       } finally {
-        CausynthMessagePropagation.endRequest(off,
+        CausymMessagePropagation.endRequest(off,
             "slow-disk-exclusion-off");
       }
       // A few detector turns, each reading 0.
       Thread.sleep(3 * DETECTION_INTERVAL_MS);
 
       Path file = new Path(dir, "file");
-      long write = CausynthMessagePropagation.beginRequest(fs.getClient(),
+      long write = CausymMessagePropagation.beginRequest(fs.getClient(),
           "write-all-ssd");
       try {
         DFSTestUtil.createFile(fs, file, 1024, (short) 1, 0L);
       } finally {
-        CausynthMessagePropagation.endRequest(write, "write-all-ssd");
+        CausymMessagePropagation.endRequest(write, "write-all-ssd");
       }
       LocatedBlock block = DFSTestUtil.getAllBlocks(fs, file).get(0);
-      CausynthCluster.recordingPrecondition(
+      CausymCluster.recordingPrecondition(
           () -> block.getStorageTypes()[0] == StorageType.SSD,
           "the ALL_SSD write must land on the SSD");
       assertEquals(1, block.getLocations().length);

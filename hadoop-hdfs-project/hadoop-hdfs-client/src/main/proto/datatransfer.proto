@@ -45,10 +45,10 @@ message DataTransferEncryptorMessageProto {
   repeated CipherOptionProto cipherOption = 4;
   optional HandshakeSecretProto handshakeSecret = 5;
   optional bool accessTokenError = 6;
-  optional string causynthCorrelation = 7;
-  optional string causynthAttempt = 8;
-  optional string causynthTrace = 9;
-  optional string causynthSymbolic = 10;
+  optional string causymCorrelation = 7;
+  optional string causymAttempt = 8;
+  optional string causymTrace = 9;
+  optional string causymSymbolic = 10;
 }
 
 message HandshakeSecretProto {
@@ -66,10 +66,10 @@ message DataTransferTraceInfoProto {
   optional uint64 traceId = 1;
   optional uint64 parentId = 2;
   optional bytes spanContext = 3;
-  // GraphChecker: the op as a message, its correlation and the values it
-  // carries (CausynthMessagePropagation#outboundOp).
-  optional string causynthCorrelation = 4;
-  optional string causynthSymbolic = 5;
+  // Causym: the op as a message, its correlation and the values it
+  // carries (CausymMessagePropagation#outboundOp).
+  optional string causymCorrelation = 4;
+  optional string causymSymbolic = 5;
 }
 
 message ClientOperationHeaderProto {
