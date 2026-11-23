@@ -17,7 +17,7 @@
  */
 package org.apache.hadoop.hdfs.qjournal.client;
 
-import edu.uva.liftlab.graphchecker.annotation.CausynthExceptionTarget;
+import edu.uva.liftlab.causym.annotation.CausymExceptionTarget;
 import java.io.IOException;
 
 import org.apache.hadoop.hdfs.server.namenode.EditLogOutputStream;
@@ -105,11 +105,11 @@ class QuorumOutputStream extends EditLogOutputStream {
       DataOutputBuffer bufToSend = new DataOutputBuffer(numReadyBytes);
       buf.flushTo(bufToSend);
       if (!(bufToSend.getLength() == numReadyBytes)) {
-        throw new @CausynthExceptionTarget("hdfs-adhoc-05") AssertionError();
+        throw new @CausymExceptionTarget("hdfs-adhoc-05") AssertionError();
       }
       byte[] data = bufToSend.getData();
       if (!(data.length == bufToSend.getLength())) {
-        throw new @CausynthExceptionTarget("hdfs-adhoc-06") AssertionError();
+        throw new @CausymExceptionTarget("hdfs-adhoc-06") AssertionError();
       }
 
       QuorumCall<AsyncLogger, Void> qcall = loggers.sendEdits(
