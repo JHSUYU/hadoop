@@ -17,7 +17,7 @@
  */
 package org.apache.hadoop.hdfs.server.datanode;
 
-import edu.uva.liftlab.graphchecker.annotation.CausynthExceptionTarget;
+import edu.uva.liftlab.causym.annotation.CausymExceptionTarget;
 import org.apache.hadoop.classification.VisibleForTesting;
 import org.apache.hadoop.thirdparty.com.google.common.base.Joiner;
 import org.apache.hadoop.util.Preconditions;
@@ -563,7 +563,7 @@ public class BlockRecoveryWorker {
   private DatanodeID getDatanodeID(String bpid) throws IOException {
     BPOfferService bpos = datanode.getBPOfferService(bpid);
     if (bpos == null) {
-      throw new @CausynthExceptionTarget("hdfs-adhoc-28")
+      throw new @CausymExceptionTarget("hdfs-adhoc-28")
           IOException("No block pool offer service for bpid=" + bpid);
     }
     return new DatanodeID(bpos.bpRegistration);
@@ -603,13 +603,13 @@ public class BlockRecoveryWorker {
       String bpid) throws IOException {
     BPOfferService bpos = datanode.getBPOfferService(bpid);
     if (bpos == null) {
-      throw new @CausynthExceptionTarget("hdfs-adhoc-29")
+      throw new @CausymExceptionTarget("hdfs-adhoc-29")
           IOException("No block pool offer service for bpid=" + bpid);
     }
 
     DatanodeProtocolClientSideTranslatorPB activeNN = bpos.getActiveNN();
     if (activeNN == null) {
-      throw new @CausynthExceptionTarget("hdfs-adhoc-30") IOException(
+      throw new @CausymExceptionTarget("hdfs-adhoc-30") IOException(
           "Block pool " + bpid + " has not recognized an active NN");
     }
     return activeNN;

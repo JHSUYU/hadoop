@@ -18,7 +18,7 @@
 
 package org.apache.hadoop.hdfs.security.token.block;
 
-import edu.uva.liftlab.graphchecker.annotation.CausynthExceptionTarget;
+import edu.uva.liftlab.causym.annotation.CausymExceptionTarget;
 import java.io.ByteArrayInputStream;
 import java.io.DataInputStream;
 import java.io.IOException;
@@ -32,7 +32,7 @@ import java.util.Iterator;
 import java.util.Map;
 
 import org.apache.commons.lang3.ArrayUtils;
-import org.apache.hadoop.ipc.CausynthSymbolicSource;
+import org.apache.hadoop.ipc.CausymSymbolicSource;
 import org.apache.hadoop.ipc.Server;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -192,14 +192,14 @@ public class BlockTokenSecretManager extends
     setSerialNo(serialNo + 1);
     currentKey = new BlockKey(serialNo, timer.now() + 2
         * keyUpdateInterval + tokenLifetime, generateSecret());
-    CausynthSymbolicSource.symbolize(
+    CausymSymbolicSource.symbolize(
         "HDFS.BLOCK_KEY.EXPIRY_DATE.INITIAL_CURRENT",
         currentKey, "<org.apache.hadoop.security.token.delegation."
             + "DelegationKey: long expiryDate>");
     setSerialNo(serialNo + 1);
     nextKey = new BlockKey(serialNo, timer.now() + 3
         * keyUpdateInterval + tokenLifetime, generateSecret());
-    CausynthSymbolicSource.symbolize(
+    CausymSymbolicSource.symbolize(
         "HDFS.BLOCK_KEY.EXPIRY_DATE.INITIAL_NEXT",
         nextKey, "<org.apache.hadoop.security.token.delegation."
             + "DelegationKey: long expiryDate>");
@@ -278,25 +278,25 @@ public class BlockTokenSecretManager extends
     BlockKey retiringKey = new BlockKey(currentKey.getKeyId(),
         timer.now() + keyUpdateInterval + tokenLifetime,
         currentKey.getKey());
-    CausynthSymbolicSource.symbolize("HDFS.BLOCK_KEY.EXPIRY_DATE.RETIRED",
+    CausymSymbolicSource.symbolize("HDFS.BLOCK_KEY.EXPIRY_DATE.RETIRED",
         retiringKey, "<org.apache.hadoop.security.token.delegation."
             + "DelegationKey: long expiryDate>");
     allKeys.put(retiringKey.getKeyId(), retiringKey);
     // update the estimated expiry date of new currentKey
     currentKey = new BlockKey(nextKey.getKeyId(), timer.now()
         + 2 * keyUpdateInterval + tokenLifetime, nextKey.getKey());
-    CausynthSymbolicSource.symbolize("HDFS.BLOCK_KEY.EXPIRY_DATE.CURRENT",
+    CausymSymbolicSource.symbolize("HDFS.BLOCK_KEY.EXPIRY_DATE.CURRENT",
         currentKey, "<org.apache.hadoop.security.token.delegation."
             + "DelegationKey: long expiryDate>");
     allKeys.put(currentKey.getKeyId(), currentKey);
     // generate a new nextKey
     setSerialNo(serialNo + 1);
-    CausynthSymbolicSource.symbolize("HDFS.BLOCK_KEY.SERIAL_NO", this,
+    CausymSymbolicSource.symbolize("HDFS.BLOCK_KEY.SERIAL_NO", this,
         "<org.apache.hadoop.hdfs.security.token.block."
             + "BlockTokenSecretManager: int serialNo>");
     nextKey = new BlockKey(serialNo, timer.now() + 3
         * keyUpdateInterval + tokenLifetime, generateSecret());
-    CausynthSymbolicSource.symbolize("HDFS.BLOCK_KEY.EXPIRY_DATE", nextKey,
+    CausymSymbolicSource.symbolize("HDFS.BLOCK_KEY.EXPIRY_DATE", nextKey,
         "<org.apache.hadoop.security.token.delegation."
             + "DelegationKey: long expiryDate>");
     allKeys.put(nextKey.getKeyId(), nextKey);
@@ -438,7 +438,7 @@ public class BlockTokenSecretManager extends
     }
     checkAccess(id, userId, block, mode, storageTypes, storageIds);
     if (!MessageDigest.isEqual(retrievePassword(id), token.getPassword())) {
-      throw new @CausynthExceptionTarget("hdfs-adhoc-14")
+      throw new @CausymExceptionTarget("hdfs-adhoc-14")
           InvalidToken("Block token with " + id
           + " doesn't have the correct token password");
     }
@@ -539,7 +539,7 @@ public class BlockTokenSecretManager extends
       key = allKeys.get(identifier.getKeyId());
     }
     if (key == null) {
-      throw new @CausynthExceptionTarget("hdfs-adhoc-12")
+      throw new @CausymExceptionTarget("hdfs-adhoc-12")
           InvalidToken("Can't re-compute password for "
           + identifier + ", since the required block key (keyID="
           + identifier.getKeyId() + ") doesn't exist.");
@@ -581,7 +581,7 @@ public class BlockTokenSecretManager extends
     synchronized (this) {
       key = allKeys.get(keyId);
       if (key == null) {
-        throw new @CausynthExceptionTarget("hdfs-17897,hdfs-17899-bug1,"
+        throw new @CausymExceptionTarget("hdfs-17897,hdfs-17899-bug1,"
             + "hdfs-17899-bug2,hdfs-17899-bug3,hdfs-17967-pathA,"
             + "hdfs-17967-pathB,hdfs-17967-pathC,hdfs-adhoc-11,"
             + "hdfs-buggy-5766") InvalidEncryptionKeyException(
