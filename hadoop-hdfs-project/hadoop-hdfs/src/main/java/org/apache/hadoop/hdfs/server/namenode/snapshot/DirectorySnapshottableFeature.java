@@ -17,7 +17,7 @@
  */
 package org.apache.hadoop.hdfs.server.namenode.snapshot;
 
-import edu.uva.liftlab.graphchecker.annotation.CausynthExceptionTarget;
+import edu.uva.liftlab.causym.annotation.CausymExceptionTarget;
 import java.io.PrintWriter;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -187,7 +187,7 @@ public class DirectorySnapshottableFeature extends DirectoryWithSnapshotFeature 
     //check snapshot quota
     final int n = getNumSnapshots();
     if (n + 1 > snapshotQuota) {
-      throw new @CausynthExceptionTarget("hdfs-adhoc-49")
+      throw new @CausymExceptionTarget("hdfs-adhoc-49")
           SnapshotException("Failed to add snapshot: there are already "
           + n + " snapshot(s) and the snapshot quota is "
           + snapshotQuota);
@@ -197,7 +197,7 @@ public class DirectorySnapshottableFeature extends DirectoryWithSnapshotFeature 
     final byte[] nameBytes = s.getRoot().getLocalNameBytes();
     final int i = searchSnapshot(nameBytes);
     if (i >= 0) {
-      throw new @CausynthExceptionTarget("hdfs-adhoc-50")
+      throw new @CausymExceptionTarget("hdfs-adhoc-50")
           SnapshotException("Failed to add snapshot: there is already a "
           + "snapshot with the same name \"" + Snapshot.getSnapshotName(s) + "\".");
     }
@@ -602,7 +602,7 @@ public class DirectorySnapshottableFeature extends DirectoryWithSnapshotFeature 
         }
       }
       if (!(n == snapshotsByNames.size())) {
-        throw new @CausynthExceptionTarget("hdfs-adhoc-51") IllegalStateException(
+        throw new @CausymExceptionTarget("hdfs-adhoc-51") IllegalStateException(
             "#n=" + n + ", snapshotsByNames.size()=" + snapshotsByNames.size());
       }
       out.print(", #snapshot=");
