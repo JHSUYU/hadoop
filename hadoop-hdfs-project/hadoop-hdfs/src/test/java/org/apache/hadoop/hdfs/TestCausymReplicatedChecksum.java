@@ -28,9 +28,9 @@ import org.apache.hadoop.fs.FSDataOutputStream;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hdfs.security.token.block.BlockKey;
 import org.apache.hadoop.hdfs.security.token.block.BlockTokenSecretManager;
-import org.apache.hadoop.hdfs.server.datanode.CausynthCluster;
+import org.apache.hadoop.hdfs.server.datanode.CausymCluster;
 import org.apache.hadoop.hdfs.server.datanode.DataNode;
-import org.apache.hadoop.ipc.CausynthMessagePropagation;
+import org.apache.hadoop.ipc.CausymMessagePropagation;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -44,7 +44,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * ordinary failure of that DataNode, keeps its cached key, and with no other
  * location fails the checksum.
  *
- * <p>The shape is {@link TestCausynthStripedChecksum}'s (hdfs-17897, the
+ * <p>The shape is {@link TestCausymStripedChecksum}'s (hdfs-17897, the
  * striped twin of this bug), on a file of one replica: inside the window
  * the master rotates twice, the DataNode takes the new keys over exactly one
  * heartbeat of its own, the client fetches the master's current encryption
@@ -55,7 +55,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * after it cleared the node's key-update mark -- leaves the DataNode without
  * the key the client presents.</p>
  */
-public class TestCausynthReplicatedChecksum {
+public class TestCausymReplicatedChecksum {
   /** Block-key serial number pinned by {@link #pinBlockKeys}. */
   private static final int SERIAL_NO = Integer.MAX_VALUE / 12931;
 
@@ -63,7 +63,7 @@ public class TestCausynthReplicatedChecksum {
   public void testStaleEncryptionKeyFailsReplicatedChecksum()
       throws Exception {
     // Nothing set up before the window expires on the wall clock.
-    Configuration conf = CausynthCluster.configure(new HdfsConfiguration());
+    Configuration conf = CausymCluster.configure(new HdfsConfiguration());
     conf.setBoolean(DFSConfigKeys.DFS_ENCRYPT_DATA_TRANSFER_KEY, true);
     conf.setBoolean(DFSConfigKeys.DFS_BLOCK_ACCESS_TOKEN_ENABLE_KEY, true);
     conf.setInt(DFSConfigKeys.DFS_REPLICATION_KEY, 1);
@@ -77,7 +77,7 @@ public class TestCausynthReplicatedChecksum {
         TimeUnit.HOURS.toSeconds(6));
     try (MiniDFSCluster cluster = new MiniDFSCluster.Builder(conf)
         .numDataNodes(1)
-        .dataNodeConfOverlays(CausynthCluster.dataNodeOverlays(1)).build();
+        .dataNodeConfOverlays(CausymCluster.dataNodeOverlays(1)).build();
          DistributedFileSystem fs = cluster.getFileSystem()) {
       cluster.waitActive();
       DFSClient client = DFSClientAdapter.getDFSClient(fs);
@@ -90,29 +90,29 @@ public class TestCausynthReplicatedChecksum {
       assertEquals(holder.getDatanodeUuid(), client.getLocatedBlocks(
           file.toString(), 0).get(0).getLocations()[0].getDatanodeUuid(),
           "the block's one replica must be on the one DataNode");
-      CausynthMessagePropagation.registerSource(
+      CausymMessagePropagation.registerSource(
           client, "EXTERNAL_APP", "DFS_CLIENT", "hdfs-12931/client", 0);
-      CausynthCluster.registerNameNode(cluster, 0, "hdfs-12931/nn0");
-      CausynthCluster.registerDataNode(holder, "hdfs-12931/dn0");
+      CausymCluster.registerNameNode(cluster, 0, "hdfs-12931/nn0");
+      CausymCluster.registerDataNode(holder, "hdfs-12931/dn0");
       BlockTokenSecretManager master = cluster.getNamesystem()
           .getBlockManager().getBlockTokenSecretManager();
       pinBlockKeys(cluster, master);
-      CausynthCluster.startRecording();
+      CausymCluster.startRecording();
 
       // THE KEY FLOWS THE RPC'S WAY (experiments/hadoop/lib/README.md).  The
       // master rotates twice; an explicit rotation marks no DataNode for a key
       // update, so the workload marks it.
       int initialKeyId = master.getCurrentKey().getKeyId();
       for (int rotation = 0; rotation < 2; rotation++) {
-        long causynthRotation = CausynthMessagePropagation.beginTick(
+        long causymRotation = CausymMessagePropagation.beginTick(
             master, "KEY_MANAGER_TICK");
         try {
           master.updateKeys(Long.MAX_VALUE);
         } finally {
-          CausynthMessagePropagation.endTick(causynthRotation);
+          CausymMessagePropagation.endTick(causymRotation);
         }
       }
-      CausynthCluster.recordingPrecondition(
+      CausymCluster.recordingPrecondition(
           () -> master.getCurrentKey().getKeyId() == initialKeyId + 2,
           "the recorded window must rotate the master twice");
       int currentKeyId = master.getCurrentKey().getKeyId();
@@ -121,35 +121,35 @@ public class TestCausynthReplicatedChecksum {
           .getDatanode(holder.getDatanodeId()).setNeedKeyUpdate(true);
       // The DataNode takes the master's new keys over ITS OWN heartbeat,
       // once.  A delivery a witness fails is not repeated in the window.
-      CausynthCluster.refreshKeysFromNameNode(holder, "heartbeat");
+      CausymCluster.refreshKeysFromNameNode(holder, "heartbeat");
 
       // The client then takes the master's CURRENT key over its own RPC and
       // presents it to the block's DataNode.
       client.clearDataEncryptionKey();
-      long cacheRequest = CausynthMessagePropagation.beginRequest(
+      long cacheRequest = CausymMessagePropagation.beginRequest(
           client, "cache-encryption-key");
       try {
         client.newDataEncryptionKey();
       } finally {
-        CausynthMessagePropagation.endRequest(
+        CausymMessagePropagation.endRequest(
             cacheRequest, "cache-encryption-key");
       }
-      CausynthCluster.recordingPrecondition(
+      CausymCluster.recordingPrecondition(
           () -> client.getEncryptionKey().keyId == currentKeyId,
           "the client must present the master's current key");
       BlockTokenSecretManager keys =
           holder.getBlockPoolTokenSecretManager().get(blockPoolId);
-      CausynthCluster.recordingPrecondition(
+      CausymCluster.recordingPrecondition(
           () -> keys.hasKey(currentKeyId),
           "the DataNode must hold the key the client presents, or the"
               + " recording is already the failure");
 
-      long checksumRequest = CausynthMessagePropagation.beginRequest(
+      long checksumRequest = CausymMessagePropagation.beginRequest(
           client, "replicated-file-checksum");
       try {
         fs.getFileChecksum(file);
       } finally {
-        CausynthMessagePropagation.endRequest(
+        CausymMessagePropagation.endRequest(
             checksumRequest, "replicated-file-checksum");
       }
     }
@@ -157,7 +157,7 @@ public class TestCausynthReplicatedChecksum {
 
   /**
    * Makes every block-key id the recorded window sees identical across
-   * GraphChecker replay sessions, as {@link TestCausynthStripedChecksum}
+   * Causym replay sessions, as {@link TestCausymStripedChecksum}
    * does: the manager seeds serialNo from SecureRandom once per JVM and each
    * replay task is its own JVM.  Two rotations retire the two
    * constructor-time keys, the retired ones are dropped everywhere, and the
@@ -168,12 +168,12 @@ public class TestCausynthReplicatedChecksum {
       BlockTokenSecretManager master) throws Exception {
     master.setSerialNo(SERIAL_NO);
     for (int rotation = 0; rotation < 2; rotation++) {
-      long causynthRotation = CausynthMessagePropagation.beginTick(
+      long causymRotation = CausymMessagePropagation.beginTick(
           master, "KEY_MANAGER_TICK");
       try {
         master.updateKeys(Long.MAX_VALUE);
       } finally {
-        CausynthMessagePropagation.endTick(causynthRotation);
+        CausymMessagePropagation.endTick(causymRotation);
       }
     }
     assertEquals(SERIAL_NO + 1, master.getCurrentKey().getKeyId());

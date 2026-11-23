@@ -51,7 +51,7 @@ import org.apache.hadoop.hdfs.protocol.datatransfer.IOStreamPair;
 import org.apache.hadoop.hdfs.protocol.datatransfer.InvalidEncryptionKeyException;
 import org.apache.hadoop.hdfs.protocol.proto.DataTransferProtos.DataTransferEncryptorMessageProto;
 import org.apache.hadoop.hdfs.protocol.proto.DataTransferProtos.DataTransferEncryptorMessageProto.DataTransferEncryptorStatus;
-import org.apache.hadoop.ipc.CausynthMessagePropagation;
+import org.apache.hadoop.ipc.CausymMessagePropagation;
 import org.apache.hadoop.hdfs.protocol.proto.DataTransferProtos.HandshakeSecretProto;
 import org.apache.hadoop.hdfs.protocol.proto.HdfsProtos.CipherOptionProto;
 import org.apache.hadoop.hdfs.protocolPB.PBHelperClient;
@@ -216,11 +216,11 @@ public final class DataTransferSaslUtil {
       Function<DataTransferEncryptorMessageProto, ? extends T> handler) throws IOException {
     DataTransferEncryptorMessageProto proto =
         DataTransferEncryptorMessageProto.parseFrom(vintPrefixed(in));
-    CausynthMessagePropagation.inboundSasl(
-        proto.hasCausynthTrace() ? proto.getCausynthTrace() : "",
-        proto.hasCausynthSymbolic() ? proto.getCausynthSymbolic() : "",
-        proto.hasCausynthCorrelation() ? proto.getCausynthCorrelation() : "",
-        proto.hasCausynthAttempt() ? proto.getCausynthAttempt() : "");
+    CausymMessagePropagation.inboundSasl(
+        proto.hasCausymTrace() ? proto.getCausymTrace() : "",
+        proto.hasCausymSymbolic() ? proto.getCausymSymbolic() : "",
+        proto.hasCausymCorrelation() ? proto.getCausymCorrelation() : "",
+        proto.hasCausymAttempt() ? proto.getCausymAttempt() : "");
     switch (proto.getStatus()) {
     case ERROR_UNKNOWN_KEY:
       throw new InvalidEncryptionKeyException(proto.getMessage());
@@ -590,14 +590,14 @@ public final class DataTransferSaslUtil {
 
   private static void writeSaslMessage(OutputStream out,
       DataTransferEncryptorMessageProto.Builder builder) throws IOException {
-    CausynthMessagePropagation.Outbound causynth =
-        CausynthMessagePropagation.outboundSasl();
-    if (causynth.active()) {
-      builder.setCausynthCorrelation(causynth.correlationId)
-          .setCausynthAttempt(causynth.attemptId)
-          .setCausynthTrace(causynth.trace);
-      if (!causynth.symbolic.isEmpty()) {
-        builder.setCausynthSymbolic(causynth.symbolic);
+    CausymMessagePropagation.Outbound causym =
+        CausymMessagePropagation.outboundSasl();
+    if (causym.active()) {
+      builder.setCausymCorrelation(causym.correlationId)
+          .setCausymAttempt(causym.attemptId)
+          .setCausymTrace(causym.trace);
+      if (!causym.symbolic.isEmpty()) {
+        builder.setCausymSymbolic(causym.symbolic);
       }
     }
     builder.build().writeDelimitedTo(out);

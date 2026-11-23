@@ -39,7 +39,7 @@ import org.apache.hadoop.hdfs.DFSConfigKeys;
 import org.apache.hadoop.hdfs.MiniDFSCluster;
 import org.apache.hadoop.hdfs.qjournal.client.QuorumJournalManager;
 import org.apache.hadoop.hdfs.qjournal.server.JournalNode;
-import org.apache.hadoop.hdfs.server.datanode.CausynthCluster;
+import org.apache.hadoop.hdfs.server.datanode.CausymCluster;
 import org.apache.hadoop.metrics2.lib.DefaultMetricsSystem;
 import org.apache.hadoop.net.NetUtils;
 
@@ -118,8 +118,8 @@ public final class MiniJournalCluster implements Closeable {
   private final JNInfo[] nodes;
   
   private MiniJournalCluster(Builder b) throws IOException {
-    if (CausynthCluster.automatic()) {
-      CausynthCluster.journalSetUp(this, b.conf);
+    if (CausymCluster.automatic()) {
+      CausymCluster.journalSetUp(this, b.conf);
     }
 
     if (b.httpPorts != null && b.httpPorts.length != b.numJournalNodes) {
@@ -152,8 +152,8 @@ public final class MiniJournalCluster implements Closeable {
         FileUtil.fullyDelete(dir);
       }
       JournalNode jn;
-      try (CausynthCluster.NodeStartup startup =
-          CausynthCluster.nodeStartup(this, "JOURNALNODE")) {
+      try (CausymCluster.NodeStartup startup =
+          CausymCluster.nodeStartup(this, "JOURNALNODE")) {
         jn = new JournalNode();
         jn.setConf(createConfForNode(b, i));
         jn.start();
@@ -161,8 +161,8 @@ public final class MiniJournalCluster implements Closeable {
       }
       nodes[i] = new JNInfo(jn);
     }
-    if (CausynthCluster.automatic()) {
-      CausynthCluster.registerJournalNodes(this);
+    if (CausymCluster.automatic()) {
+      CausymCluster.registerJournalNodes(this);
     }
   }
 
@@ -198,8 +198,8 @@ public final class MiniJournalCluster implements Closeable {
    * @throws IOException if one or more nodes failed to stop
    */
   public void shutdown() throws IOException {
-    if (CausynthCluster.automatic()) {
-      CausynthCluster.shutdownAutomatically(this);
+    if (CausymCluster.automatic()) {
+      CausymCluster.shutdownAutomatically(this);
     }
     boolean failed = false;
     for (JNInfo info : nodes) {
@@ -271,16 +271,16 @@ public final class MiniJournalCluster implements Closeable {
     }
 
     JournalNode newJN;
-    try (CausynthCluster.NodeStartup startup =
-        CausynthCluster.nodeRestart(jn)) {
+    try (CausymCluster.NodeStartup startup =
+        CausymCluster.nodeRestart(jn)) {
       newJN = new JournalNode();
       newJN.setConf(conf);
       newJN.start();
       startup.built(newJN);
     }
     info.node = newJN;
-    if (CausynthCluster.automatic()) {
-      CausynthCluster.restartedJournalNode(this, i);
+    if (CausymCluster.automatic()) {
+      CausymCluster.restartedJournalNode(this, i);
     }
   }
 
@@ -322,8 +322,8 @@ public final class MiniJournalCluster implements Closeable {
         LOG.warn("Thread interrupted when waiting for node start", ite);
       }
     }
-    if (CausynthCluster.automatic()) {
-      CausynthCluster.registerJournalsAutomatically(this);
+    if (CausymCluster.automatic()) {
+      CausymCluster.registerJournalsAutomatically(this);
     }
   }
 
