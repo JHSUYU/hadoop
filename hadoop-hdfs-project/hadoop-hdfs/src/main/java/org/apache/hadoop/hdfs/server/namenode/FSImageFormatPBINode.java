@@ -18,7 +18,7 @@
 
 package org.apache.hadoop.hdfs.server.namenode;
 
-import edu.uva.liftlab.graphchecker.annotation.CausynthExceptionTarget;
+import edu.uva.liftlab.causym.annotation.CausymExceptionTarget;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -528,7 +528,7 @@ public final class FSImageFormatPBINode {
         BlockProto b = bp.get(i);
         if (isStriped) {
           if (!(ecPolicy.getId() > 0)) {
-            throw new @CausynthExceptionTarget("hdfs-adhoc-47") IllegalStateException(
+            throw new @CausymExceptionTarget("hdfs-adhoc-47") IllegalStateException(
                 "File with ID " + n.getId() +
                 " has an invalid erasure coding policy ID " + ecPolicy.getId());
           }

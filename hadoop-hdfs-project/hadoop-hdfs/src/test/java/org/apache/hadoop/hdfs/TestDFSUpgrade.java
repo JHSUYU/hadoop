@@ -461,7 +461,7 @@ public class TestDFSUpgrade {
         Storage.writeProperties(version, props);
       }
 
-      // GraphChecker: the upgrade tasks wait (a workaround, see
+      // Causym: the upgrade tasks wait (a workaround, see
       // BlockPoolSliceStorage#upgradeTaskDelayMs), so natively every volume's
       // VERSION is read before any task writes the shared layout; each later
       // task waits 5 s more (#upgradeTaskStaggerMs), so natively volume 1's

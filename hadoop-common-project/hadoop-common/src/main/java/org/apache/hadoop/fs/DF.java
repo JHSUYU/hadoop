@@ -35,7 +35,7 @@ import org.apache.hadoop.util.Shell;
 import org.apache.hadoop.classification.VisibleForTesting;
 
 /** Filesystem disk space usage statistics.
- * Uses the JVM's file store to get mount points (GraphChecker: no 'df'
+ * Uses the JVM's file store to get mount points (Causym: no 'df'
  * process), and java.io.File for space utilization. */
 @InterfaceAudience.LimitedPrivate({"HDFS", "MapReduce"})
 @InterfaceStability.Evolving
@@ -125,7 +125,7 @@ public class DF extends Shell {
   }
 
   /**
-   * GraphChecker: the file system and mount point of the directory as the
+   * Causym: the file system and mount point of the directory as the
    * JVM resolves them, not from a df process: each process started a stderr
    * reader thread whose timing no replay holds.  The mount point is the
    * highest ancestor still on the directory's file store; the file system
