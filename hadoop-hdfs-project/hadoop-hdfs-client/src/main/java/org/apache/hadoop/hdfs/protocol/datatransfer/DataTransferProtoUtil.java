@@ -33,7 +33,7 @@ import org.apache.hadoop.hdfs.protocol.proto.HdfsProtos.ChecksumTypeProto;
 import org.apache.hadoop.hdfs.protocolPB.PBHelperClient;
 import org.apache.hadoop.hdfs.security.token.block.BlockTokenIdentifier;
 import org.apache.hadoop.hdfs.security.token.block.InvalidBlockTokenException;
-import org.apache.hadoop.ipc.CausynthMessagePropagation;
+import org.apache.hadoop.ipc.CausymMessagePropagation;
 import org.apache.hadoop.security.token.Token;
 import org.apache.hadoop.thirdparty.protobuf.Descriptors.Descriptor;
 import org.apache.hadoop.thirdparty.protobuf.Descriptors.FieldDescriptor;
@@ -88,19 +88,19 @@ public abstract class DataTransferProtoUtil {
   }
 
   /**
-   * The op as it leaves (GraphChecker): a message carrying, on its trace
+   * The op as it leaves (Causym): a message carrying, on its trace
    * info -- its header's base header's, or its own when it has no header
    * (the short-circuit shared-memory ops) -- its correlation and every value
    * its message fields carry (the shim's outboundOp is handed the op).
    */
-  static Message withCausynth(Message op) {
-    CausynthMessagePropagation.Outbound causynth =
-        CausynthMessagePropagation.outboundOp(op);
-    return causynth.active() ? carry(op.toBuilder(), causynth).build() : op;
+  static Message withCausym(Message op) {
+    CausymMessagePropagation.Outbound causym =
+        CausymMessagePropagation.outboundOp(op);
+    return causym.active() ? carry(op.toBuilder(), causym).build() : op;
   }
 
   private static Message.Builder carry(Message.Builder message,
-      CausynthMessagePropagation.Outbound causynth) {
+      CausymMessagePropagation.Outbound causym) {
     for (FieldDescriptor field : message.getDescriptorForType().getFields()) {
       if (field.isRepeated()
           || field.getJavaType() != FieldDescriptor.JavaType.MESSAGE) {
@@ -110,15 +110,15 @@ public abstract class DataTransferProtoUtil {
       if (type.equals(DataTransferTraceInfoProto.getDescriptor())) {
         message.setField(field,
             ((DataTransferTraceInfoProto) message.getField(field)).toBuilder()
-                .setCausynthCorrelation(causynth.correlationId)
-                .setCausynthSymbolic(causynth.symbolic)
+                .setCausymCorrelation(causym.correlationId)
+                .setCausymSymbolic(causym.symbolic)
                 .build());
         return message;
       }
       if (type.equals(BaseHeaderProto.getDescriptor())
           || type.equals(ClientOperationHeaderProto.getDescriptor())) {
         message.setField(field, carry(
-            ((Message) message.getField(field)).toBuilder(), causynth)
+            ((Message) message.getField(field)).toBuilder(), causym)
             .build());
         return message;
       }
