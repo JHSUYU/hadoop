@@ -50,7 +50,7 @@ import org.apache.hadoop.hdfs.server.protocol.HeartbeatResponse;
 import org.apache.hadoop.hdfs.server.namenode.NameNodeRpcServer;
 import org.apache.hadoop.hdfs.util.StripedBlockUtil;
 import org.apache.hadoop.io.erasurecode.ECSchema;
-import org.apache.hadoop.ipc.CausynthMessagePropagation;
+import org.apache.hadoop.ipc.CausymMessagePropagation;
 import org.apache.hadoop.test.GenericTestUtils;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
@@ -100,7 +100,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * of 2 MiB.  XOR-2-1 also needs only four DataNodes -- two data, one parity,
  * one reconstruction target.
  */
-public class TestCausynthStripedReconstructTargetStaleKey {
+public class TestCausymStripedReconstructTargetStaleKey {
   /** Block-key serial number pinned by {@link #pinBlockKeys}. */
   private static final int SERIAL_NO = Integer.MAX_VALUE / 17967 + 6;
   private static final int CELL_SIZE = 1024;
@@ -110,7 +110,7 @@ public class TestCausynthStripedReconstructTargetStaleKey {
   @Timeout(240)
   public void testReconstructionAfterKeyRotations() throws Exception {
     // Nothing set up before the window expires on the wall clock.
-    Configuration conf = CausynthCluster.configure(new HdfsConfiguration());
+    Configuration conf = CausymCluster.configure(new HdfsConfiguration());
     conf.setBoolean(DFSConfigKeys.DFS_ENCRYPT_DATA_TRANSFER_KEY, true);
     conf.setBoolean(DFSConfigKeys.DFS_BLOCK_ACCESS_TOKEN_ENABLE_KEY, true);
     conf.setInt(DFSConfigKeys.DFS_CLIENT_SOCKET_TIMEOUT_KEY, 10 * 60 * 1000);
@@ -143,16 +143,16 @@ public class TestCausynthStripedReconstructTargetStaleKey {
     ErasureCodingPolicy policy =
         new ErasureCodingPolicy(new ECSchema("xor", 2, 1), CELL_SIZE);
     // Each DataNode has IPC connections of its own, as a DataNode process
-    // does (CausynthCluster.dataNodeOverlays).
+    // does (CausymCluster.dataNodeOverlays).
     try (MiniDFSCluster cluster = new MiniDFSCluster.Builder(conf)
         .numDataNodes(4)
-        .dataNodeConfOverlays(CausynthCluster.dataNodeOverlays(4)).build();
+        .dataNodeConfOverlays(CausymCluster.dataNodeOverlays(4)).build();
          DistributedFileSystem fs = cluster.getFileSystem()) {
       cluster.waitActive();
       policy = fs.addErasureCodingPolicies(
           new ErasureCodingPolicy[]{policy})[0].getPolicy();
       fs.enableErasureCodingPolicy(policy.getName());
-      Path dir = new Path("/causynth-hdfs-17967-c");
+      Path dir = new Path("/causym-hdfs-17967-c");
       fs.mkdirs(dir);
       fs.setErasureCodingPolicy(dir, policy.getName());
 
@@ -205,25 +205,25 @@ public class TestCausynthStripedReconstructTargetStaleKey {
       String blockPoolId = blockGroup.getBlockPoolId();
       NameNodeRpcServer namenode =
           (NameNodeRpcServer) cluster.getNameNodeRpc();
-      CausynthCluster.startRecording();
+      CausymCluster.startRecording();
 
       int initialKeyId = currentKeyId(master);
-      long rotations = CausynthMessagePropagation.beginRequest(
+      long rotations = CausymMessagePropagation.beginRequest(
           namenode.getClientRpcServer(), "rotate-block-keys");
       try {
         for (int rotation = 0; rotation < 2; rotation++) {
-          long causynthRotation = CausynthMessagePropagation.beginTick(
+          long causymRotation = CausymMessagePropagation.beginTick(
               master, "KEY_MANAGER_TICK");
           try {
             master.updateKeys(Long.MAX_VALUE);
           } finally {
-            CausynthMessagePropagation.endTick(causynthRotation);
+            CausymMessagePropagation.endTick(causymRotation);
           }
         }
       } finally {
-        CausynthMessagePropagation.endRequest(rotations, "rotate-block-keys");
+        CausymMessagePropagation.endRequest(rotations, "rotate-block-keys");
       }
-      CausynthCluster.recordingPrecondition(
+      CausymCluster.recordingPrecondition(
           () -> currentKeyId(master) == initialKeyId + 2,
           "the recorded window must rotate the master twice");
       for (DataNode node : nodes) {
@@ -231,7 +231,7 @@ public class TestCausynthStripedReconstructTargetStaleKey {
             .getDatanode(node.getDatanodeId()).setNeedKeyUpdate(true);
       }
       // In the order of the nodes' names, not the cluster's.
-      for (DataNode node : CausynthCluster.dataNodes()) {
+      for (DataNode node : CausymCluster.dataNodes()) {
         refreshKeysFromNameNode(node, "heartbeat");
       }
 
@@ -239,10 +239,10 @@ public class TestCausynthStripedReconstructTargetStaleKey {
           worker.getBlockPoolTokenSecretManager().get(blockPoolId);
       BlockTokenSecretManager targetKeys =
           target.getBlockPoolTokenSecretManager().get(blockPoolId);
-      CausynthCluster.recordingPrecondition(
+      CausymCluster.recordingPrecondition(
           () -> currentKeyId(workerKeys) == currentKeyId(master),
           "the reconstructing node must present the master's current key");
-      CausynthCluster.recordingPrecondition(
+      CausymCluster.recordingPrecondition(
           () -> targetKeys.hasKey(currentKeyId(master)),
           "the target must hold the key its heartbeat delivered");
 
@@ -260,19 +260,19 @@ public class TestCausynthStripedReconstructTargetStaleKey {
       ExtendedBlock rebuilt =
           StripedBlockUtil.constructInternalBlock(blockGroup, policy, 0);
       final DataNode reconstructionTarget = target;
-      long request = CausynthMessagePropagation.beginRequest(
+      long request = CausymMessagePropagation.beginRequest(
           worker.getDatanodeId(), "ec-reconstruct");
       try {
         worker.getErasureCodingWorker().processErasureCodingTasks(
             Collections.singletonList(task));
         GenericTestUtils.waitFor(
             () -> reconstructionTarget.getFSDataset().isValidBlock(rebuilt),
-            50, CausynthCluster.WINDOW_WAIT_MS);
+            50, CausymCluster.WINDOW_WAIT_MS);
         assertTrue(target.getFSDataset().isValidBlock(rebuilt),
             "the target must receive the rebuilt internal block; the recorded"
                 + " reconstruction has to SUCCEED");
       } finally {
-        CausynthMessagePropagation.endRequest(request, "ec-reconstruct");
+        CausymMessagePropagation.endRequest(request, "ec-reconstruct");
       }
     }
   }
@@ -285,7 +285,7 @@ public class TestCausynthStripedReconstructTargetStaleKey {
 
   /**
    * Makes every block-key id the recorded window sees identical across
-   * GraphChecker replay sessions: the NameNode manager seeds serialNo from
+   * Causym replay sessions: the NameNode manager seeds serialNo from
    * SecureRandom once per JVM and each replay task is its own JVM.  Two
    * rotations here retire the constructor-time keys, and those are then
    * dropped everywhere so every manager starts the window holding exactly the
@@ -295,13 +295,13 @@ public class TestCausynthStripedReconstructTargetStaleKey {
     BlockTokenSecretManager master = cluster.getNamesystem()
         .getBlockManager().getBlockTokenSecretManager();
     master.setSerialNo(SERIAL_NO);
-    for (int rotation = 0; rotation < 2; rotation++) { // causynth-d3-rotation-scope
-      long causynthRotation = CausynthMessagePropagation.beginTick(
+    for (int rotation = 0; rotation < 2; rotation++) { // causym-d3-rotation-scope
+      long causymRotation = CausymMessagePropagation.beginTick(
           master, "KEY_MANAGER_TICK");
       try {
         master.updateKeys(Long.MAX_VALUE);
       } finally {
-        CausynthMessagePropagation.endTick(causynthRotation);
+        CausymMessagePropagation.endTick(causymRotation);
       }
     }
     assertEquals(SERIAL_NO + 1, master.getCurrentKey().getKeyId());
@@ -323,10 +323,10 @@ public class TestCausynthStripedReconstructTargetStaleKey {
     }
   }
 
-  /** One key-refresh heartbeat: the one shared helper's (CausynthCluster). */
+  /** One key-refresh heartbeat: the one shared helper's (CausymCluster). */
   private static void refreshKeysFromNameNode(DataNode datanode, String api)
       throws IOException {
-    CausynthCluster.refreshKeysFromNameNode(datanode, api);
+    CausymCluster.refreshKeysFromNameNode(datanode, api);
   }
 
   /** The private allKeys map; BlockTokenSecretManager has no test accessor. */
@@ -372,12 +372,12 @@ public class TestCausynthStripedReconstructTargetStaleKey {
   private static void registerSources(MiniDFSCluster cluster, DataNode worker,
       DataNode helper, DataNode lost, DataNode target) {
     // Every node, registered whole, before any traffic the recording
-    // depends on (CausynthCluster).
-    CausynthCluster.registerNameNode(cluster, 0, "hdfs-17967/nn0");
-    CausynthCluster.registerDataNode(worker, "hdfs-17967/worker-dn");
-    CausynthCluster.registerDataNode(helper, "hdfs-17967/helper-dn");
-    CausynthCluster.registerDataNode(lost, "hdfs-17967/lost-dn");
-    CausynthCluster.registerDataNode(target, "hdfs-17967/target-dn");
-    CausynthCluster.registerOtherDataNodes(cluster, "hdfs-17967");
+    // depends on (CausymCluster).
+    CausymCluster.registerNameNode(cluster, 0, "hdfs-17967/nn0");
+    CausymCluster.registerDataNode(worker, "hdfs-17967/worker-dn");
+    CausymCluster.registerDataNode(helper, "hdfs-17967/helper-dn");
+    CausymCluster.registerDataNode(lost, "hdfs-17967/lost-dn");
+    CausymCluster.registerDataNode(target, "hdfs-17967/target-dn");
+    CausymCluster.registerOtherDataNodes(cluster, "hdfs-17967");
   }
 }

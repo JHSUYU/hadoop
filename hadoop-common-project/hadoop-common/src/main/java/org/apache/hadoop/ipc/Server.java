@@ -1018,19 +1018,19 @@ public abstract class Server {
     private ByteString federatedNamespaceState;
 
     /** The scope this call was built in, carried to the handler
-     * that runs it: the pool never inherits it. // causynth-d3-lineage */
-    final Object causynthScope =
-        CausynthMessagePropagation.captureScope();
+     * that runs it: the pool never inherits it. // causym-d3-lineage */
+    final Object causymScope =
+        CausymMessagePropagation.captureScope();
 
-    /** GraphChecker: opens the exchange this call is on the handler that
+    /** Causym: opens the exchange this call is on the handler that
      * runs it, before any of its work, the remote user's doAs included, so
      * every occurrence the call runs stands on its own message; a call no
      * message carried opens none. */
-    void causynthEnter() {
+    void causymEnter() {
     }
 
-    /** GraphChecker: closes what {@link #causynthEnter} opened. */
-    void causynthExit() {
+    /** Causym: closes what {@link #causymEnter} opened. */
+    void causymExit() {
     }
 
     Call() {
@@ -1244,11 +1244,11 @@ public abstract class Server {
     final Connection connection;  // connection to client
     final Writable rpcRequest;    // Serialized Rpc request from client
     ByteBuffer rpcResponse;       // the response for this call
-    String causynthTrace = "";
-    String causynthSymbolic = "";
-    // GraphChecker: the exchange this call is, while a handler runs it.
-    private long causynthCall;
-    private CausynthMessagePropagation.Inbound causynthInbound;
+    String causymTrace = "";
+    String causymSymbolic = "";
+    // Causym: the exchange this call is, while a handler runs it.
+    private long causymCall;
+    private CausymMessagePropagation.Inbound causymInbound;
 
     private ResponseParams responseParams; // the response params
     private Writable rv;                   // the byte response
@@ -1259,8 +1259,8 @@ public abstract class Server {
       this.rpcRequest = call.rpcRequest;
       this.rv = call.rv;
       this.responseParams = call.responseParams;
-      this.causynthTrace = call.causynthTrace;
-      this.causynthSymbolic = call.causynthSymbolic;
+      this.causymTrace = call.causymTrace;
+      this.causymSymbolic = call.causymSymbolic;
     }
 
     RpcCall(Connection connection, int id) {
@@ -1357,19 +1357,19 @@ public abstract class Server {
     }
 
     @Override
-    void causynthEnter() {
-      causynthCall = CausynthMessagePropagation
-          .enterCarriedScope(causynthScope, "IPC_HANDLER", null);
-      causynthInbound = CausynthMessagePropagation.inbound(causynthTrace,
-          causynthSymbolic, CausynthMessagePropagation.IPC,
-          CausynthMessagePropagation.rpcCorrelation(clientId, callId),
+    void causymEnter() {
+      causymCall = CausymMessagePropagation
+          .enterCarriedScope(causymScope, "IPC_HANDLER", null);
+      causymInbound = CausymMessagePropagation.inbound(causymTrace,
+          causymSymbolic, CausymMessagePropagation.IPC,
+          CausymMessagePropagation.rpcCorrelation(clientId, callId),
           Integer.toString(retryCount), "REQUEST", Server.this);
     }
 
     @Override
-    void causynthExit() {
-      CausynthMessagePropagation.endInbound(causynthInbound);
-      CausynthMessagePropagation.exitCarriedScope(causynthCall);
+    void causymExit() {
+      CausymMessagePropagation.endInbound(causymInbound);
+      CausymMessagePropagation.exitCarriedScope(causymCall);
     }
 
     /**
@@ -3062,10 +3062,10 @@ public abstract class Server {
             header.getRetryCount(), rpcRequest,
             ProtoUtil.convert(header.getRpcKind()),
             header.getClientId().toByteArray(), span, callerContext, authHeader);
-        call.causynthTrace = header.hasCausynthTrace()
-            ? header.getCausynthTrace() : "";
-        call.causynthSymbolic = header.hasCausynthSymbolic()
-            ? header.getCausynthSymbolic() : "";
+        call.causymTrace = header.hasCausymTrace()
+            ? header.getCausymTrace() : "";
+        call.causymSymbolic = header.hasCausymSymbolic()
+            ? header.getCausymSymbolic() : "";
 
         // Save the priority level assignment by the scheduler
         call.setPriorityLevel(callQueue.getPriorityLevel(call));
@@ -3253,14 +3253,14 @@ public abstract class Server {
 
   private void internalQueueCall(Call call, boolean blocking)
       throws IOException, InterruptedException {
-    // GraphChecker: the hand-off of a received call is named by its request,
+    // Causym: the hand-off of a received call is named by its request,
     // not by how many calls its connection carried before.
-    Object causynthHandoff =
-        CausynthMessagePropagation.handingOff(call.clientId, call.callId);
+    Object causymHandoff =
+        CausymMessagePropagation.handingOff(call.clientId, call.callId);
     try {
       internalQueueCallNamed(call, blocking);
     } finally {
-      CausynthMessagePropagation.handedOff(causynthHandoff);
+      CausymMessagePropagation.handedOff(causymHandoff);
     }
   }
 
@@ -3351,8 +3351,8 @@ public abstract class Server {
           AuthorizationContext.setCurrentAuthorizationHeader(call.authHeader);
           UserGroupInformation remoteUser = call.getRemoteUser();
           connDropped = !call.isOpen();
-          // GraphChecker: the call's exchange opens before any of its work.
-          call.causynthEnter();
+          // Causym: the call's exchange opens before any of its work.
+          call.causymEnter();
           try {
             if (remoteUser != null) {
               remoteUser.doAs(call);
@@ -3360,7 +3360,7 @@ public abstract class Server {
               call.run();
             }
           } finally {
-            call.causynthExit();
+            call.causymExit();
           }
         } catch (InterruptedException e) {
           if (running) {                          // unexpected -- log it
@@ -3682,16 +3682,16 @@ public abstract class Server {
     headerBuilder.setRetryCount(call.retryCount);
     headerBuilder.setStatus(status);
     headerBuilder.setServerIpcVersionNum(CURRENT_VERSION);
-    // GraphChecker: the response door is handed the response it carries.
-    CausynthMessagePropagation.Outbound causynth =
-        CausynthMessagePropagation.outboundResponse(
-            CausynthMessagePropagation.IPC,
-            CausynthMessagePropagation.rpcCorrelation(call.clientId,
+    // Causym: the response door is handed the response it carries.
+    CausymMessagePropagation.Outbound causym =
+        CausymMessagePropagation.outboundResponse(
+            CausymMessagePropagation.IPC,
+            CausymMessagePropagation.rpcCorrelation(call.clientId,
                 call.callId), Integer.toString(call.retryCount), this, rv);
-    if (causynth.active()) {
-      headerBuilder.setCausynthTrace(causynth.trace);
-      if (!causynth.symbolic.isEmpty()) {
-        headerBuilder.setCausynthSymbolic(causynth.symbolic);
+    if (causym.active()) {
+      headerBuilder.setCausymTrace(causym.trace);
+      if (!causym.symbolic.isEmpty()) {
+        headerBuilder.setCausymSymbolic(causym.symbolic);
       }
     }
     if (alignmentContext != null) {

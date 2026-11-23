@@ -17,7 +17,7 @@
  */
 package org.apache.hadoop.hdfs.server.namenode;
 
-import edu.uva.liftlab.graphchecker.annotation.CausynthExceptionTarget;
+import edu.uva.liftlab.causym.annotation.CausymExceptionTarget;
 import org.apache.commons.lang3.tuple.Pair;
 import org.apache.hadoop.hdfs.protocol.HdfsConstants;
 import org.apache.hadoop.util.Preconditions;
@@ -911,7 +911,7 @@ class FSDirRenameOp {
         String errMsg = "Source " + srcIIP.getPath() +
             " and dest " + dstIIP.getPath() + " are not under " +
             "the same snapshot root.";
-        throw new @CausynthExceptionTarget("hdfs-adhoc-41") SnapshotException(errMsg);
+        throw new @CausymExceptionTarget("hdfs-adhoc-41") SnapshotException(errMsg);
       }
     }
   }
