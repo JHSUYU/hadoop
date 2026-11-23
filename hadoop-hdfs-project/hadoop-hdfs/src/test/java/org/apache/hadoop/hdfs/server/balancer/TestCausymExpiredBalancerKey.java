@@ -58,11 +58,11 @@ import org.apache.hadoop.hdfs.protocol.proto.DataTransferProtos.Status;
 import org.apache.hadoop.hdfs.security.token.block.BlockKey;
 import org.apache.hadoop.hdfs.security.token.block.BlockTokenIdentifier;
 import org.apache.hadoop.hdfs.security.token.block.BlockTokenSecretManager;
-import org.apache.hadoop.hdfs.server.datanode.CausynthCluster;
+import org.apache.hadoop.hdfs.server.datanode.CausymCluster;
 import org.apache.hadoop.hdfs.server.datanode.DataNode;
 import org.apache.hadoop.hdfs.server.namenode.NameNodeRpcServer;
 import org.apache.hadoop.hdfs.server.protocol.NamenodeProtocol;
-import org.apache.hadoop.ipc.CausynthMessagePropagation;
+import org.apache.hadoop.ipc.CausymMessagePropagation;
 import org.apache.hadoop.ipc.RPC;
 import org.apache.hadoop.net.NetUtils;
 import org.apache.hadoop.security.token.Token;
@@ -81,7 +81,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * DataNode has removed: the destination's {@code retrieveDataEncryptionKey}
  * finds no block key for the id and the move fails.
  *
- * <p>The shape is {@link TestCausynthBalancerCachedKey}'s (hdfs-17899 bug1):
+ * <p>The shape is {@link TestCausymBalancerCachedKey}'s (hdfs-17899 bug1):
  * the mover is the test holding a real {@link KeyManager}, which takes its
  * keys from the NameNode over the recorded RPC, caches its encryption key in
  * {@link KeyManager#newDataEncryptionKey()} and signs the move's access token
@@ -102,7 +102,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * keys' serial numbers are pinned before the window, so only the clocks
  * decide it.</p>
  */
-public class TestCausynthExpiredBalancerKey {
+public class TestCausymExpiredBalancerKey {
   /** Block-key serial number pinned by {@link #pinBlockKeys}. */
   private static final int SERIAL_NO = Integer.MAX_VALUE / 11741;
 
@@ -110,7 +110,7 @@ public class TestCausynthExpiredBalancerKey {
   @Timeout(180)
   public void testBlockMoveWithCachedKeyAfterRotations() throws Exception {
     // Nothing set up before the window expires on the wall clock.
-    Configuration conf = CausynthCluster.configure(new HdfsConfiguration());
+    Configuration conf = CausymCluster.configure(new HdfsConfiguration());
     conf.setBoolean(DFSConfigKeys.DFS_ENCRYPT_DATA_TRANSFER_KEY, true);
     conf.setBoolean(DFSConfigKeys.DFS_BLOCK_ACCESS_TOKEN_ENABLE_KEY, true);
     conf.setInt(DFSConfigKeys.DFS_CLIENT_SOCKET_TIMEOUT_KEY, 10 * 60 * 1000);
@@ -141,7 +141,7 @@ public class TestCausynthExpiredBalancerKey {
         TimeUnit.HOURS.toSeconds(6));
     try (MiniDFSCluster cluster = new MiniDFSCluster.Builder(conf)
         .numDataNodes(2)
-        .dataNodeConfOverlays(CausynthCluster.dataNodeOverlays(2)).build();
+        .dataNodeConfOverlays(CausymCluster.dataNodeOverlays(2)).build();
          DistributedFileSystem fs = cluster.getFileSystem()) {
       cluster.waitActive();
 
@@ -150,9 +150,9 @@ public class TestCausynthExpiredBalancerKey {
       // one per move.
       DataNode proxy = cluster.getDataNodes().get(0);
       DataNode target = cluster.getDataNodes().get(1);
-      ExtendedBlock first = writeBlock(fs, "/causynth-hdfs-11741-first",
+      ExtendedBlock first = writeBlock(fs, "/causym-hdfs-11741-first",
           proxy);
-      ExtendedBlock second = writeBlock(fs, "/causynth-hdfs-11741-second",
+      ExtendedBlock second = writeBlock(fs, "/causym-hdfs-11741-second",
           proxy);
 
       pinBlockKeys(cluster);
@@ -161,52 +161,52 @@ public class TestCausynthExpiredBalancerKey {
       String blockPoolId = first.getBlockPoolId();
       NameNodeRpcServer namenode =
           (NameNodeRpcServer) cluster.getNameNodeRpc();
-      CausynthCluster.registerNameNode(cluster, 0, "hdfs-11741/nn0");
-      CausynthCluster.registerDataNode(proxy, "hdfs-11741/proxy-dn");
-      CausynthCluster.registerDataNode(target, "hdfs-11741/target-dn");
-      CausynthMessagePropagation.registerSource(this, "EXTERNAL_APP",
+      CausymCluster.registerNameNode(cluster, 0, "hdfs-11741/nn0");
+      CausymCluster.registerDataNode(proxy, "hdfs-11741/proxy-dn");
+      CausymCluster.registerDataNode(target, "hdfs-11741/target-dn");
+      CausymMessagePropagation.registerSource(this, "EXTERNAL_APP",
           "BALANCER", "hdfs-11741/balancer", 0);
 
       NamenodeProtocol rpc = NameNodeProxies.createProxy(conf, fs.getUri(),
           NamenodeProtocol.class).getProxy();
       KeyManager keyManager = null;
       try {
-        CausynthCluster.startRecording();
+        CausymCluster.startRecording();
 
         // 1. The master rotates once, and every DataNode takes the keys over
         //    its own heartbeat: the cluster's keys are in step, the current
         //    key's expiry written by a recorded NameNode clock.
         rotate(namenode, master, 1);
-        CausynthCluster.recordingPrecondition(
+        CausymCluster.recordingPrecondition(
             () -> currentKeyId(master) == SERIAL_NO + 2,
             "the first rotation must make the second pinned key current");
         refreshDataNodes(cluster);
 
         // 2. The Balancer starts: its KeyManager takes the NameNode's keys
         //    over its own RPC.
-        long fetch = CausynthMessagePropagation.beginRequest(this,
+        long fetch = CausymMessagePropagation.beginRequest(this,
             "fetch-block-keys");
         try {
           keyManager = new KeyManager(blockPoolId, rpc, true, conf);
-          CausynthMessagePropagation.registerSourceAlias(keyManager, this);
+          CausymMessagePropagation.registerSourceAlias(keyManager, this);
         } finally {
-          CausynthMessagePropagation.endRequest(fetch, "fetch-block-keys");
+          CausymMessagePropagation.endRequest(fetch, "fetch-block-keys");
         }
 
         // 3. Its first move mints the encryption key it caches, from the
         //    master's current block key, and succeeds.
-        long balance = CausynthMessagePropagation.beginRequest(this,
+        long balance = CausymMessagePropagation.beginRequest(this,
             "balance-block");
         int cached;
         try {
           cached = keyManager.newDataEncryptionKey().keyId;
-          CausynthCluster.recordingPrecondition(
+          CausymCluster.recordingPrecondition(
               () -> cached == SERIAL_NO + 2,
               "the balancer must cache a key of the master's current block"
                   + " key");
           move(conf, keyManager, proxy, target, first);
         } finally {
-          CausynthMessagePropagation.endRequest(balance, "balance-block");
+          CausymMessagePropagation.endRequest(balance, "balance-block");
         }
 
         // 4. The master rotates twice: the cached key's block key is retired
@@ -215,38 +215,38 @@ public class TestCausynthExpiredBalancerKey {
         //    its own heartbeat, whose addKeys first runs removeExpiredKeys on
         //    the node's clock.
         rotate(namenode, master, 2);
-        CausynthCluster.recordingPrecondition(
+        CausymCluster.recordingPrecondition(
             () -> currentKeyId(master) == SERIAL_NO + 4,
             "the master must be two rotations past the cached key");
         refreshDataNodes(cluster);
 
         // 5. The Balancer's key updater turn: its block keys follow the
         //    master, its cached encryption key does not.
-        long refresh = CausynthMessagePropagation.beginRequest(this,
+        long refresh = CausymMessagePropagation.beginRequest(this,
             "refresh-block-keys");
         try {
           keyManager.updateBlockKeys();
         } finally {
-          CausynthMessagePropagation.endRequest(refresh, "refresh-block-keys");
+          CausymMessagePropagation.endRequest(refresh, "refresh-block-keys");
         }
 
         // 6. The second move presents the cached key.
-        balance = CausynthMessagePropagation.beginRequest(this,
+        balance = CausymMessagePropagation.beginRequest(this,
             "balance-block");
         try {
           int presented = keyManager.newDataEncryptionKey().keyId;
-          CausynthCluster.recordingPrecondition(
+          CausymCluster.recordingPrecondition(
               () -> presented == cached && presented != currentKeyId(master),
               "the balancer must present its cached key, behind the master's");
           BlockTokenSecretManager targetKeys =
               target.getBlockPoolTokenSecretManager().get(blockPoolId);
-          CausynthCluster.recordingPrecondition(
+          CausymCluster.recordingPrecondition(
               () -> targetKeys.hasKey(presented),
               "the destination must still hold the retired key, or the"
                   + " recording is already the failure");
           move(conf, keyManager, proxy, target, second);
         } finally {
-          CausynthMessagePropagation.endRequest(balance, "balance-block");
+          CausymMessagePropagation.endRequest(balance, "balance-block");
         }
       } finally {
         if (keyManager != null) {
@@ -257,11 +257,11 @@ public class TestCausynthExpiredBalancerKey {
     }
   }
 
-  /** A block of one replica, written to {@code holder} (CausynthCluster). */
+  /** A block of one replica, written to {@code holder} (CausymCluster). */
   private static ExtendedBlock writeBlock(DistributedFileSystem fs,
       String name, DataNode holder) throws IOException {
     Path path = new Path(name);
-    try (FSDataOutputStream out = CausynthCluster.createOnNode(fs, path,
+    try (FSDataOutputStream out = CausymCluster.createOnNode(fs, path,
         holder)) {
       out.write(new byte[]{1, 2, 3, 4});
     }
@@ -289,7 +289,7 @@ public class TestCausynthExpiredBalancerKey {
         "the recorded move must SUCCEED: the destination holds the key");
     GenericTestUtils.waitFor(
         () -> target.getFSDataset().isValidBlock(block), 20,
-        CausynthCluster.WINDOW_WAIT_MS);
+        CausymCluster.WINDOW_WAIT_MS);
     assertTrue(target.getFSDataset().isValidBlock(block),
         "the destination must receive the block from the proxy");
   }
@@ -297,35 +297,35 @@ public class TestCausynthExpiredBalancerKey {
   /** {@code rotations} rotations of the master, one key-manager tick each. */
   private static void rotate(NameNodeRpcServer namenode,
       BlockTokenSecretManager master, int rotations) throws IOException {
-    long request = CausynthMessagePropagation.beginRequest(
+    long request = CausymMessagePropagation.beginRequest(
         namenode.getClientRpcServer(), "rotate-block-keys");
     try {
       for (int rotation = 0; rotation < rotations; rotation++) {
-        long tick = CausynthMessagePropagation.beginTick(master,
+        long tick = CausymMessagePropagation.beginTick(master,
             "KEY_MANAGER_TICK");
         try {
           master.updateKeys(Long.MAX_VALUE);
         } finally {
-          CausynthMessagePropagation.endTick(tick);
+          CausymMessagePropagation.endTick(tick);
         }
       }
     } finally {
-      CausynthMessagePropagation.endRequest(request, "rotate-block-keys");
+      CausymMessagePropagation.endRequest(request, "rotate-block-keys");
     }
   }
 
   /**
-   * Each DataNode, in the order of the nodes' names (CausynthCluster), marked
+   * Each DataNode, in the order of the nodes' names (CausymCluster), marked
    * for a key update as the NameNode marks it after a rotation and at once
    * sent one key-refresh heartbeat: the mark is taken by this heartbeat, not
    * by a daemon heartbeat whose command another thread applies later.
    */
   private static void refreshDataNodes(MiniDFSCluster cluster)
       throws IOException {
-    for (DataNode node : CausynthCluster.dataNodes()) {
+    for (DataNode node : CausymCluster.dataNodes()) {
       cluster.getNamesystem().getBlockManager().getDatanodeManager()
           .getDatanode(node.getDatanodeId()).setNeedKeyUpdate(true);
-      CausynthCluster.refreshKeysFromNameNode(node, "heartbeat");
+      CausymCluster.refreshKeysFromNameNode(node, "heartbeat");
     }
   }
 
@@ -333,7 +333,7 @@ public class TestCausynthExpiredBalancerKey {
    * Sends one REPLACE_BLOCK over an encrypted connection, the way
    * {@code Dispatcher.PendingMove.dispatch} does, with the Balancer's
    * {@link KeyManager} as the encryption-key factory
-   * (TestCausynthBalancerCachedKey).
+   * (TestCausymBalancerCachedKey).
    */
   private static Status sendReplaceBlock(Configuration conf,
       KeyManager keyManager, DataNode target, ExtendedBlock block,
@@ -388,23 +388,23 @@ public class TestCausynthExpiredBalancerKey {
 
   /**
    * Makes every block-key id the recorded window sees identical across
-   * GraphChecker replay sessions: the NameNode manager seeds serialNo from
+   * Causym replay sessions: the NameNode manager seeds serialNo from
    * SecureRandom once per JVM and each replay task is its own JVM.  Two
    * rotations here retire the constructor-time keys, and those are then
    * dropped everywhere so every manager starts the window holding exactly the
-   * pinned pair (TestCausynthBalancerCachedKey).
+   * pinned pair (TestCausymBalancerCachedKey).
    */
   private static void pinBlockKeys(MiniDFSCluster cluster) throws Exception {
     BlockTokenSecretManager master = cluster.getNamesystem()
         .getBlockManager().getBlockTokenSecretManager();
     master.setSerialNo(SERIAL_NO);
     for (int rotation = 0; rotation < 2; rotation++) {
-      long causynthRotation = CausynthMessagePropagation.beginTick(
+      long causymRotation = CausymMessagePropagation.beginTick(
           master, "KEY_MANAGER_TICK");
       try {
         master.updateKeys(Long.MAX_VALUE);
       } finally {
-        CausynthMessagePropagation.endTick(causynthRotation);
+        CausymMessagePropagation.endTick(causymRotation);
       }
     }
     assertEquals(SERIAL_NO + 1, master.getCurrentKey().getKeyId());

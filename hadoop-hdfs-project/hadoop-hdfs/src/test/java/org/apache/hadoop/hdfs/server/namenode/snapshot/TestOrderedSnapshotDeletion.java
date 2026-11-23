@@ -29,7 +29,7 @@ import org.apache.hadoop.hdfs.XAttrHelper;
 import org.apache.hadoop.hdfs.server.namenode.INode;
 import org.apache.hadoop.hdfs.server.namenode.NameNodeRpcServer;
 import org.apache.hadoop.hdfs.server.namenode.XAttrFeature;
-import org.apache.hadoop.ipc.CausynthMessagePropagation;
+import org.apache.hadoop.ipc.CausymMessagePropagation;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -90,9 +90,9 @@ public class TestOrderedSnapshotDeletion {
 
     cluster = new MiniDFSCluster.Builder(conf).numDataNodes(0).build();
     cluster.waitActive();
-    CausynthMessagePropagation.registerSource(
+    CausymMessagePropagation.registerSource(
         this, "EXTERNAL_APP", "HDFS_CLIENT", "hdfs-17960/client", 0);
-    CausynthMessagePropagation.registerSource(
+    CausymMessagePropagation.registerSource(
         cluster, "CLUSTER_NODE", "NAMENODE", "hdfs-17960/nn0", 0);
     bindNameNodeAliases();
   }
@@ -247,9 +247,9 @@ public class TestOrderedSnapshotDeletion {
   @Timeout(value = 6000)
   public void testOrderedDeletionWithRestart() throws Exception {
     DistributedFileSystem hdfs = cluster.getFileSystem();
-    CausynthMessagePropagation.startRecording();
+    CausymMessagePropagation.startRecording();
 
-    long createRequest = CausynthMessagePropagation.beginRequest(
+    long createRequest = CausymMessagePropagation.beginRequest(
         this, "create-snapshots");
     try {
       hdfs.mkdirs(snapshottableDir);
@@ -263,17 +263,17 @@ public class TestOrderedSnapshotDeletion {
       hdfs.mkdirs(sub1);
       hdfs.createSnapshot(snapshottableDir, "s1");
     } finally {
-      CausynthMessagePropagation.endRequest(
+      CausymMessagePropagation.endRequest(
           createRequest, "create-snapshots");
     }
 
-    long deleteRequest = CausynthMessagePropagation.beginRequest(
+    long deleteRequest = CausymMessagePropagation.beginRequest(
         this, "record-ordered-deletes");
     try {
       assertXAttrSet("s1", hdfs, null);
       assertXAttrSet("s1", hdfs, null);
     } finally {
-      CausynthMessagePropagation.endRequest(
+      CausymMessagePropagation.endRequest(
           deleteRequest, "record-ordered-deletes");
     }
 
@@ -289,15 +289,15 @@ public class TestOrderedSnapshotDeletion {
     // which is the shape the concolic search is supposed to find.
     cluster.getNameNode().getConf().setBoolean(
         DFS_NAMENODE_SNAPSHOT_DELETION_ORDERED, true);
-    CausynthMessagePropagation.restartSource(
+    CausymMessagePropagation.restartSource(
         cluster, "CLUSTER_NODE", "NAMENODE", "hdfs-17960/nn0", 1);
-    long restartRequest = CausynthMessagePropagation.beginRequest(
+    long restartRequest = CausymMessagePropagation.beginRequest(
         cluster, "restart-namenode");
     try {
       cluster.restartNameNodes();
       bindNameNodeAliases();
     } finally {
-      CausynthMessagePropagation.endRequest(
+      CausymMessagePropagation.endRequest(
           restartRequest, "restart-namenode");
     }
     // Healthy replay: both snapshots survive the two duplicate deletion
@@ -313,12 +313,12 @@ public class TestOrderedSnapshotDeletion {
     // recorded.  The failure this campaign is about is the count mismatch
     // inside FSImageFormatPBSnapshot.Saver.serializeSnapshotSection, and
     // nothing here weakens it.
-    System.out.println("[causynth] post-restart snapshotListing="
+    System.out.println("[causym] post-restart snapshotListing="
         + hdfs.getSnapshotListing(snapshottableDir).length
         + " numSnapshots="
         + cluster.getNamesystem().getSnapshotManager().getNumSnapshots());
 
-    long checkpointRequest = CausynthMessagePropagation.beginRequest(
+    long checkpointRequest = CausymMessagePropagation.beginRequest(
         this, "checkpoint-namespace");
     try {
       hdfs.setSafeMode(SafeModeAction.ENTER);
@@ -330,16 +330,16 @@ public class TestOrderedSnapshotDeletion {
       hdfs.saveNamespace();
       hdfs.setSafeMode(SafeModeAction.LEAVE);
     } finally {
-      CausynthMessagePropagation.endRequest(
+      CausymMessagePropagation.endRequest(
           checkpointRequest, "checkpoint-namespace");
     }
   }
 
   private void bindNameNodeAliases() {
-    CausynthMessagePropagation.registerSourceAlias(
+    CausymMessagePropagation.registerSourceAlias(
         cluster.getNameNode(), cluster);
     NameNodeRpcServer rpc = (NameNodeRpcServer) cluster.getNameNodeRpc();
-    CausynthMessagePropagation.registerSourceAlias(
+    CausymMessagePropagation.registerSourceAlias(
         rpc.getClientRpcServer(), cluster);
   }
 
