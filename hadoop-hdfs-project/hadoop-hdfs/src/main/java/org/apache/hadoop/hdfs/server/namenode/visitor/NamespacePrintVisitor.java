@@ -17,7 +17,7 @@
  */
 package org.apache.hadoop.hdfs.server.namenode.visitor;
 
-import edu.uva.liftlab.graphchecker.annotation.CausynthExceptionTarget;
+import edu.uva.liftlab.causym.annotation.CausymExceptionTarget;
 import org.apache.hadoop.hdfs.server.namenode.DirectoryWithQuotaFeature;
 import org.apache.hadoop.hdfs.server.namenode.FSNamesystem;
 import org.apache.hadoop.hdfs.server.namenode.INode;
@@ -158,7 +158,7 @@ public final class NamespacePrintVisitor implements NamespaceVisitor {
     }
     final int numSnapshots = snapshottable.getNumSnapshots();
     if (!(n == numSnapshots)) {
-      throw new @CausynthExceptionTarget("hdfs-adhoc-53") IllegalStateException(
+      throw new @CausymExceptionTarget("hdfs-adhoc-53") IllegalStateException(
           "numSnapshots = " + numSnapshots + " != " + n);
     }
     out.print(", #snapshot=");

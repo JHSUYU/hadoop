@@ -182,9 +182,9 @@ public class Client implements AutoCloseable {
     return retryCount.get() != null ? retryCount.get() : 0;
   }
 
-  /** GraphChecker: the attempt the next call on this thread is -- the
+  /** Causym: the attempt the next call on this thread is -- the
    * retry count a retry handler set with its call id -- else 0. */
-  static int causynthAttempt() {
+  static int causymAttempt() {
     return callId.get() == null ? 0 : getRetryCount();
   }
 
@@ -342,12 +342,12 @@ public class Client implements AutoCloseable {
     final RPC.RpcKind rpcKind;      // Rpc EngineKind
     private final Object externalHandler;
     private AlignmentContext alignmentContext;
-    private String causynthTrace = "";
-    private String causynthSymbolic = "";
+    private String causymTrace = "";
+    private String causymSymbolic = "";
     /** The request scope this call was created in, captured on the thread
      * that created it and carried with it to the send. */
-    private final Object causynthScope =
-        CausynthMessagePropagation.captureScope();
+    private final Object causymScope =
+        CausymMessagePropagation.captureScope();
 
     private Call(RPC.RpcKind rpcKind, Writable param) {
       this.rpcKind = rpcKind;
@@ -416,11 +416,11 @@ public class Client implements AutoCloseable {
       callComplete();
     }
 
-    private void setCausynthResponse(RpcResponseHeaderProto header) {
-      causynthTrace = header.hasCausynthTrace()
-          ? header.getCausynthTrace() : "";
-      causynthSymbolic = header.hasCausynthSymbolic()
-          ? header.getCausynthSymbolic() : "";
+    private void setCausymResponse(RpcResponseHeaderProto header) {
+      causymTrace = header.hasCausymTrace()
+          ? header.getCausymTrace() : "";
+      causymSymbolic = header.hasCausymSymbolic()
+          ? header.getCausymSymbolic() : "";
     }
   }
 
@@ -1240,20 +1240,20 @@ public class Client implements AutoCloseable {
       // 2) RpcRequest
       //
       // Items '1' and '2' are prepared here. 
-      String correlationId = CausynthMessagePropagation.rpcCorrelation(
+      String correlationId = CausymMessagePropagation.rpcCorrelation(
           clientId, call.id);
-      CausynthMessagePropagation.Outbound causynth =
-          CausynthMessagePropagation.outboundRequest(
-              CausynthMessagePropagation.IPC, correlationId,
+      CausymMessagePropagation.Outbound causym =
+          CausymMessagePropagation.outboundRequest(
+              CausymMessagePropagation.IPC, correlationId,
               Integer.toString(call.retry), Client.this,
-              call.causynthScope, call.rpcRequest);
+              call.causymScope, call.rpcRequest);
       RpcRequestHeaderProto.Builder header = ProtoUtil.makeRpcRequestHeader(
           call.rpcKind, OperationProto.RPC_FINAL_PACKET, call.id, call.retry,
           clientId, call.alignmentContext).toBuilder();
-      if (causynth.active()) {
-        header.setCausynthTrace(causynth.trace);
-        if (!causynth.symbolic.isEmpty()) {
-          header.setCausynthSymbolic(causynth.symbolic);
+      if (causym.active()) {
+        header.setCausymTrace(causym.trace);
+        if (!causym.symbolic.isEmpty()) {
+          header.setCausymSymbolic(causym.symbolic);
         }
       }
 
@@ -1294,7 +1294,7 @@ public class Client implements AutoCloseable {
         if (status == RpcStatusProto.SUCCESS) {
           Writable value = packet.newInstance(valueClass, conf);
           final Call call = calls.remove(callId);
-          call.setCausynthResponse(header);
+          call.setCausymResponse(header);
           if (call.alignmentContext != null) {
             call.alignmentContext.receiveResponseState(header);
           }
@@ -1318,7 +1318,7 @@ public class Client implements AutoCloseable {
           RemoteException re = new RemoteException(exceptionClassName, errorMsg, erCode);
           if (status == RpcStatusProto.ERROR) {
             final Call call = calls.remove(callId);
-            call.setCausynthResponse(header);
+            call.setCausymResponse(header);
             call.setException(re);
           } else if (status == RpcStatusProto.FATAL) {
             // Close the connection
@@ -1630,13 +1630,13 @@ public class Client implements AutoCloseable {
       throws IOException {
     try {
       Writable response = call.rpcResponseFuture.get();
-      installCausynthResponse(call);
+      installCausymResponse(call);
       return response;
     } catch (InterruptedException ie) {
       Thread.currentThread().interrupt();
       throw new InterruptedIOException("Call interrupted");
     } catch (ExecutionException e) {
-      installCausynthResponse(call);
+      installCausymResponse(call);
       Throwable cause = e.getCause();
       if (cause instanceof IOException) {
         throw warpIOException((IOException) cause, connection);
@@ -1645,13 +1645,13 @@ public class Client implements AutoCloseable {
     }
   }
 
-  private void installCausynthResponse(Call call) {
-    if (call.causynthTrace.isEmpty() && call.causynthSymbolic.isEmpty()) {
+  private void installCausymResponse(Call call) {
+    if (call.causymTrace.isEmpty() && call.causymSymbolic.isEmpty()) {
       return;
     }
-    CausynthMessagePropagation.inbound(call.causynthTrace,
-        call.causynthSymbolic, CausynthMessagePropagation.IPC,
-        CausynthMessagePropagation.rpcCorrelation(clientId, call.id),
+    CausymMessagePropagation.inbound(call.causymTrace,
+        call.causymSymbolic, CausymMessagePropagation.IPC,
+        CausymMessagePropagation.rpcCorrelation(clientId, call.id),
         Integer.toString(call.retry), "RESPONSE", this);
   }
 

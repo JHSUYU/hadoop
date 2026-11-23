@@ -17,7 +17,7 @@
  */
 package org.apache.hadoop.hdfs.qjournal.server;
 
-import edu.uva.liftlab.graphchecker.annotation.CausynthExceptionTarget;
+import edu.uva.liftlab.causym.annotation.CausymExceptionTarget;
 import org.apache.hadoop.thirdparty.protobuf.ByteString;
 import java.io.Closeable;
 import java.io.File;
@@ -485,7 +485,7 @@ public class Journal implements Closeable {
   private synchronized void checkRequest(RequestInfo reqInfo) throws IOException {
     // Invariant 25 from ZAB paper
     if (reqInfo.getEpoch() < lastPromisedEpoch.get()) {
-      throw new @CausynthExceptionTarget("hdfs-adhoc-08")
+      throw new @CausymExceptionTarget("hdfs-adhoc-08")
           IOException("IPC's epoch " + reqInfo.getEpoch() +
           " is less than the last promised epoch " +
           lastPromisedEpoch.get() + " ; journal id: " + journalId);
@@ -504,7 +504,7 @@ public class Journal implements Closeable {
 
     if (reqInfo.hasCommittedTxId()) {
       if (!(reqInfo.getCommittedTxId() >= committedTxnId.get())) {
-        throw new @CausynthExceptionTarget("hdfs-adhoc-09") IllegalArgumentException(
+        throw new @CausymExceptionTarget("hdfs-adhoc-09") IllegalArgumentException(
             "Client trying to move committed txid backward from " +
             committedTxnId.get() + " to " + reqInfo.getCommittedTxId() +
                 " ; journal id: " + journalId);
@@ -518,7 +518,7 @@ public class Journal implements Closeable {
     checkRequest(reqInfo);
     
     if (reqInfo.getEpoch() != lastWriterEpoch.get()) {
-      throw new @CausynthExceptionTarget("hdfs-adhoc-10,hdfs-inj-05,hdfs-inj-05-control")
+      throw new @CausymExceptionTarget("hdfs-adhoc-10,hdfs-inj-05,hdfs-inj-05-control")
           IOException("IPC's epoch " + reqInfo.getEpoch() +
           " is not the current writer epoch  " +
           lastWriterEpoch.get() + " ; journal id: " + journalId);
@@ -927,7 +927,7 @@ public class Journal implements Closeable {
         // which are already Committed.
         if (txnRange(currentSegment).contains(committedTxnId.get()) &&
             !txnRange(segment).contains(committedTxnId.get())) {
-          throw new @CausynthExceptionTarget("hdfs-adhoc-07") AssertionError(
+          throw new @CausymExceptionTarget("hdfs-adhoc-07") AssertionError(
               "Cannot replace segment " +
               TextFormat.shortDebugString(currentSegment) +
               " with new segment " +
