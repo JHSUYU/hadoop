@@ -17,7 +17,7 @@
  */
 package org.apache.hadoop.hdfs.server.namenode;
 
-import edu.uva.liftlab.graphchecker.annotation.CausynthExceptionTarget;
+import edu.uva.liftlab.causym.annotation.CausymExceptionTarget;
 import java.io.IOException;
 import java.util.Set;
 
@@ -99,7 +99,7 @@ final class FSDirTruncateOp {
           .getStoragePolicy("LAZY_PERSIST");
 
       if (lpPolicy != null && lpPolicy.getId() == file.getStoragePolicyID()) {
-        throw new @CausynthExceptionTarget("hdfs-adhoc-42") UnsupportedOperationException(
+        throw new @CausymExceptionTarget("hdfs-adhoc-42") UnsupportedOperationException(
             "Cannot truncate lazy persist file " + src);
       }
 
@@ -115,7 +115,7 @@ final class FSDirTruncateOp {
           if (newLength == truncateLength) {
             return new TruncateResult(false, fsd.getAuditFileInfo(iip));
           } else {
-            throw new @CausynthExceptionTarget("hdfs-adhoc-43")
+            throw new @CausymExceptionTarget("hdfs-adhoc-43")
                 AlreadyBeingCreatedException(
                 RecoverLeaseOp.TRUNCATE_FILE.getExceptionMessage(src,
                     clientName, clientMachine, src + " is being truncated."));
@@ -132,7 +132,7 @@ final class FSDirTruncateOp {
         return new TruncateResult(true, fsd.getAuditFileInfo(iip));
       }
       if (oldLength < newLength) {
-        throw new @CausynthExceptionTarget("hdfs-adhoc-44")
+        throw new @CausymExceptionTarget("hdfs-adhoc-44")
             HadoopIllegalArgumentException(
             "Cannot truncate to a larger file size. Current size: " + oldLength
                 + ", truncate size: " + newLength + ".");

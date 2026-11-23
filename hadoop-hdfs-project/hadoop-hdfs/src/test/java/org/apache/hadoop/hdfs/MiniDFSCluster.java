@@ -114,7 +114,7 @@ import org.apache.hadoop.hdfs.server.blockmanagement.DatanodeManager;
 import org.apache.hadoop.hdfs.server.common.HdfsServerConstants.StartupOption;
 import org.apache.hadoop.hdfs.server.common.Storage;
 import org.apache.hadoop.hdfs.server.common.Util;
-import org.apache.hadoop.hdfs.server.datanode.CausynthCluster;
+import org.apache.hadoop.hdfs.server.datanode.CausymCluster;
 import org.apache.hadoop.hdfs.server.datanode.DataNode;
 import org.apache.hadoop.hdfs.server.datanode.DataNodeTestUtils;
 import org.apache.hadoop.hdfs.server.datanode.DataStorage;
@@ -559,8 +559,8 @@ public class MiniDFSCluster implements AutoCloseable {
    * Used by builder to create and return an instance of MiniDFSCluster
    */
   protected MiniDFSCluster(Builder builder) throws IOException {
-    if (CausynthCluster.automatic()) {
-      builder.dnConfOverlays = CausynthCluster.automaticSetUp(this, builder.conf,
+    if (CausymCluster.automatic()) {
+      builder.dnConfOverlays = CausymCluster.automaticSetUp(this, builder.conf,
           builder.numDataNodes, builder.dnConfOverlays);
     }
     if (builder.nnTopology == null) {
@@ -622,8 +622,8 @@ public class MiniDFSCluster implements AutoCloseable {
                        builder.useConfiguredTopologyMappingClass,
                        builder.dnHttpPorts,
                        builder.dnIpcPorts);
-    if (CausynthCluster.automatic()) {
-      CausynthCluster.registerAutomatically(this);
+    if (CausymCluster.automatic()) {
+      CausymCluster.registerAutomatically(this);
     }
   }
   
@@ -1165,8 +1165,8 @@ public class MiniDFSCluster implements AutoCloseable {
           StartupOption.FORMAT.setClusterId(nn.getClusterId());
         }
         // The format is the NameNode's startup too.
-        try (CausynthCluster.NodeStartup startup =
-            CausynthCluster.nameNodeStartup(this, index)) {
+        try (CausymCluster.NodeStartup startup =
+            CausymCluster.nameNodeStartup(this, index)) {
           DFSTestUtil.formatNameNode(conf);
         }
       }
@@ -1403,8 +1403,8 @@ public class MiniDFSCluster implements AutoCloseable {
   private void createNameNode(int nnIndex, Configuration hdfsConf,
       boolean format, StartupOption operation, String clusterId,
       String nameserviceId, String nnId) throws IOException {
-    CausynthCluster.NodeStartup startup =
-        CausynthCluster.nameNodeStartup(this, nnIndex);
+    CausymCluster.NodeStartup startup =
+        CausymCluster.nameNodeStartup(this, nnIndex);
     NameNode nn;
     try {
       // Format and clean out DataNode directories
@@ -1826,8 +1826,8 @@ public class MiniDFSCluster implements AutoCloseable {
         IPC_CLIENT_CONNECT_MAX_RETRIES_ON_SASL_DEFAULT);
       int numRetries = 0;
       DataNode dn = null;
-      try (CausynthCluster.NodeStartup startup =
-          CausynthCluster.nodeStartup(this, "DATANODE")) {
+      try (CausymCluster.NodeStartup startup =
+          CausymCluster.nodeStartup(this, "DATANODE")) {
         while (true) {
           try {
             dn = DataNode.instantiateDataNode(dnArgs, dnConf,
@@ -1884,8 +1884,8 @@ public class MiniDFSCluster implements AutoCloseable {
     if (storageCapacities != null) {
       storageCap.addAll(Arrays.asList(storageCapacities));
     }
-    if (CausynthCluster.automatic()) {
-      CausynthCluster.registerStartedDataNodes(this);
+    if (CausymCluster.automatic()) {
+      CausymCluster.registerStartedDataNodes(this);
     }
   }
 
@@ -2209,8 +2209,8 @@ public class MiniDFSCluster implements AutoCloseable {
    */
   public void shutdown(boolean deleteDfsDir, boolean closeFileSystem) {
     LOG.info("Shutting down the Mini HDFS Cluster");
-    if (CausynthCluster.automatic()) {
-      CausynthCluster.shutdownAutomatically(this);
+    if (CausymCluster.automatic()) {
+      CausymCluster.shutdownAutomatically(this);
     }
     if (checkExitOnShutdown)  {
       if (ExitUtil.terminateCalled()) {
@@ -2361,8 +2361,8 @@ public class MiniDFSCluster implements AutoCloseable {
     }
 
     NameNode nn;
-    try (CausynthCluster.NodeStartup startup =
-        CausynthCluster.nodeRestart(info)) {
+    try (CausymCluster.NodeStartup startup =
+        CausymCluster.nodeRestart(info)) {
       nn = NameNode.createNameNode(args, info.conf);
     }
     nn.getHttpServer()
@@ -2371,8 +2371,8 @@ public class MiniDFSCluster implements AutoCloseable {
     info.nameserviceId = info.conf.get(DFS_NAMESERVICE_ID);
     info.nnId = info.conf.get(DFS_HA_NAMENODE_ID_KEY);
     info.setStartOpt(startOpt);
-    if (CausynthCluster.automatic()) {
-      CausynthCluster.restartedNameNode(this, nnIndex);
+    if (CausymCluster.automatic()) {
+      CausymCluster.restartedNameNode(this, nnIndex);
     }
     if (waitActive) {
       if (numDataNodes > 0) {
@@ -2641,8 +2641,8 @@ public class MiniDFSCluster implements AutoCloseable {
           addr.getAddress().getHostAddress() + ":" + dnprop.ipcPort); 
     }
     final DataNode newDn;
-    try (CausynthCluster.NodeStartup startup =
-        CausynthCluster.nodeRestart(dnprop.datanode)) {
+    try (CausymCluster.NodeStartup startup =
+        CausymCluster.nodeRestart(dnprop.datanode)) {
       newDn = DataNode.createDataNode(args, conf, secureResources);
       startup.built(newDn);
     }
@@ -2655,8 +2655,8 @@ public class MiniDFSCluster implements AutoCloseable {
         newDn.getIpcPort());
     dataNodes.add(dnp);
     numDataNodes++;
-    if (CausynthCluster.automatic()) {
-      CausynthCluster.registerStartedDataNodes(this);
+    if (CausymCluster.automatic()) {
+      CausymCluster.registerStartedDataNodes(this);
     }
 
     setDataNodeStorageCapacities(
