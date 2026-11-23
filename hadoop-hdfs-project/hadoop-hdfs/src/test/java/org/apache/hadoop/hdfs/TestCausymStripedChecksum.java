@@ -30,10 +30,10 @@ import org.apache.hadoop.hdfs.protocol.DatanodeInfo;
 import org.apache.hadoop.hdfs.protocol.SystemErasureCodingPolicies;
 import org.apache.hadoop.hdfs.security.token.block.BlockKey;
 import org.apache.hadoop.hdfs.security.token.block.BlockTokenSecretManager;
-import org.apache.hadoop.hdfs.server.datanode.CausynthCluster;
+import org.apache.hadoop.hdfs.server.datanode.CausymCluster;
 import org.apache.hadoop.hdfs.server.datanode.DataNode;
 import org.apache.hadoop.hdfs.server.namenode.NameNodeRpcServer;
-import org.apache.hadoop.ipc.CausynthMessagePropagation;
+import org.apache.hadoop.ipc.CausymMessagePropagation;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -43,21 +43,21 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * HDFS-17897: a striped file checksum whose DataNode missed the NameNode's key
  * update cannot resolve the encryption key the client presents.
  */
-public class TestCausynthStripedChecksum {
+public class TestCausymStripedChecksum {
   /** Block-key serial number pinned by {@link #pinBlockKeys}. */
   private static final int SERIAL_NO = Integer.MAX_VALUE / 17897;
 
   @Test
   public void testStaleEncryptionKeyFailsStripedChecksum() throws Exception {
     // Nothing set up before the window expires on the wall clock.
-    Configuration conf = CausynthCluster.configure(new HdfsConfiguration());
+    Configuration conf = CausymCluster.configure(new HdfsConfiguration());
     conf.setBoolean(DFSConfigKeys.DFS_ENCRYPT_DATA_TRANSFER_KEY, true);
     conf.setBoolean(DFSConfigKeys.DFS_BLOCK_ACCESS_TOKEN_ENABLE_KEY, true);
     // Each DataNode has IPC connections of its own, as a DataNode process
-    // does (CausynthCluster.dataNodeOverlays).
+    // does (CausymCluster.dataNodeOverlays).
     try (MiniDFSCluster cluster = new MiniDFSCluster.Builder(conf)
         .numDataNodes(3)
-        .dataNodeConfOverlays(CausynthCluster.dataNodeOverlays(3)).build();
+        .dataNodeConfOverlays(CausymCluster.dataNodeOverlays(3)).build();
          DistributedFileSystem fs = cluster.getFileSystem()) {
       cluster.waitActive();
       DFSClient client = DFSClientAdapter.getDFSClient(fs);
@@ -77,22 +77,22 @@ public class TestCausynthStripedChecksum {
       BlockTokenSecretManager master = cluster.getNamesystem()
           .getBlockManager().getBlockTokenSecretManager();
       pinBlockKeys(cluster, master);
-      CausynthCluster.startRecording();
+      CausymCluster.startRecording();
 
       // THE KEY FLOWS THE RPC'S WAY (experiments/hadoop/lib/README.md).  The
       // master rotates twice; an explicit rotation marks no DataNode for a key
       // update, so the workload marks every one.
       int initialKeyId = master.getCurrentKey().getKeyId();
       for (int rotation = 0; rotation < 2; rotation++) {
-        long causynthRotation = CausynthMessagePropagation.beginTick(
+        long causymRotation = CausymMessagePropagation.beginTick(
             master, "KEY_MANAGER_TICK");
         try {
           master.updateKeys(Long.MAX_VALUE);
         } finally {
-          CausynthMessagePropagation.endTick(causynthRotation);
+          CausymMessagePropagation.endTick(causymRotation);
         }
       }
-      CausynthCluster.recordingPrecondition(
+      CausymCluster.recordingPrecondition(
           () -> master.getCurrentKey().getKeyId() == initialKeyId + 2,
           "the recorded window must rotate the master twice");
       int currentKeyId = master.getCurrentKey().getKeyId();
@@ -107,39 +107,39 @@ public class TestCausynthStripedChecksum {
       // witness fails -- the request never reaching the NameNode, or the
       // NameNode's answer lost after it cleared the node's key-update mark --
       // is not repeated in the window.
-      for (DataNode node : CausynthCluster.dataNodes()) {
-        CausynthCluster.refreshKeysFromNameNode(node, "heartbeat");
+      for (DataNode node : CausymCluster.dataNodes()) {
+        CausymCluster.refreshKeysFromNameNode(node, "heartbeat");
       }
 
       // The client then takes the master's CURRENT key over its own RPC and
       // presents it to every DataNode of the group.
       client.clearDataEncryptionKey();
-      long cacheRequest = CausynthMessagePropagation.beginRequest(
+      long cacheRequest = CausymMessagePropagation.beginRequest(
           client, "cache-encryption-key");
       try {
         client.newDataEncryptionKey();
       } finally {
-        CausynthMessagePropagation.endRequest(
+        CausymMessagePropagation.endRequest(
             cacheRequest, "cache-encryption-key");
       }
-      CausynthCluster.recordingPrecondition(
+      CausymCluster.recordingPrecondition(
           () -> client.getEncryptionKey().keyId == currentKeyId,
           "the client must present the master's current key");
       for (DataNode node : cluster.getDataNodes()) {
         BlockTokenSecretManager keys =
             node.getBlockPoolTokenSecretManager().get(blockPoolId);
-        CausynthCluster.recordingPrecondition(
+        CausymCluster.recordingPrecondition(
             () -> keys.hasKey(currentKeyId),
             "every DataNode must hold the key the client presents, or the"
                 + " recording is already the failure");
       }
 
-      long checksumRequest = CausynthMessagePropagation.beginRequest(
+      long checksumRequest = CausymMessagePropagation.beginRequest(
           client, "striped-file-checksum");
       try {
         fs.getFileChecksum(file);
       } finally {
-        CausynthMessagePropagation.endRequest(
+        CausymMessagePropagation.endRequest(
             checksumRequest, "striped-file-checksum");
       }
     }
@@ -147,7 +147,7 @@ public class TestCausynthStripedChecksum {
 
   /**
    * Makes every block-key id the recorded window sees identical across
-   * GraphChecker replay sessions.  The manager seeds serialNo from
+   * Causym replay sessions.  The manager seeds serialNo from
    * SecureRandom once per JVM and each replay task is its own JVM.
    * setSerialNo only moves the counter, so the two constructor-time keys keep
    * their random ids; two rotations retire them: the first mints
@@ -161,24 +161,24 @@ public class TestCausynthStripedChecksum {
   private static void pinBlockKeys(MiniDFSCluster cluster,
       BlockTokenSecretManager master) throws Exception {
     master.setSerialNo(SERIAL_NO);
-    { // causynth-d3-rotation-scope
-      long causynthRotation = org.apache.hadoop.ipc.CausynthMessagePropagation.beginTick(
+    { // causym-d3-rotation-scope
+      long causymRotation = org.apache.hadoop.ipc.CausymMessagePropagation.beginTick(
           master, "KEY_MANAGER_TICK");
       try {
         master.updateKeys(Long.MAX_VALUE);
       } finally {
-        org.apache.hadoop.ipc.CausynthMessagePropagation.endTick(
-            causynthRotation);
+        org.apache.hadoop.ipc.CausymMessagePropagation.endTick(
+            causymRotation);
       }
     }
-    { // causynth-d3-rotation-scope
-      long causynthRotation = org.apache.hadoop.ipc.CausynthMessagePropagation.beginTick(
+    { // causym-d3-rotation-scope
+      long causymRotation = org.apache.hadoop.ipc.CausymMessagePropagation.beginTick(
           master, "KEY_MANAGER_TICK");
       try {
         master.updateKeys(Long.MAX_VALUE);
       } finally {
-        org.apache.hadoop.ipc.CausynthMessagePropagation.endTick(
-            causynthRotation);
+        org.apache.hadoop.ipc.CausymMessagePropagation.endTick(
+            causymRotation);
       }
     }
     assertEquals(SERIAL_NO + 1, master.getCurrentKey().getKeyId());
@@ -230,12 +230,12 @@ public class TestCausynthStripedChecksum {
 
   private static void registerSources(MiniDFSCluster cluster,
       DFSClient client, Path file) throws Exception {
-    CausynthMessagePropagation.registerSource(
+    CausymMessagePropagation.registerSource(
         client, "EXTERNAL_APP", "DFS_CLIENT", "hdfs-17897/client", 0);
     // Every node, registered whole, before any traffic the recording
-    // depends on (CausynthCluster).  dn<i> is the i-th location of the
+    // depends on (CausymCluster).  dn<i> is the i-th location of the
     // block group, so dn0 is the checksum leader the case is about.
-    CausynthCluster.registerNameNode(cluster, 0, "hdfs-17897/nn0");
+    CausymCluster.registerNameNode(cluster, 0, "hdfs-17897/nn0");
     DatanodeInfo[] locations = client.getLocatedBlocks(
         file.toString(), 0).get(0).getLocations();
     int nextIndex = locations.length;
@@ -252,7 +252,7 @@ public class TestCausynthStripedChecksum {
       if (index < 0) {
         index = nextIndex++;
       }
-      CausynthCluster.registerDataNode(node, "hdfs-17897/dn" + index);
+      CausymCluster.registerDataNode(node, "hdfs-17897/dn" + index);
     }
   }
 }
