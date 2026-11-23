@@ -85,7 +85,7 @@ import org.apache.hadoop.hdfs.protocol.LocatedBlocks;
 import org.apache.hadoop.hdfs.protocol.HdfsConstants.StoragePolicySatisfierMode;
 import org.apache.hadoop.hdfs.server.balancer.NameNodeConnector;
 import org.apache.hadoop.hdfs.server.common.HdfsServerConstants;
-import org.apache.hadoop.hdfs.server.datanode.CausynthCluster;
+import org.apache.hadoop.hdfs.server.datanode.CausymCluster;
 import org.apache.hadoop.hdfs.server.datanode.DataNode;
 import org.apache.hadoop.hdfs.server.datanode.DataNodeTestUtils;
 import org.apache.hadoop.hdfs.server.datanode.InternalDataNodeTestUtils;
@@ -121,7 +121,7 @@ import org.apache.hadoop.hdfs.security.token.block.BlockKey;
 
 import org.apache.hadoop.hdfs.security.token.block.BlockTokenSecretManager;
 import org.apache.hadoop.hdfs.server.namenode.NameNodeRpcServer;
-import org.apache.hadoop.ipc.CausynthMessagePropagation;
+import org.apache.hadoop.ipc.CausymMessagePropagation;
 
 /**
  * Tests the external sps service plugins.
@@ -276,12 +276,12 @@ public class TestExternalStoragePolicySatisfier {
       }
     }
     // Each DataNode has IPC connections of its own, as a DataNode process
-    // does (CausynthCluster.dataNodeOverlays).
+    // does (CausymCluster.dataNodeOverlays).
     final MiniDFSCluster cluster = new MiniDFSCluster.Builder(conf)
         .numDataNodes(numberOfDatanodes).storagesPerDatanode(storagesPerDn)
         .storageTypes(storageTypes).storageCapacities(capacities)
         .dataNodeConfOverlays(
-            CausynthCluster.dataNodeOverlays(numberOfDatanodes)).build();
+            CausymCluster.dataNodeOverlays(numberOfDatanodes)).build();
     cluster.waitActive();
 
     if (startSPS) {
@@ -1090,7 +1090,7 @@ public class TestExternalStoragePolicySatisfier {
 
   @Test
   @Timeout(value = 120)
-  public void testCausynthSpsKeyRefreshRpcFailure() throws Exception {
+  public void testCausymSpsKeyRefreshRpcFailure() throws Exception {
     StorageType[][] diskTypes =
         new StorageType[][]{{StorageType.DISK, StorageType.SSD}};
     config.setBoolean(DFSConfigKeys.DFS_ENCRYPT_DATA_TRANSFER_KEY, true);
@@ -1111,7 +1111,7 @@ public class TestExternalStoragePolicySatisfier {
         0);
     config.setLong("dfs.block.size", DEFAULT_BLOCK_SIZE);
     // Nothing set up before the window expires on the wall clock.
-    CausynthCluster.configure(config);
+    CausymCluster.configure(config);
     try {
       hdfsCluster = startCluster(config, diskTypes, 1, 2, CAPACITY,
           true, false);
@@ -1142,14 +1142,14 @@ public class TestExternalStoragePolicySatisfier {
         }
       }, 100, 15000);
       DataNode target = hdfsCluster.getDataNodes().get(0);
-      registerCausynthSources(target);
+      registerCausymSources(target);
 
       BlockTokenSecretManager master = hdfsCluster.getNamesystem()
           .getBlockManager().getBlockTokenSecretManager();
 
       dfs.setStoragePolicy(new Path(FILE), ONE_SSD);
       dfs.satisfyStoragePolicy(new Path(FILE));
-      CausynthCluster.startRecording();
+      CausymCluster.startRecording();
 
       // THE KEY FLOWS THE RPC'S WAY (experiments/hadoop/lib/README.md).
       // 1. The master rotates twice: its current key is two serials past
@@ -1157,22 +1157,22 @@ public class TestExternalStoragePolicySatisfier {
       int initialKeyId = currentKeyId(master);
       NameNodeRpcServer namenode =
           (NameNodeRpcServer) hdfsCluster.getNameNodeRpc();
-      long rotations = CausynthMessagePropagation.beginRequest(
+      long rotations = CausymMessagePropagation.beginRequest(
           namenode.getClientRpcServer(), "rotate-block-keys");
       try {
         for (int rotation = 0; rotation < 2; rotation++) {
-          long causynthRotation = CausynthMessagePropagation.beginTick(
+          long causymRotation = CausymMessagePropagation.beginTick(
               master, "KEY_MANAGER_TICK");
           try {
             master.updateKeys(Long.MAX_VALUE);
           } finally {
-            CausynthMessagePropagation.endTick(causynthRotation);
+            CausymMessagePropagation.endTick(causymRotation);
           }
         }
       } finally {
-        CausynthMessagePropagation.endRequest(rotations, "rotate-block-keys");
+        CausymMessagePropagation.endRequest(rotations, "rotate-block-keys");
       }
-      CausynthCluster.recordingPrecondition(
+      CausymCluster.recordingPrecondition(
           () -> currentKeyId(master) == initialKeyId + 2,
           "the recorded window must rotate the master twice");
 
@@ -1181,12 +1181,12 @@ public class TestExternalStoragePolicySatisfier {
       //    points on this RPC are what a witness flips.
       hdfsCluster.getNamesystem().getBlockManager().getDatanodeManager()
           .getDatanode(target.getDatanodeId()).setNeedKeyUpdate(true);
-      CausynthCluster.refreshKeysFromNameNode(target, "heartbeat");
+      CausymCluster.refreshKeysFromNameNode(target, "heartbeat");
 
       // 3. The SPS takes the NameNode's keys over its own RPC.  A refresh
       //    whose RPC fails leaves the SPS on the keys it had, as its
       //    BlockKeyUpdater does.
-      long refreshRequest = CausynthMessagePropagation.beginRequest(
+      long refreshRequest = CausymMessagePropagation.beginRequest(
           nnc, "refresh-block-keys");
       try {
         try {
@@ -1196,19 +1196,19 @@ public class TestExternalStoragePolicySatisfier {
               failed);
         }
       } finally {
-        CausynthMessagePropagation.endRequest(
+        CausymMessagePropagation.endRequest(
             refreshRequest, "refresh-block-keys");
       }
       BlockTokenSecretManager targetKeys =
           target.getBlockPoolTokenSecretManager().get(
               hdfsCluster.getNamesystem().getBlockPoolId());
-      CausynthCluster.recordingPrecondition(
+      CausymCluster.recordingPrecondition(
           () -> targetKeys.hasKey(currentKeyId(master)),
           "the DataNode must hold the master's current key, delivered by its"
               + " heartbeat, or the recording is already the failure");
 
       // 4. The move: the SPS presents the master's current key.
-      long request = CausynthMessagePropagation.beginRequest(
+      long request = CausymMessagePropagation.beginRequest(
           nnc, "satisfy-storage-policy");
       try {
         startExternalSps();
@@ -1216,7 +1216,7 @@ public class TestExternalStoragePolicySatisfier {
         DFSTestUtil.waitExpectedStorageType(
             FILE, StorageType.SSD, 1, 30000, dfs);
       } finally {
-        CausynthMessagePropagation.endRequest(
+        CausymMessagePropagation.endRequest(
             request, "satisfy-storage-policy");
       }
     } finally {
@@ -1226,7 +1226,7 @@ public class TestExternalStoragePolicySatisfier {
 
   /**
    * Makes every block-key id the recorded window sees identical across
-   * GraphChecker replay sessions.  The NameNode manager seeds serialNo from
+   * Causym replay sessions.  The NameNode manager seeds serialNo from
    * SecureRandom once per JVM and each replay task is its own JVM, so without
    * this the replay groups of one campaign mint unrelated ids.  setSerialNo
    * only moves the counter, so the two constructor-time keys keep their
@@ -1242,24 +1242,24 @@ public class TestExternalStoragePolicySatisfier {
     BlockTokenSecretManager master = cluster.getNamesystem()
         .getBlockManager().getBlockTokenSecretManager();
     master.setSerialNo(SERIAL_NO);
-    { // causynth-d3-rotation-scope
-      long causynthRotation = org.apache.hadoop.ipc.CausynthMessagePropagation.beginTick(
+    { // causym-d3-rotation-scope
+      long causymRotation = org.apache.hadoop.ipc.CausymMessagePropagation.beginTick(
           master, "KEY_MANAGER_TICK");
       try {
         master.updateKeys(Long.MAX_VALUE);
       } finally {
-        org.apache.hadoop.ipc.CausynthMessagePropagation.endTick(
-            causynthRotation);
+        org.apache.hadoop.ipc.CausymMessagePropagation.endTick(
+            causymRotation);
       }
     }
-    { // causynth-d3-rotation-scope
-      long causynthRotation = org.apache.hadoop.ipc.CausynthMessagePropagation.beginTick(
+    { // causym-d3-rotation-scope
+      long causymRotation = org.apache.hadoop.ipc.CausymMessagePropagation.beginTick(
           master, "KEY_MANAGER_TICK");
       try {
         master.updateKeys(Long.MAX_VALUE);
       } finally {
-        org.apache.hadoop.ipc.CausynthMessagePropagation.endTick(
-            causynthRotation);
+        org.apache.hadoop.ipc.CausymMessagePropagation.endTick(
+            causymRotation);
       }
     }
     assertEquals(SERIAL_NO + 1, master.getCurrentKey().getKeyId());
@@ -1315,15 +1315,15 @@ public class TestExternalStoragePolicySatisfier {
     }
   }
 
-  private void registerCausynthSources(DataNode target) {
+  private void registerCausymSources(DataNode target) {
     // Every node, registered whole, before any traffic the recording depends
-    // on (CausynthCluster); the SPS and its key manager are this case's own.
-    CausynthCluster.registerNameNode(hdfsCluster, 0, "hdfs-17899/nn0");
-    CausynthCluster.registerDataNode(target, "hdfs-17899/target-dn");
-    CausynthCluster.registerOtherDataNodes(hdfsCluster, "hdfs-17899");
-    CausynthMessagePropagation.registerSource(
+    // on (CausymCluster); the SPS and its key manager are this case's own.
+    CausymCluster.registerNameNode(hdfsCluster, 0, "hdfs-17899/nn0");
+    CausymCluster.registerDataNode(target, "hdfs-17899/target-dn");
+    CausymCluster.registerOtherDataNodes(hdfsCluster, "hdfs-17899");
+    CausymMessagePropagation.registerSource(
         nnc, "EXTERNAL_APP", "SPS", "hdfs-17899/sps", 0);
-    CausynthMessagePropagation.registerSourceAlias(nnc.getKeyManager(), nnc);
+    CausymMessagePropagation.registerSourceAlias(nnc.getKeyManager(), nnc);
   }
 
 

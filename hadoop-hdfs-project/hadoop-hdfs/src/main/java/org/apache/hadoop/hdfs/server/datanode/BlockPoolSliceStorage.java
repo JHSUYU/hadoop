@@ -18,7 +18,7 @@
 
 package org.apache.hadoop.hdfs.server.datanode;
 
-import edu.uva.liftlab.graphchecker.annotation.CausynthExceptionTarget;
+import edu.uva.liftlab.causym.annotation.CausymExceptionTarget;
 import java.io.File;
 import java.io.IOException;
 import java.net.URI;
@@ -183,7 +183,7 @@ public class BlockPoolSliceStorage extends Storage {
 
         // 3. Check CTime and update successfully loaded storage.
         if (getCTime() != nsInfo.getCTime()) {
-          throw new @CausynthExceptionTarget("hdfs-adhoc-25")
+          throw new @CausymExceptionTarget("hdfs-adhoc-25")
               IOException("Datanode CTime (=" + getCTime()
               + ") is not equal to namenode CTime (=" + nsInfo.getCTime() + ")");
         }
@@ -392,14 +392,14 @@ public class BlockPoolSliceStorage extends Storage {
     assert this.layoutVersion >= DataNodeLayoutVersion.getCurrentLayoutVersion()
        : "Future version is not allowed";
     if (getNamespaceID() != nsInfo.getNamespaceID()) {
-      throw new @CausynthExceptionTarget("hdfs-adhoc-22")
+      throw new @CausymExceptionTarget("hdfs-adhoc-22")
           IOException("Incompatible namespaceIDs in "
           + sd.getRoot().getCanonicalPath() + ": namenode namespaceID = "
           + nsInfo.getNamespaceID() + "; datanode namespaceID = "
           + getNamespaceID());
     }
     if (!blockpoolID.equals(nsInfo.getBlockPoolID())) {
-      throw new @CausynthExceptionTarget("hdfs-adhoc-23")
+      throw new @CausymExceptionTarget("hdfs-adhoc-23")
           IOException("Incompatible blockpoolIDs in "
           + sd.getRoot().getCanonicalPath() + ": namenode blockpoolID = "
           + nsInfo.getBlockPoolID() + "; datanode blockpoolID = "
@@ -422,7 +422,7 @@ public class BlockPoolSliceStorage extends Storage {
     }
     // layoutVersion == LAYOUT_VERSION && this.cTime > nsInfo.cTime
     // must shutdown
-    throw new @CausynthExceptionTarget("hdfs-adhoc-24")
+    throw new @CausymExceptionTarget("hdfs-adhoc-24")
         IOException("Datanode state: LV = " + this.getLayoutVersion()
         + " CTime = " + this.getCTime()
         + " is newer than the namespace state: LV = "
@@ -513,7 +513,7 @@ public class BlockPoolSliceStorage extends Storage {
     linkAllBlocks(bpTmpDir, bpCurDir, oldLV, conf);
     this.layoutVersion = DataNodeLayoutVersion.getCurrentLayoutVersion();
     if (!(this.namespaceID == nsInfo.getNamespaceID())) {
-      throw new @CausynthExceptionTarget("hdfs-adhoc-27") AssertionError(
+      throw new @CausymExceptionTarget("hdfs-adhoc-27") AssertionError(
           "Data-node and name-node layout versions must be the same.");
     }
     this.cTime = nsInfo.getCTime();
@@ -625,7 +625,7 @@ public class BlockPoolSliceStorage extends Storage {
     if (!(prevInfo.getLayoutVersion() >=
         DataNodeLayoutVersion.getCurrentLayoutVersion() &&
         prevInfo.getCTime() <= nsInfo.getCTime())) { // cannot rollback
-      throw new @CausynthExceptionTarget("hdfs-adhoc-26")
+      throw new @CausymExceptionTarget("hdfs-adhoc-26")
           InconsistentFSStateException(bpSd.getRoot(),
           "Cannot rollback to a newer state.\nDatanode previous state: LV = "
               + prevInfo.getLayoutVersion() + " CTime = " + prevInfo.getCTime()

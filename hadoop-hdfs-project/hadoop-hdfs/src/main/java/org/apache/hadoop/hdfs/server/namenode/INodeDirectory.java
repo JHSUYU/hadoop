@@ -17,7 +17,7 @@
  */
 package org.apache.hadoop.hdfs.server.namenode;
 
-import edu.uva.liftlab.graphchecker.annotation.CausynthExceptionTarget;
+import edu.uva.liftlab.causym.annotation.CausymExceptionTarget;
 import java.io.FileNotFoundException;
 import java.io.PrintWriter;
 import java.util.ArrayList;
@@ -357,7 +357,7 @@ public class INodeDirectory extends INodeWithAdditionalFields
     if (!(oldChild == children.get(i)
         || oldChild == children.get(i).asReference().getReferredINode()
             .asReference().getReferredINode())) {
-      throw new @CausynthExceptionTarget("hdfs-adhoc-48") IllegalStateException();
+      throw new @CausymExceptionTarget("hdfs-adhoc-48") IllegalStateException();
     }
     oldChild = children.get(i);
     

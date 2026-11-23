@@ -25,8 +25,8 @@ import org.apache.hadoop.hdfs.DFSClient;
 import org.apache.hadoop.hdfs.DFSConfigKeys;
 import org.apache.hadoop.hdfs.HdfsConfiguration;
 import org.apache.hadoop.hdfs.MiniDFSCluster;
-import org.apache.hadoop.hdfs.server.datanode.CausynthCluster;
-import org.apache.hadoop.ipc.CausynthMessagePropagation;
+import org.apache.hadoop.hdfs.server.datanode.CausymCluster;
+import org.apache.hadoop.ipc.CausymMessagePropagation;
 import org.apache.hadoop.test.PathUtils;
 import org.apache.hadoop.util.ExitUtil;
 import org.junit.jupiter.api.Test;
@@ -59,14 +59,14 @@ import org.junit.jupiter.api.Timeout;
  * when the start was not completed.  The counterfactual is a local-IO fault
  * on the first roll's edits_inprogress create.</p>
  */
-public class TestCausynthRollSegmentFailure {
+public class TestCausymRollSegmentFailure {
   static final File TEST_DIR =
-      PathUtils.getTestDir(TestCausynthRollSegmentFailure.class);
+      PathUtils.getTestDir(TestCausymRollSegmentFailure.class);
 
   @Test
   @Timeout(300)
   public void testNextRollAfterFailedStartLogSegment() throws Exception {
-    Configuration conf = CausynthCluster.configure(new HdfsConfiguration());
+    Configuration conf = CausymCluster.configure(new HdfsConfiguration());
     conf.setBoolean(DFSConfigKeys.DFS_NAMENODE_EDITS_ASYNC_LOGGING, false);
     conf.setLong(DFSConfigKeys.DFS_HEARTBEAT_INTERVAL_KEY, 21600L);
     conf.set(DFSConfigKeys.DFS_NAMENODE_NAME_DIR_KEY,
@@ -80,24 +80,24 @@ public class TestCausynthRollSegmentFailure {
       cluster.waitActive();
       DFSClient client = cluster.getFileSystem().getClient();
       FSEditLog editLog = cluster.getNamesystem().getFSImage().getEditLog();
-      CausynthCluster.registerCluster(cluster, "roll", client);
-      CausynthCluster.startRecording();
+      CausymCluster.registerCluster(cluster, "roll", client);
+      CausymCluster.startRecording();
 
       roll(editLog, client, "roll-1", true);
-      CausynthCluster.recordingPrecondition(editLog::isSegmentOpen,
+      CausymCluster.recordingPrecondition(editLog::isSegmentOpen,
           "the first roll must leave a segment open");
       roll(editLog, client, "roll-2", false);
-      CausynthCluster.recordingPrecondition(editLog::isSegmentOpen,
+      CausymCluster.recordingPrecondition(editLog::isSegmentOpen,
           "the second roll must leave a segment open");
     }
   }
 
   private static void roll(FSEditLog editLog, DFSClient client, String api,
       boolean logFirst) {
-    long request = CausynthMessagePropagation.beginRequest(client, api);
+    long request = CausymMessagePropagation.beginRequest(client, api);
     try {
       if (logFirst) {
-        editLog.logSetReplication("/causynth-roll", (short) 1);
+        editLog.logSetReplication("/causym-roll", (short) 1);
         editLog.logSync();
       }
       editLog.rollEditLog(NameNodeLayoutVersion.CURRENT_LAYOUT_VERSION);
@@ -109,7 +109,7 @@ public class TestCausynthRollSegmentFailure {
       // keeps serving and the next roll comes.  The recording never reaches
       // this; a counterfactual replay that faults the first roll does.
     } finally {
-      CausynthMessagePropagation.endRequest(request, api);
+      CausymMessagePropagation.endRequest(request, api);
     }
   }
 }

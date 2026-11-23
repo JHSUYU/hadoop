@@ -17,7 +17,7 @@
  */
 package org.apache.hadoop.hdfs.server.namenode;
 
-import edu.uva.liftlab.graphchecker.annotation.CausynthExceptionTarget;
+import edu.uva.liftlab.causym.annotation.CausymExceptionTarget;
 import static org.apache.hadoop.hdfs.DFSConfigKeys.DFS_NAMENODE_IP_PROXY_USERS;
 import static org.apache.hadoop.util.ExitUtil.terminate;
 import static org.apache.hadoop.util.Time.monotonicNow;
@@ -1468,7 +1468,7 @@ public class FSEditLog implements LogsPurgeable {
     LOG.info("Ending log segment " + curSegmentTxId +
         ", " + getLastWrittenTxId());
     if (!isSegmentOpen()) {
-      throw new @CausynthExceptionTarget("hdfs-adhoc-45,hdfs-inj-01,hdfs-inj-01-control") IllegalStateException(
+      throw new @CausymExceptionTarget("hdfs-adhoc-45,hdfs-inj-01,hdfs-inj-01-control") IllegalStateException(
           String.format("Bad state: %s", state));
     }
     
