@@ -45,7 +45,7 @@ import org.apache.hadoop.hdfs.security.token.block.BlockTokenSecretManager;
 import org.apache.hadoop.hdfs.server.namenode.NameNodeRpcServer;
 import org.apache.hadoop.hdfs.server.protocol.DatanodeCommand;
 import org.apache.hadoop.hdfs.server.protocol.HeartbeatResponse;
-import org.apache.hadoop.ipc.CausynthMessagePropagation;
+import org.apache.hadoop.ipc.CausymMessagePropagation;
 import org.apache.hadoop.test.GenericTestUtils;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
@@ -62,7 +62,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  *
  * <p>Based on the fix's TestUpdateDataNodeCurrentKey (two NameNodes,
  * block tokens on), in the shape of hdfs-adhoc-12's workload
- * (TestCausynthDataTransferRpcFailure: data transfer unencrypted, so the
+ * (TestCausymDataTransferRpcFailure: data transfer unencrypted, so the
  * target checks the token with no SASL key check before it).  nn0 is
  * active.  Inside the window the standby nn1 rotates its block keys twice,
  * and each DataNode takes nn1's new keys over ONE heartbeat of its own to
@@ -75,7 +75,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * the source signs with nn0's key whatever nn1 sends, and the same loss is
  * harmless.</p>
  */
-public class TestCausynthStandbyCurrentKey {
+public class TestCausymStandbyCurrentKey {
   /** Block-key serial number pinned by {@link #pinBlockKeys}. */
   private static final int SERIAL_NO = Integer.MAX_VALUE / 17383 + 2;
   /** Longer than any case runs. */
@@ -85,7 +85,7 @@ public class TestCausynthStandbyCurrentKey {
   @Timeout(180)
   public void testTransferAfterStandbyKeyUpdate() throws Exception {
     // Nothing set up before the window expires on the wall clock.
-    Configuration conf = CausynthCluster.configure(new HdfsConfiguration());
+    Configuration conf = CausymCluster.configure(new HdfsConfiguration());
     conf.setBoolean(DFSConfigKeys.DFS_ENCRYPT_DATA_TRANSFER_KEY, false);
     conf.setBoolean(DFSConfigKeys.DFS_BLOCK_ACCESS_TOKEN_ENABLE_KEY, true);
     conf.setInt(DFSConfigKeys.DFS_CLIENT_SOCKET_TIMEOUT_KEY, 10 * 60 * 1000);
@@ -102,11 +102,11 @@ public class TestCausynthStandbyCurrentKey {
         TimeUnit.SECONDS.toMillis(3 * NEVER_S));
     conf.setLong(DFSConfigKeys.DFS_HA_TAILEDITS_PERIOD_KEY, NEVER_S);
     // Each DataNode has IPC connections of its own, as a DataNode process
-    // does (CausynthCluster.dataNodeOverlays).
+    // does (CausymCluster.dataNodeOverlays).
     try (MiniDFSCluster cluster = new MiniDFSCluster.Builder(conf)
         .nnTopology(MiniDFSNNTopology.simpleHATopology())
         .numDataNodes(2)
-        .dataNodeConfOverlays(CausynthCluster.dataNodeOverlays(2)).build()) {
+        .dataNodeConfOverlays(CausymCluster.dataNodeOverlays(2)).build()) {
       cluster.waitActive();
       cluster.transitionToActive(0);
       List<DataNode> nodes = cluster.getDataNodes();
@@ -120,13 +120,13 @@ public class TestCausynthStandbyCurrentKey {
       GenericTestUtils.waitFor(() -> nodes.stream().allMatch(node ->
           activeIs(node, actor(cluster, node, 0))
               && currentKeyId(keys(node, cluster)) == currentKeyId(active)),
-          100, CausynthCluster.WINDOW_WAIT_MS);
+          100, CausymCluster.WINDOW_WAIT_MS);
 
       DistributedFileSystem fs = cluster.getFileSystem(0);
-      Path path = new Path("/causynth-hdfs-17383");
+      Path path = new Path("/causym-hdfs-17383");
       // Pinned to the first DataNode: the case's roles are read off this
-      // block (CausynthCluster.createOnNode).
-      try (FSDataOutputStream out = CausynthCluster.createOnNode(fs, path,
+      // block (CausymCluster.createOnNode).
+      try (FSDataOutputStream out = CausymCluster.createOnNode(fs, path,
           nodes.get(0))) {
         out.write(1);
       }
@@ -145,29 +145,29 @@ public class TestCausynthStandbyCurrentKey {
       BPServiceActor targetToStandby = actor(cluster, target, 1);
       NameNodeRpcServer standbyRpc =
           (NameNodeRpcServer) cluster.getNameNodeRpc(1);
-      CausynthCluster.startRecording();
+      CausymCluster.startRecording();
 
       // The standby rotates twice, as its own request, as its heartbeat
       // manager does each key-update interval and marks every DataNode
       // for a key update; an explicit rotation marks none, so the workload
       // marks the two it drives.
       int initialKeyId = currentKeyId(standby);
-      long rotations = CausynthMessagePropagation.beginRequest(
+      long rotations = CausymMessagePropagation.beginRequest(
           standbyRpc.getClientRpcServer(), "rotate-block-keys");
       try {
         for (int rotation = 0; rotation < 2; rotation++) {
-          long causynthRotation = CausynthMessagePropagation.beginTick(
+          long causymRotation = CausymMessagePropagation.beginTick(
               standby, "KEY_MANAGER_TICK");
           try {
             standby.updateKeys(Long.MAX_VALUE);
           } finally {
-            CausynthMessagePropagation.endTick(causynthRotation);
+            CausymMessagePropagation.endTick(causymRotation);
           }
         }
       } finally {
-        CausynthMessagePropagation.endRequest(rotations, "rotate-block-keys");
+        CausymMessagePropagation.endRequest(rotations, "rotate-block-keys");
       }
-      CausynthCluster.recordingPrecondition(
+      CausymCluster.recordingPrecondition(
           () -> currentKeyId(standby) == initialKeyId + 2,
           "the recorded window must rotate the standby twice");
       int standbyKeyId = currentKeyId(standby);
@@ -182,15 +182,15 @@ public class TestCausynthStandbyCurrentKey {
       // nothing else in the window delivers the key again.
       refreshKeysFromNameNode(target, targetToStandby);
       refreshKeysFromNameNode(source, sourceToStandby);
-      CausynthCluster.recordingPrecondition(
+      CausymCluster.recordingPrecondition(
           () -> targetKeys.hasKey(currentKeyId(sourceKeys)),
           "the target must hold the key the source signs with, or the"
               + " recording is already the failure");
-      CausynthCluster.recordingPrecondition(
+      CausymCluster.recordingPrecondition(
           () -> targetKeys.hasKey(standbyKeyId),
           "the target must hold the standby's current key");
 
-      long request = CausynthMessagePropagation.beginRequest(
+      long request = CausymMessagePropagation.beginRequest(
           source.getDatanodeId(), "replicate-block");
       try {
         source.transferBlock(block,
@@ -199,17 +199,17 @@ public class TestCausynthStandbyCurrentKey {
             new StorageType[]{StorageType.DISK}, new String[0]);
         GenericTestUtils.waitFor(
             () -> target.getFSDataset().isValidBlock(block), 20,
-            CausynthCluster.WINDOW_WAIT_MS);
+            CausymCluster.WINDOW_WAIT_MS);
         assertTrue(target.getFSDataset().isValidBlock(block));
       } finally {
-        CausynthMessagePropagation.endRequest(request, "replicate-block");
+        CausymMessagePropagation.endRequest(request, "replicate-block");
       }
     }
   }
 
   /**
    * Makes every block-key id the recorded window sees identical across
-   * GraphChecker replay sessions, on both NameNodes: each master seeds its
+   * Causym replay sessions, on both NameNodes: each master seeds its
    * serial from SecureRandom once per JVM, in its own half of the id range.
    * Two rotations retire each master's constructor-time keys, which are
    * then dropped everywhere; every DataNode takes the standby's pinned keys
@@ -221,13 +221,13 @@ public class TestCausynthStandbyCurrentKey {
     for (int index : new int[]{1, 0}) {
       BlockTokenSecretManager master = master(cluster, index);
       master.setSerialNo(SERIAL_NO);
-      for (int rotation = 0; rotation < 2; rotation++) { // causynth-d3-rotation-scope
-        long causynthRotation = CausynthMessagePropagation.beginTick(
+      for (int rotation = 0; rotation < 2; rotation++) { // causym-d3-rotation-scope
+        long causymRotation = CausymMessagePropagation.beginTick(
             master, "KEY_MANAGER_TICK");
         try {
           master.updateKeys(Long.MAX_VALUE);
         } finally {
-          CausynthMessagePropagation.endTick(causynthRotation);
+          CausymMessagePropagation.endTick(causymRotation);
         }
       }
       int current = currentKeyId(master);
@@ -252,13 +252,13 @@ public class TestCausynthStandbyCurrentKey {
    * actor} serves, as the workload's own request on that node: the
    * heartbeat is sent and every command it returns -- a KeyUpdateCommand
    * among them -- is applied before this returns
-   * (CausynthCluster#refreshKeysFromNameNode, to a NameNode of choice).  A
+   * (CausymCluster#refreshKeysFromNameNode, to a NameNode of choice).  A
    * modeled transport failure leaves the node's keys as they were.
    */
   private static void refreshKeysFromNameNode(DataNode datanode,
       BPServiceActor actor) {
     BPOfferService service = datanode.getAllBpOs().get(0);
-    long request = CausynthMessagePropagation.beginRequest(
+    long request = CausymMessagePropagation.beginRequest(
         datanode.getDatanodeId(), "heartbeat");
     try {
       HeartbeatResponse response = actor.sendHeartBeat(false);
@@ -271,7 +271,7 @@ public class TestCausynthStandbyCurrentKey {
     } catch (IOException transport) {
       return;
     } finally {
-      CausynthMessagePropagation.endRequest(request, "heartbeat");
+      CausymMessagePropagation.endRequest(request, "heartbeat");
     }
   }
 
@@ -338,11 +338,11 @@ public class TestCausynthStandbyCurrentKey {
   private static void registerSources(MiniDFSCluster cluster,
       DataNode source, DataNode target) {
     // Every node, registered whole, before any traffic the recording
-    // depends on (CausynthCluster).
-    CausynthCluster.registerNameNode(cluster, 0, "hdfs-buggy-17383/nn0");
-    CausynthCluster.registerNameNode(cluster, 1, "hdfs-buggy-17383/nn1");
-    CausynthCluster.registerDataNode(source, "hdfs-buggy-17383/source-dn");
-    CausynthCluster.registerDataNode(target, "hdfs-buggy-17383/target-dn");
-    CausynthCluster.registerOtherDataNodes(cluster, "hdfs-buggy-17383");
+    // depends on (CausymCluster).
+    CausymCluster.registerNameNode(cluster, 0, "hdfs-buggy-17383/nn0");
+    CausymCluster.registerNameNode(cluster, 1, "hdfs-buggy-17383/nn1");
+    CausymCluster.registerDataNode(source, "hdfs-buggy-17383/source-dn");
+    CausymCluster.registerDataNode(target, "hdfs-buggy-17383/target-dn");
+    CausymCluster.registerOtherDataNodes(cluster, "hdfs-buggy-17383");
   }
 }

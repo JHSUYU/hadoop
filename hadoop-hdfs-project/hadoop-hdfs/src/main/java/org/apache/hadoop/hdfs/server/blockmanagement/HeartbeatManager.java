@@ -38,7 +38,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import org.apache.hadoop.classification.VisibleForTesting;
-import org.apache.hadoop.ipc.CausynthMessagePropagation;
+import org.apache.hadoop.ipc.CausymMessagePropagation;
 
 /**
  * Manage the heartbeats received from datanodes.
@@ -545,10 +545,10 @@ class HeartbeatManager implements DatanodeStatistics {
       while(namesystem.isRunning()) {
         restartHeartbeatStopWatch();
         // One rotation tick is one lineage root: the key update
-        // this loop performs belongs to no request. // causynth-d3-lineage
+        // this loop performs belongs to no request. // causym-d3-lineage
         // Its owner is the block manager, which every NameNode has (the
         // block-token manager is null while block tokens are off).
-        long causynthTick = CausynthMessagePropagation.beginTick(
+        long causymTick = CausymMessagePropagation.beginTick(
             blockManager, "HEARTBEAT_TICK");
         try {
           final long now = Time.monotonicNow();
@@ -567,7 +567,7 @@ class HeartbeatManager implements DatanodeStatistics {
         } catch (Exception e) {
           LOG.error("Exception while checking heartbeat", e);
         } finally {
-          CausynthMessagePropagation.endTick(causynthTick);
+          CausymMessagePropagation.endTick(causymTick);
         }
         try {
           Thread.sleep(5000);  // 5 seconds

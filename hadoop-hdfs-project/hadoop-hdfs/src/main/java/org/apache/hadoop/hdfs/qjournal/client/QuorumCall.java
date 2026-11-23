@@ -48,7 +48,7 @@ class QuorumCall<KEY, RESULT> {
   private final Map<KEY, RESULT> successes = Maps.newHashMap();
   private final Map<KEY, Throwable> exceptions = Maps.newHashMap();
   /**
-   * GraphChecker: the calls' keys in the order they were made (AsyncLoggerSet
+   * Causym: the calls' keys in the order they were made (AsyncLoggerSet
    * makes them in its loggers' order), which {@link #getResults()} keeps. The
    * successes map is keyed by AsyncLogger, whose hash is its identity hash, so
    * its own order differs in every JVM, and a reader of the results would
@@ -306,7 +306,7 @@ class QuorumCall<KEY, RESULT> {
    * quorum.
    */
   public synchronized Map<KEY, RESULT> getResults() {
-    // GraphChecker: in the order the calls were made (see keys).
+    // Causym: in the order the calls were made (see keys).
     Map<KEY, RESULT> results = Maps.newLinkedHashMap();
     for (KEY key : keys) {
       if (successes.containsKey(key)) {

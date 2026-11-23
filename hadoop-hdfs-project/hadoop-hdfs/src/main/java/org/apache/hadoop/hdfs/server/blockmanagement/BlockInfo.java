@@ -17,7 +17,7 @@
  */
 package org.apache.hadoop.hdfs.server.blockmanagement;
 
-import edu.uva.liftlab.graphchecker.annotation.CausynthExceptionTarget;
+import edu.uva.liftlab.causym.annotation.CausymExceptionTarget;
 import java.io.IOException;
 import java.util.Iterator;
 import java.util.LinkedList;
@@ -426,7 +426,7 @@ public abstract class BlockInfo extends Block
   public List<ReplicaUnderConstruction> setGenerationStampAndVerifyReplicas(
       long genStamp) {
     if (!(uc != null && !isComplete())) {
-      throw new @CausynthExceptionTarget("hdfs-adhoc-16") IllegalStateException();
+      throw new @CausymExceptionTarget("hdfs-adhoc-16") IllegalStateException();
     }
     // Set the generation stamp for the block.
     setGenerationStamp(genStamp);
@@ -447,7 +447,7 @@ public abstract class BlockInfo extends Block
           + block.getBlockId() + ", expected id = " + getBlockId());
     }
     if (isComplete()) {
-      throw new @CausynthExceptionTarget("hdfs-adhoc-15") IllegalStateException();
+      throw new @CausymExceptionTarget("hdfs-adhoc-15") IllegalStateException();
     }
     uc.commit();
     this.setNumBytes(block.getNumBytes());
