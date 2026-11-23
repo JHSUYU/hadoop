@@ -44,7 +44,7 @@ import org.apache.hadoop.hdfs.security.token.block.BlockTokenSecretManager;
 import org.apache.hadoop.hdfs.server.namenode.NameNodeRpcServer;
 import org.apache.hadoop.hdfs.server.protocol.DatanodeCommand;
 import org.apache.hadoop.hdfs.server.protocol.HeartbeatResponse;
-import org.apache.hadoop.ipc.CausynthMessagePropagation;
+import org.apache.hadoop.ipc.CausymMessagePropagation;
 import org.apache.hadoop.test.GenericTestUtils;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
@@ -59,7 +59,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * encryption off, the same delivery failure leaves the target unable to
  * resolve the block token's key instead (hdfs-adhoc-12).
  */
-public class TestCausynthDataTransferRpcFailure {
+public class TestCausymDataTransferRpcFailure {
   /** Block-key serial number pinned by {@link #pinBlockKeys}. */
   private static final int SERIAL_NO = Integer.MAX_VALUE / 17899 + 2;
 
@@ -110,7 +110,7 @@ public class TestCausynthDataTransferRpcFailure {
       boolean encrypted, String prefix, int rotations, long heartbeatS)
       throws Exception {
     // Nothing set up before the window expires on the wall clock.
-    Configuration conf = CausynthCluster.configure(new HdfsConfiguration());
+    Configuration conf = CausymCluster.configure(new HdfsConfiguration());
     conf.setBoolean(DFSConfigKeys.DFS_ENCRYPT_DATA_TRANSFER_KEY, encrypted);
     conf.setBoolean(DFSConfigKeys.DFS_BLOCK_ACCESS_TOKEN_ENABLE_KEY, true);
     conf.setInt(
@@ -125,17 +125,17 @@ public class TestCausynthDataTransferRpcFailure {
       conf.setLong(DFSConfigKeys.DFS_HEARTBEAT_INTERVAL_KEY, heartbeatS);
     }
     // Each DataNode has IPC connections of its own, as a DataNode process
-    // does (CausynthCluster.dataNodeOverlays).
+    // does (CausymCluster.dataNodeOverlays).
     try (MiniDFSCluster cluster = new MiniDFSCluster.Builder(conf)
         .numDataNodes(2)
-        .dataNodeConfOverlays(CausynthCluster.dataNodeOverlays(2)).build();
+        .dataNodeConfOverlays(CausymCluster.dataNodeOverlays(2)).build();
          DistributedFileSystem fs = cluster.getFileSystem()) {
       cluster.waitActive();
-      Path path = new Path("/causynth-hdfs-17899-bug3");
+      Path path = new Path("/causym-hdfs-17899-bug3");
       // Pinned to the first DataNode: the case's roles are read off this
       // block, and random placement would make a different started node play
-      // them in every run (CausynthCluster.createOnNode).
-      try (FSDataOutputStream out = CausynthCluster.createOnNode(fs, path,
+      // them in every run (CausymCluster.createOnNode).
+      try (FSDataOutputStream out = CausymCluster.createOnNode(fs, path,
           cluster.getDataNodes().get(0))) {
         out.write(1);
       }
@@ -152,31 +152,31 @@ public class TestCausynthDataTransferRpcFailure {
 
       BlockTokenSecretManager master = cluster.getNamesystem()
           .getBlockManager().getBlockTokenSecretManager();
-      CausynthCluster.startRecording();
+      CausymCluster.startRecording();
 
       int initialKeyId = currentKeyId(master);
       // THE KEY FLOWS THE RPC'S WAY (experiments/hadoop/lib/README.md).  The
       // master rotates, as the NameNode's own request; an explicit
       // rotation marks no DataNode for a key update, so the workload marks
       // the two it drives.
-      long rotateRequest = CausynthMessagePropagation.beginRequest(
+      long rotateRequest = CausymMessagePropagation.beginRequest(
           ((NameNodeRpcServer) cluster.getNameNodeRpc()).getClientRpcServer(),
           "rotate-block-keys");
       try {
         for (int rotation = 0; rotation < rotations; rotation++) {
-          long causynthRotation = CausynthMessagePropagation.beginTick(
+          long causymRotation = CausymMessagePropagation.beginTick(
               master, "KEY_MANAGER_TICK");
           try {
             master.updateKeys(Long.MAX_VALUE);
           } finally {
-            CausynthMessagePropagation.endTick(causynthRotation);
+            CausymMessagePropagation.endTick(causymRotation);
           }
         }
       } finally {
-        CausynthMessagePropagation.endRequest(rotateRequest,
+        CausymMessagePropagation.endRequest(rotateRequest,
             "rotate-block-keys");
       }
-      CausynthCluster.recordingPrecondition(
+      CausymCluster.recordingPrecondition(
           () -> currentKeyId(master) == initialKeyId + rotations,
           "the recorded window must rotate the master " + rotations
               + " time(s)");
@@ -199,25 +199,25 @@ public class TestCausynthDataTransferRpcFailure {
       if (refreshKeysFromNameNode(target)) {
         GenericTestUtils.waitFor(
             () -> currentKeyId(targetKeys) == currentKeyId, 100,
-            CausynthCluster.WINDOW_WAIT_MS);
+            CausymCluster.WINDOW_WAIT_MS);
       }
       if (refreshKeysFromNameNode(source)) {
         GenericTestUtils.waitFor(
             () -> currentKeyId(sourceKeys) == currentKeyId, 100,
-            CausynthCluster.WINDOW_WAIT_MS);
+            CausymCluster.WINDOW_WAIT_MS);
       }
       // The source signs the transfer's encryption key with the master's
       // CURRENT key, which the target holds only because its own
       // heartbeat delivered it.
-      CausynthCluster.recordingPrecondition(
+      CausymCluster.recordingPrecondition(
           () -> currentKeyId(sourceKeys) == currentKeyId,
           "the source must present the master's current key");
-      CausynthCluster.recordingPrecondition(
+      CausymCluster.recordingPrecondition(
           () -> targetKeys.hasKey(currentKeyId),
           "the target must hold the key the source presents, or the"
               + " recording is already the failure");
 
-      long request = CausynthMessagePropagation.beginRequest(
+      long request = CausymMessagePropagation.beginRequest(
           source.getDatanodeId(), "replicate-block");
       try {
         source.transferBlock(block,
@@ -225,17 +225,17 @@ public class TestCausynthDataTransferRpcFailure {
                 .setNodeID(target.getDatanodeId()).build()},
             new StorageType[]{StorageType.DISK}, new String[0]);
         GenericTestUtils.waitFor(
-            () -> target.getFSDataset().isValidBlock(block), 20, CausynthCluster.WINDOW_WAIT_MS);
+            () -> target.getFSDataset().isValidBlock(block), 20, CausymCluster.WINDOW_WAIT_MS);
         assertTrue(target.getFSDataset().isValidBlock(block));
       } finally {
-        CausynthMessagePropagation.endRequest(request, "replicate-block");
+        CausymMessagePropagation.endRequest(request, "replicate-block");
       }
     }
   }
 
   /**
    * Makes every block-key id the recorded window sees identical across
-   * GraphChecker replay sessions.  The NameNode manager seeds serialNo from
+   * Causym replay sessions.  The NameNode manager seeds serialNo from
    * SecureRandom once per JVM and each replay task is its own JVM, so without
    * this the replay groups of one campaign mint unrelated ids.  setSerialNo
    * only moves the counter, so the two constructor-time keys keep their
@@ -252,24 +252,24 @@ public class TestCausynthDataTransferRpcFailure {
     BlockTokenSecretManager master = cluster.getNamesystem()
         .getBlockManager().getBlockTokenSecretManager();
     master.setSerialNo(SERIAL_NO);
-    { // causynth-d3-rotation-scope
-      long causynthRotation = org.apache.hadoop.ipc.CausynthMessagePropagation.beginTick(
+    { // causym-d3-rotation-scope
+      long causymRotation = org.apache.hadoop.ipc.CausymMessagePropagation.beginTick(
           master, "KEY_MANAGER_TICK");
       try {
         master.updateKeys(Long.MAX_VALUE);
       } finally {
-        org.apache.hadoop.ipc.CausynthMessagePropagation.endTick(
-            causynthRotation);
+        org.apache.hadoop.ipc.CausymMessagePropagation.endTick(
+            causymRotation);
       }
     }
-    { // causynth-d3-rotation-scope
-      long causynthRotation = org.apache.hadoop.ipc.CausynthMessagePropagation.beginTick(
+    { // causym-d3-rotation-scope
+      long causymRotation = org.apache.hadoop.ipc.CausymMessagePropagation.beginTick(
           master, "KEY_MANAGER_TICK");
       try {
         master.updateKeys(Long.MAX_VALUE);
       } finally {
-        org.apache.hadoop.ipc.CausynthMessagePropagation.endTick(
-            causynthRotation);
+        org.apache.hadoop.ipc.CausymMessagePropagation.endTick(
+            causymRotation);
       }
     }
     assertEquals(SERIAL_NO + 1, master.getCurrentKey().getKeyId());
@@ -336,13 +336,13 @@ public class TestCausynthDataTransferRpcFailure {
   }
 
   /**
-   * One key-refresh heartbeat: the one shared helper's (CausynthCluster).
+   * One key-refresh heartbeat: the one shared helper's (CausymCluster).
    * False when a modeled transport failure left the node's keys as they
    * were, so the caller skips waiting for keys that will never arrive.
    */
   private static boolean refreshKeysFromNameNode(DataNode datanode)
       throws IOException {
-    return CausynthCluster.refreshKeysFromNameNode(datanode, "heartbeat");
+    return CausymCluster.refreshKeysFromNameNode(datanode, "heartbeat");
   }
 
   private static DataNode find(List<DataNode> nodes, DatanodeInfo location) {
@@ -354,10 +354,10 @@ public class TestCausynthDataTransferRpcFailure {
   private static void registerSources(MiniDFSCluster cluster,
       DataNode source, DataNode target, String prefix) {
     // Every node, registered whole, before any traffic the recording depends
-    // on (CausynthCluster).
-    CausynthCluster.registerNameNode(cluster, 0, prefix + "/nn0");
-    CausynthCluster.registerDataNode(source, prefix + "/source-dn");
-    CausynthCluster.registerDataNode(target, prefix + "/target-dn");
-    CausynthCluster.registerOtherDataNodes(cluster, prefix);
+    // on (CausymCluster).
+    CausymCluster.registerNameNode(cluster, 0, prefix + "/nn0");
+    CausymCluster.registerDataNode(source, prefix + "/source-dn");
+    CausymCluster.registerDataNode(target, prefix + "/target-dn");
+    CausymCluster.registerOtherDataNodes(cluster, prefix);
   }
 }

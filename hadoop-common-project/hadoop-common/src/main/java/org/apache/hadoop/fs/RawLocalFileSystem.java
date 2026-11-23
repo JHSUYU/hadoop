@@ -1082,7 +1082,7 @@ public class RawLocalFileSystem extends FileSystem {
     }
 
     /**
-     * GraphChecker: without the native library, a POSIX file's permission,
+     * Causym: without the native library, a POSIX file's permission,
      * owner and group come from its attributes in the JVM, as stat() gives
      * them natively, not from an `ls -ld` process: each process started a
      * stderr reader thread, thousands per upgrade test, whose timing no
@@ -1221,7 +1221,7 @@ public class RawLocalFileSystem extends FileSystem {
       NativeIO.POSIX.chmod(pathToFile(p).getCanonicalPath(),
                      permission.toShort());
     } else if (!Shell.WINDOWS) {
-      // GraphChecker: chmod(2) in the JVM, not a chmod process (see
+      // Causym: chmod(2) in the JVM, not a chmod process (see
       // DeprecatedRawLocalFileStatus#loadPermissionInfoByAttributes).
       Files.setAttribute(pathToFile(p).toPath(), "unix:mode",
           (int) permission.toShort());

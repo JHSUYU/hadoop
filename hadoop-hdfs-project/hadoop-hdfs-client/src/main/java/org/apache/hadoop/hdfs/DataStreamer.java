@@ -17,7 +17,7 @@
  */
 package org.apache.hadoop.hdfs;
 
-import edu.uva.liftlab.graphchecker.annotation.CausynthExceptionTarget;
+import edu.uva.liftlab.causym.annotation.CausymExceptionTarget;
 import static org.apache.hadoop.hdfs.protocol.proto.DataTransferProtos.Status.SUCCESS;
 
 import java.io.BufferedOutputStream;
@@ -426,7 +426,7 @@ class DataStreamer extends Daemon {
           // the node index has shifted.
           restartingNodeIndex--;
         } else if (waitForRestart) {
-          throw new @CausynthExceptionTarget("hdfs-adhoc-02")
+          throw new @CausymExceptionTarget("hdfs-adhoc-02")
               IllegalStateException("badNodeIndex = " + badNodeIndex
               + " = restartingNodeIndex = " + restartingNodeIndex);
         }
@@ -972,7 +972,7 @@ class DataStreamer extends Daemon {
                     + "File being written: {}, block: {}, "
                     + "Write pipeline datanodes: {}.",
                     TimeUnit.NANOSECONDS.toMillis(duration), writeTimeout, src, block, nodes);
-                throw new @CausynthExceptionTarget("hdfs-adhoc-04")
+                throw new @CausymExceptionTarget("hdfs-adhoc-04")
                     InterruptedIOException("No ack received after " +
                     TimeUnit.NANOSECONDS.toSeconds(duration) + "s and a timeout of " +
                     writeTimeout / 1000 + "s");
@@ -1431,7 +1431,7 @@ class DataStreamer extends Daemon {
           }
           assert endOfBlockPacket.isLastPacketInBlock();
           if (!(lastAckedSeqno == endOfBlockPacket.getSeqno() - 1)) {
-            throw new @CausynthExceptionTarget("hdfs-adhoc-03") AssertionError();
+            throw new @CausymExceptionTarget("hdfs-adhoc-03") AssertionError();
           }
           lastAckedSeqno = endOfBlockPacket.getSeqno();
           pipelineRecoveryCount = 0;
